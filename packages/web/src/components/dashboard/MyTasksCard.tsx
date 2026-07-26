@@ -25,7 +25,7 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
     <DashboardCard
       title={strings.dashboard.myTasks}
       action={
-        <Button isIconOnly variant="secondary" aria-label={strings.task.addTask} onPress={onAddTask}>
+        <Button isIconOnly variant="primary" aria-label={strings.task.addTask} onPress={onAddTask}>
           <Plus className="size-4" />
         </Button>
       }

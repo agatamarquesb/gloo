@@ -11,6 +11,14 @@
     "oxc/no-async-endpoint-handlers": "off",
     "no-underscore-dangle": "off"
   },
+  "overrides": [
+    {
+      "files": ["scripts/**"],
+      "rules": {
+        "no-await-in-loop": "off"
+      }
+    }
+  ],
   "ignorePatterns": ["**/dist/**", "**/generated/**", "**/node_modules/**"],
   "env": {
     "builtin": true,

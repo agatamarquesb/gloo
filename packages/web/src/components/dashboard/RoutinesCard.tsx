@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { Button } from '@heroui/react';
+import { Button, ScrollShadow } from '@heroui/react';
 
 import type { RoutineDto } from '@gloo/shared';
 
@@ -51,8 +51,9 @@ function RoutineRow({
       <span className="shrink-0 text-xs text-muted">{formatRoutineDay(date)}</span>
 
       {canEdit ? (
-        // Revealed on hover, but focus-within keeps them reachable by keyboard.
-        <span className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        // Always visible: hover-only controls hide the fact that a row is editable
+        // at all, and are unreachable on touch.
+        <span className="flex shrink-0 gap-1">
           <Button isIconOnly size="sm" variant="ghost" aria-label={strings.common.edit} onPress={onEdit}>
             <Pencil className="size-4" />
           </Button>
@@ -96,7 +97,10 @@ export function RoutinesCard() {
       ) : routines.length === 0 ? (
         <p className="py-6 text-center text-muted">{strings.routine.empty}</p>
       ) : (
-        <div className={`${VISIBLE_HEIGHT} overflow-y-auto pr-1`}>
+        // HeroUI's own fade rather than a hand-rolled gradient mask: it tracks the
+        // scroll position, so an edge only softens while it actually has content
+        // hidden past it — the last row stays crisp once you reach the bottom.
+        <ScrollShadow variant="fade" orientation="vertical" size={28} className={`${VISIBLE_HEIGHT} pr-1`}>
           {groups.map((group) => (
             <section key={group.key} className="mb-3 last:mb-0">
               <h3 className="mb-2 text-xs font-medium tracking-wide text-muted uppercase">
@@ -118,10 +122,10 @@ export function RoutinesCard() {
               </ul>
             </section>
           ))}
-        </div>
+        </ScrollShadow>
       )}
 
-      <Button variant="secondary" fullWidth className="rounded-full" onPress={openCreate}>
+      <Button variant="primary" fullWidth className="rounded-full" onPress={openCreate}>
         <Plus className="size-4" />
         {strings.routine.addRoutine}
       </Button>

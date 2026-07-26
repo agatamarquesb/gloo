@@ -31,6 +31,11 @@ export interface TaskListItemDto {
   sector: SectorDto;
   assignees: UserDto[];
   createdById: string;
+  /**
+   * Whether the task has notes in its description. A flag rather than the text
+   * itself so list responses stay small — the body only comes with the detail DTO.
+   */
+  hasDescription: boolean;
 }
 
 export interface TaskDetailDto extends TaskListItemDto {

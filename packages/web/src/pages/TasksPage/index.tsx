@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@heroui/react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import type { TaskFilters, TaskSortBy, TaskStatusFilter } from '@gloo/shared';
 
@@ -22,7 +22,13 @@ type StatusPillValue = TaskStatusFilter | 'ALL';
 export function TasksPage() {
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isCreateOpen, setCreateOpen] = useState(false);
+
+  // TaskCard stamps the route it was clicked from, so a task opened from the
+  // Dashboard closes back to the Dashboard. Falls back to the list for a URL
+  // pasted straight into the address bar, which carries no state.
+  const closeTo = (location.state as { from?: string } | null)?.from ?? '/tasks';
 
   // Filters live in the URL so the Dashboard cards can deep-link into a
   // pre-filtered Tasks view, and so filtered views stay shareable/bookmarkable.
@@ -48,7 +54,10 @@ export function TasksPage() {
         }
         return next;
       },
-      { replace: true },
+      // Carry location.state through the replace. Without it the search effect,
+      // which fires once on mount, silently drops the origin TaskCard stamped on
+      // the entry — and the modal would always close back to the list.
+      { replace: true, state: location.state },
     );
   }
 
@@ -126,7 +135,7 @@ export function TasksPage() {
         </div>
       </div>
 
-      {taskId ? <TaskModal taskId={taskId} onClose={() => navigate('/tasks')} /> : null}
+      {taskId ? <TaskModal taskId={taskId} onClose={() => navigate(closeTo)} /> : null}
       <CreateTaskModal isOpen={isCreateOpen} onClose={() => setCreateOpen(false)} />
     </div>
   );

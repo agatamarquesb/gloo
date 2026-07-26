@@ -10,12 +10,14 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "oxlint .",
     "format": "oxlint --fix .",
+    "screenshot": "node scripts/screenshot.mjs",
     "db:migrate": "pnpm --filter @gloo/api exec prisma migrate dev",
     "db:seed": "pnpm --filter @gloo/api exec prisma db seed",
     "db:studio": "pnpm --filter @gloo/api exec prisma studio"
   },
   "devDependencies": {
     "oxlint": "^1.75.0",
+    "playwright": "^1.62.0",
     "typescript": "^5.7.0"
   }
 }

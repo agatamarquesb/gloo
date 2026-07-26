@@ -3,13 +3,13 @@ import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/d
 import { Calendar } from '@heroui/react';
 import { useNavigate } from 'react-router';
 
-import { useIsDarkMode } from '@/hooks/ui/useIsDarkMode';
 import { useSectors } from '@/hooks/queries/sectors';
 import { useTasksCalendar } from '@/hooks/queries/tasks';
-import { seriesColor } from '@/theme/chartColors';
+import { useTileColors } from '@/hooks/ui/useTileColors';
 import { strings } from '@/strings/pt-BR';
 
 import { DashboardCard } from './DashboardCard';
+import { sortBySectorOrder } from './sectorOrder';
 
 const MAX_DOTS = 3;
 
@@ -21,16 +21,24 @@ function monthRange(focused: CalendarDate) {
 
 export function CalendarCard() {
   const navigate = useNavigate();
-  const isDark = useIsDarkMode();
   const [focused, setFocused] = useState<CalendarDate>(() => today(getLocalTimeZone()));
+  const tileColors = useTileColors();
 
   const { from, to } = monthRange(focused);
   const { data: entries = [] } = useTasksCalendar(from, to);
   const { data: sectors = [] } = useSectors();
 
   // Sector → palette slot, so a day's dots match the donut's colors exactly.
+  // Both sides slot by the shared display order, not by API order, or the same
+  // sector would land on a different color in each card.
   const slotBySector = useMemo(
-    () => new Map(sectors.map((sector, index) => [sector.id, index])),
+    () =>
+      new Map(
+        sortBySectorOrder(sectors, (sector) => sector.name).map((sector, index) => [
+          sector.id,
+          index,
+        ]),
+      ),
     [sectors],
   );
   const bySector = useMemo(
@@ -41,6 +49,11 @@ export function CalendarCard() {
   return (
     <DashboardCard title={strings.dashboard.calendar}>
       <Calendar
+        // HeroUI pins .calendar to a fixed w-63/max-w-63, which left the grid
+        // short of the card's right edge. Utilities outrank the component layer,
+        // so this lets the 7-column grid stretch and the card's own padding
+        // become the margin on all four sides.
+        className="w-full max-w-full"
         aria-label={strings.dashboard.calendar}
         focusedValue={focused}
         onFocusChange={setFocused}
@@ -70,7 +83,8 @@ export function CalendarCard() {
                               key={sectorId}
                               className="size-1 rounded-full"
                               style={{
-                                backgroundColor: seriesColor(slotBySector.get(sectorId) ?? 0, isDark),
+                                backgroundColor:
+                                  tileColors[(slotBySector.get(sectorId) ?? 0) % tileColors.length],
                               }}
                             />
                           ))}

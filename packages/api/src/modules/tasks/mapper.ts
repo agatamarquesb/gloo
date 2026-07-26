@@ -51,6 +51,8 @@ export function toTaskListItemDto(task: TaskWithRelations): TaskListItemDto {
     sector: { id: task.sector.id, name: task.sector.name },
     assignees: task.assignees.map((a) => toUserDto(a.user)),
     createdById: task.createdById,
+    // Whitespace-only descriptions don't count as notes.
+    hasDescription: Boolean(task.description?.trim()),
   };
 }
 

@@ -8,3 +8,6 @@ build/
 packages/api/generated/
 uploads/
 .turbo/
+
+# Output of `pnpm screenshot`
+.screenshots/

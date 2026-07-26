@@ -44,6 +44,8 @@ export const strings = {
     },
     addTask: 'Adicionar tarefa',
     copyLink: 'Copiar link',
+    hasNotes: 'Tem anotações',
+    noNotes: 'Sem anotações',
   },
   routine: {
     recurrence: {
@@ -81,9 +83,10 @@ export const strings = {
   },
   timeBlocking: {
     title: 'Time blocking',
-    subtitle: 'Escolha um bloco de foco',
-    custom: 'Personalizado',
-    customPrompt: 'Minutos:',
+    customOpen: 'Tempo personalizado',
+    customLabel: 'Tempo (hh:mm:ss)',
+    customConfirm: 'Confirmar tempo',
+    customCancel: 'Cancelar',
     start: 'Iniciar',
     pause: 'Pausar',
     reset: 'Zerar',
