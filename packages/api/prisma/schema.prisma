@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum TaskPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum RoutineRecurrence {
+  WEEKLY
+  MONTHLY
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(EMPLOYEE)
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdTasks     Task[]         @relation("TaskCreator")
+  assignedTasks    TaskAssignee[]
+  createdRoutines  Routine[]      @relation("RoutineCreator")
+  assignedRoutines Routine[]      @relation("RoutineAssignee")
+
+  @@map("users")
+}
+
+model Sector {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  tasks Task[]
+
+  @@map("sectors")
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+  status      TaskStatus   @default(TODO)
+  sectorId    String
+  sector      Sector       @relation(fields: [sectorId], references: [id])
+  createdById String
+  createdBy   User         @relation("TaskCreator", fields: [createdById], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  subtasks  Subtask[]
+  assignees TaskAssignee[]
+
+  @@index([status])
+  @@index([dueDate])
+  @@index([sectorId])
+  @@map("tasks")
+}
+
+model TaskAssignee {
+  taskId String
+  userId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@map("task_assignees")
+}
+
+model Subtask {
+  id     String  @id @default(uuid())
+  taskId String
+  task   Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  text   String
+  done   Boolean @default(false)
+  order  Int     @default(0)
+
+  @@index([taskId])
+  @@map("subtasks")
+}
+
+model Routine {
+  id              String            @id @default(uuid())
+  description     String
+  recurrence      RoutineRecurrence
+  weekday         Int?
+  dayOfMonth      Int?
+  done            Boolean           @default(false)
+  lastCompletedAt DateTime?
+  assigneeId      String
+  assignee        User              @relation("RoutineAssignee", fields: [assigneeId], references: [id])
+  createdById     String
+  createdBy       User              @relation("RoutineCreator", fields: [createdById], references: [id])
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([assigneeId])
+  @@map("routines")
+}

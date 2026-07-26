@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "react", "jsx-a11y"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "oxc/no-async-endpoint-handlers": "off",
+    "no-underscore-dangle": "off"
+  },
+  "ignorePatterns": ["**/dist/**", "**/generated/**", "**/node_modules/**"],
+  "env": {
+    "builtin": true,
+    "browser": true,
+    "node": true
+  }
+}

@@ -1,0 +1,89 @@
+import { useMemo, useState } from 'react';
+import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
+import { Calendar } from '@heroui/react';
+import { useNavigate } from 'react-router';
+
+import { useIsDarkMode } from '@/hooks/ui/useIsDarkMode';
+import { useSectors } from '@/hooks/queries/sectors';
+import { useTasksCalendar } from '@/hooks/queries/tasks';
+import { seriesColor } from '@/theme/chartColors';
+import { strings } from '@/strings/pt-BR';
+
+import { DashboardCard } from './DashboardCard';
+
+const MAX_DOTS = 3;
+
+function monthRange(focused: CalendarDate) {
+  const first = focused.set({ day: 1 });
+  const last = first.add({ months: 1 }).subtract({ days: 1 });
+  return { from: first.toString(), to: last.toString() };
+}
+
+export function CalendarCard() {
+  const navigate = useNavigate();
+  const isDark = useIsDarkMode();
+  const [focused, setFocused] = useState<CalendarDate>(() => today(getLocalTimeZone()));
+
+  const { from, to } = monthRange(focused);
+  const { data: entries = [] } = useTasksCalendar(from, to);
+  const { data: sectors = [] } = useSectors();
+
+  // Sector → palette slot, so a day's dots match the donut's colors exactly.
+  const slotBySector = useMemo(
+    () => new Map(sectors.map((sector, index) => [sector.id, index])),
+    [sectors],
+  );
+  const bySector = useMemo(
+    () => new Map(entries.map((entry) => [entry.date, entry.sectorIds])),
+    [entries],
+  );
+
+  return (
+    <DashboardCard title={strings.dashboard.calendar}>
+      <Calendar
+        aria-label={strings.dashboard.calendar}
+        focusedValue={focused}
+        onFocusChange={setFocused}
+        onChange={(date) => navigate(`/tasks?dueDateFrom=${date.toString()}&dueDateTo=${date.toString()}`)}
+      >
+        <Calendar.Header>
+          <Calendar.NavButton slot="previous" />
+          <Calendar.Heading />
+          <Calendar.NavButton slot="next" />
+        </Calendar.Header>
+        <Calendar.Grid>
+          <Calendar.GridHeader>
+            {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
+          </Calendar.GridHeader>
+          <Calendar.GridBody>
+            {(date) => (
+              <Calendar.Cell date={date} className="relative">
+                {({ formattedDate }) => {
+                  const sectorIds = bySector.get(date.toString()) ?? [];
+                  return (
+                    <>
+                      {formattedDate}
+                      {sectorIds.length > 0 ? (
+                        <span className="pointer-events-none absolute inset-x-0 -bottom-0.5 flex justify-center gap-0.5">
+                          {sectorIds.slice(0, MAX_DOTS).map((sectorId) => (
+                            <span
+                              key={sectorId}
+                              className="size-1 rounded-full"
+                              style={{
+                                backgroundColor: seriesColor(slotBySector.get(sectorId) ?? 0, isDark),
+                              }}
+                            />
+                          ))}
+                        </span>
+                      ) : null}
+                    </>
+                  );
+                }}
+              </Calendar.Cell>
+            )}
+          </Calendar.GridBody>
+        </Calendar.Grid>
+      </Calendar>
+    </DashboardCard>
+  );
+}

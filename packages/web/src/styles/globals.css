@@ -1,0 +1,87 @@
+@import 'tailwindcss';
+@import '@heroui/styles';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Gloo brand palette — the ONLY place these hex values are defined.
+ * Every other file must reference these tokens (bg-main, text-tertiary, the
+ * --main/--secondary/--tertiary/--fourtiary CSS vars, or theme/colors.ts on
+ * the JS side) instead of hardcoding colors.
+ */
+:root {
+  --main: #ffca26;
+  --secondary: #f3e8cc;
+  --tertiary: #19532b;
+  --fourtiary: #9abc04;
+
+  /* Wire our brand color into HeroUI's single accent slot (buttons, focus
+     rings, checked states, links). Dark text reads better than white on this
+     golden yellow, so accent-foreground uses HeroUI's near-black primitive. */
+  --accent: var(--main);
+  --accent-foreground: var(--eclipse);
+  /* Tertiary green doubles as the semantic "success/done" color instead of
+     HeroUI's unrelated default green, keeping status colors on-palette. */
+  --success: var(--tertiary);
+}
+
+.dark {
+  /* Perceptually tuned for a dark background, not a naive hue inversion:
+     main is darkened/desaturated so it doesn't glare, tertiary/fourtiary are
+     lightened to keep contrast against the dark surface. */
+  --main: #e0ac1e;
+  --secondary: #2a2718;
+  --tertiary: #3e8b54;
+  --fourtiary: #b7d93f;
+
+  --accent: var(--main);
+  --accent-foreground: var(--eclipse);
+  --success: var(--tertiary);
+}
+
+@theme inline {
+  --color-main: var(--main);
+  --color-secondary: var(--secondary);
+  --color-tertiary: var(--tertiary);
+  --color-fourtiary: var(--fourtiary);
+}
+
+/*
+ * Animation. Everything here is transform/opacity/color only — properties the
+ * compositor can animate without layout work — and everything is disabled
+ * under prefers-reduced-motion.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  /* Theme flip: fade surfaces instead of snapping between light and dark. */
+  body,
+  aside,
+  section,
+  [data-slot='modal-dialog'] {
+    transition:
+      background-color 200ms var(--ease-out-fluid, ease),
+      border-color 200ms var(--ease-out-fluid, ease);
+  }
+
+  /* Cards and list rows rise slightly on entry. */
+  @keyframes gloo-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .gloo-rise {
+    animation: gloo-rise 260ms var(--ease-out-fluid, cubic-bezier(0.32, 0.72, 0, 1)) both;
+    will-change: transform, opacity;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gloo-rise {
+    animation: none;
+  }
+}

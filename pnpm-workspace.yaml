@@ -1,0 +1,10 @@
+packages:
+  - 'packages/*'
+allowBuilds:
+  '@prisma/engines': true
+  bcrypt: true
+  esbuild: true
+  prisma: true
+minimumReleaseAgeExclude:
+  - lucide-react@1.27.0
+  - recharts@3.10.1
