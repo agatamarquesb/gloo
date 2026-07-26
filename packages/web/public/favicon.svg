@@ -1,8 +1,8 @@
-<!-- Static asset: cannot reference CSS vars, so the palette's Main (#FFCA26)
-     and Tertiary (#19532B) are inlined here. Keep in sync with
+<!-- Static asset: cannot reference CSS vars, so the palette's primary Green
+     (#C4D254) and Black (#000000) are inlined here. Keep in sync with
      src/styles/globals.css if the brand palette changes. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#FFCA26" />
+  <rect width="32" height="32" rx="8" fill="#C4D254" />
   <text
     x="16"
     y="22"
@@ -10,6 +10,6 @@
     font-family="system-ui, -apple-system, sans-serif"
     font-size="19"
     font-weight="700"
-    fill="#19532B"
+    fill="#000000"
   >G</text>
 </svg>

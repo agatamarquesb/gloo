@@ -5,45 +5,107 @@
 
 /*
  * Gloo brand palette — the ONLY place these hex values are defined.
- * Every other file must reference these tokens (bg-main, text-tertiary, the
- * --main/--secondary/--tertiary/--fourtiary CSS vars, or theme/colors.ts on
- * the JS side) instead of hardcoding colors.
+ *
+ * Five official colors: blue, yellow, green, red, black. GREEN IS PRIMARY and
+ * the default choice for buttons, charts, sliders and any other accent
+ * surface. Blue/yellow/red are soft pastel status tints — blue = to do,
+ * yellow = in progress, red = overdue — and black is the text color that sits
+ * on top of any of them.
+ *
+ * Every other file must reference these tokens (bg-green, text-black, the
+ * --blue/--yellow/--green/--red/--black CSS vars, or theme/colors.ts on the JS
+ * side) instead of hardcoding colors.
+ *
+ * The five brand values are identical in light and dark mode, so a status color
+ * never shifts meaning between themes. The one exception is the --tile-* set
+ * below, which is scoped to the Dashboard's task-summary tiles: those get their
+ * own darker steps in dark mode. Nothing else in the app changes with the theme —
+ * in particular --green keeps its brand value in both modes, so buttons, focus
+ * rings, chips and charts look the same either way.
  */
 :root {
-  --main: #ffca26;
-  --secondary: #f3e8cc;
-  --tertiary: #19532b;
-  --fourtiary: #9abc04;
+  --blue: #98e0ff;
+  --yellow: #ffe868;
+  --green: #c4d254;
+  --red: #ffd9c9;
+  --black: #000000;
 
-  /* Wire our brand color into HeroUI's single accent slot (buttons, focus
-     rings, checked states, links). Dark text reads better than white on this
-     golden yellow, so accent-foreground uses HeroUI's near-black primitive. */
-  --accent: var(--main);
-  --accent-foreground: var(--eclipse);
-  /* Tertiary green doubles as the semantic "success/done" color instead of
-     HeroUI's unrelated default green, keeping status colors on-palette. */
-  --success: var(--tertiary);
+  /* Green is primary, so it fills HeroUI's accent slot (buttons, focus rings,
+     checked states, links) and doubles as the semantic "success/done" color
+     instead of HeroUI's unrelated default green. Every brand color carries
+     black text at 9:1 or better, hence --black for the status foregrounds.
+
+     --danger is deliberately NOT wired to --red: our red is a pale status tint,
+     and destructive affordances — the delete button, HIGH-priority
+     and overdue chips — need a color that reads as alarming. They keep HeroUI's
+     saturated red. Use bg-red for the soft status tint, `danger` for danger. */
+  --accent: var(--green);
+  --accent-foreground: var(--black);
+  --success: var(--green);
+  --success-foreground: var(--black);
+  --warning: var(--yellow);
+  --warning-foreground: var(--black);
+
+  /* Task-summary tiles (Dashboard). The ONLY per-mode colors in the palette, and
+     deliberately their own tokens rather than the brand ones: in light mode they
+     ARE the brand values, in dark mode they step down to muted variants so the
+     tiles don't glare as bright pastel panels. Scoped here so darkening a tile
+     never leaks into --green or anything else that uses it. */
+  --tile-todo: var(--blue);
+  --tile-progress: var(--yellow);
+  --tile-done: var(--green);
+  --tile-overdue: var(--red);
+  --tile-foreground: var(--black);
+
+  /* The icon's backing disc: filled white here, reduced to a white outline in
+     dark mode. Either way the disc keeps its size and its edge, which is what
+     lines the icon up with the count and label below it. */
+  --tile-icon-backdrop: #ffffff;
+  --tile-icon-border: transparent;
 }
 
 .dark {
-  /* Perceptually tuned for a dark background, not a naive hue inversion:
-     main is darkened/desaturated so it doesn't glare, tertiary/fourtiary are
-     lightened to keep contrast against the dark surface. */
-  --main: #e0ac1e;
-  --secondary: #2a2718;
-  --tertiary: #3e8b54;
-  --fourtiary: #b7d93f;
+  /* Brand colors are mode-invariant, so this only re-asserts the semantic
+     wiring — otherwise HeroUI's own .dark value for --warning would take over. */
+  --accent: var(--green);
+  --accent-foreground: var(--black);
+  --success: var(--green);
+  --success-foreground: var(--black);
+  --warning: var(--yellow);
+  --warning-foreground: var(--black);
 
-  --accent: var(--main);
-  --accent-foreground: var(--eclipse);
-  --success: var(--tertiary);
+  /* Muted tile steps for the dark surface, with white text on top. Chosen for
+     appearance: white text lands at ~2.7-2.9:1 here, under the WCAG AA 4.5:1
+     floor, and the darker steps that would clear it were rejected as too dull.
+     Note these do NOT feed --green: the primary green is unchanged in dark
+     mode. */
+  --tile-todo: #6da1b6;
+  --tile-progress: #b69b4d;
+  --tile-done: #939e3f;
+  --tile-overdue: #b6988e;
+  --tile-foreground: #ffffff;
+
+  /* Outline only: a filled white disc glared and a dark one read as a heavy hole
+     punched in the tile, but dropping the disc entirely left the icon floating
+     out of line with the text. The ring keeps the alignment without the mass. */
+  --tile-icon-backdrop: transparent;
+  --tile-icon-border: #ffffff;
 }
 
 @theme inline {
-  --color-main: var(--main);
-  --color-secondary: var(--secondary);
-  --color-tertiary: var(--tertiary);
-  --color-fourtiary: var(--fourtiary);
+  --color-blue: var(--blue);
+  --color-yellow: var(--yellow);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-black: var(--black);
+
+  --color-tile-todo: var(--tile-todo);
+  --color-tile-progress: var(--tile-progress);
+  --color-tile-done: var(--tile-done);
+  --color-tile-overdue: var(--tile-overdue);
+  --color-tile-foreground: var(--tile-foreground);
+  --color-tile-icon-backdrop: var(--tile-icon-backdrop);
+  --color-tile-icon-border: var(--tile-icon-border);
 }
 
 /*

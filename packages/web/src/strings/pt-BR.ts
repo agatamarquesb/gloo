@@ -60,7 +60,6 @@ export const strings = {
   },
   dashboard: {
     taskSummary: 'Resumo de tarefas',
-    taskSummarySubtitle: 'Acompanhe o andamento das suas tarefas',
     myTasks: 'Minhas tarefas',
     openBySector: 'Tarefas abertas por setor',
     calendar: 'Calendário',

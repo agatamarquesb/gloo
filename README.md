@@ -61,10 +61,17 @@ Colour Pallete:
 
 Create a file containing all colours used. Always reuse from this file, to make changing later easy. Do not hardcode colours. 
 
-Main - #FFCA26
-Secondary - #F3E8CC 
-Tertiary - #19532B
-Fourtiary - #9ABC04
+Green - #C4D254 (PRIMARY — preferred for buttons, charts, sliders, accents)
+Yellow - #FFE868
+Blue - #98E0FF
+Red - #FFD9C9
+Black - #000000
+
+Status meaning: Blue = to do, Yellow = in progress, Green = done, Red = overdue.
+Black is the text color that sits on top of any of them.
+
+Blue/yellow/red are pastel status tints, not alert colors: destructive
+affordances (delete, HIGH priority, overdue chips) keep HeroUI's saturated red.
 
 Night Mode:
 Prepare all colours for a night mode version

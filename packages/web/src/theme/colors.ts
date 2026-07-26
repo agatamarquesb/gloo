@@ -4,9 +4,10 @@
  * the hex values here. Used where a raw color string is required rather than
  * a Tailwind class — e.g. Recharts `fill`/`stroke` props.
  */
-const PALETTE_VARS = ['--main', '--secondary', '--tertiary', '--fourtiary'] as const;
+const PALETTE_VARS = ['--blue', '--yellow', '--green', '--red', '--black'] as const;
 
-export type PaletteKey = 'main' | 'secondary' | 'tertiary' | 'fourtiary';
+/** Green is the primary brand color — prefer it whenever a single accent is needed. */
+export type PaletteKey = 'blue' | 'yellow' | 'green' | 'red' | 'black';
 
 export function getPaletteColor(key: PaletteKey): string {
   const varName = `--${key}`;

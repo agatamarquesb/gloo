@@ -19,7 +19,7 @@ export function Sidebar() {
   return (
     <aside className="hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-surface px-3 py-5 md:flex">
       <div className="mb-8 flex items-center gap-2 px-2">
-        <span className="flex size-8 items-center justify-center rounded-xl bg-main text-sm font-bold text-tertiary">
+        <span className="flex size-8 items-center justify-center rounded-xl bg-green text-sm font-bold text-black">
           G
         </span>
         <span className="text-lg font-semibold text-surface-foreground">{strings.appName}</span>
