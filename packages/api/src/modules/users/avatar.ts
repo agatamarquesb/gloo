@@ -8,8 +8,8 @@ import type { FastifyInstance } from 'fastify';
 
 import { env } from '../../config/env';
 import { prisma } from '../../lib/prisma';
+import { toUserDto } from '../../lib/userDto';
 
-const MAX_BYTES = 2 * 1024 * 1024;
 const EXTENSION_BY_MIME: Record<string, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
@@ -18,7 +18,12 @@ const EXTENSION_BY_MIME: Record<string, string> = {
 
 export async function avatarRoutes(app: FastifyInstance) {
   app.post('/me/avatar', async (request, reply) => {
-    const file = await request.file({ limits: { fileSize: MAX_BYTES } });
+    // No size cap, by product decision: users pick straight from a phone
+    // camera roll. `Infinity` is set explicitly rather than omitted, because
+    // @fastify/multipart would otherwise apply its own default limit and
+    // silently truncate the file. Internal app, ≤3 accounts, so the upload is
+    // trusted; revisit if this ever faces a wider audience.
+    const file = await request.file({ limits: { fileSize: Infinity } });
     if (!file) {
       return reply.code(400).send({ error: 'Nenhum arquivo enviado' });
     }
@@ -33,13 +38,6 @@ export async function avatarRoutes(app: FastifyInstance) {
     const filename = `${randomUUID()}.${extension}`;
     const destination = path.join(env.UPLOADS_DIR, filename);
     await pipeline(file.file, createWriteStream(destination));
-
-    // @fastify/multipart flags truncation rather than throwing, so an
-    // over-limit upload has to be rejected (and cleaned up) explicitly.
-    if (file.file.truncated) {
-      await unlink(destination).catch(() => {});
-      return reply.code(413).send({ error: 'Imagem muito grande (máx. 2MB)' });
-    }
 
     const previous = await prisma.user.findUnique({
       where: { id: request.authUser.id },
@@ -57,12 +55,6 @@ export async function avatarRoutes(app: FastifyInstance) {
       await unlink(path.join(env.UPLOADS_DIR, path.basename(previous.avatarUrl))).catch(() => {});
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      avatarUrl: user.avatarUrl,
-    };
+    return toUserDto(user);
   });
 }

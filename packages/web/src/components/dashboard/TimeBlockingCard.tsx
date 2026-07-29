@@ -3,6 +3,7 @@ import { Check, Pause, Play, RotateCcw, X } from 'lucide-react';
 import { Button, Input } from '@heroui/react';
 import { TextField } from 'react-aria-components';
 
+import { playAlarm } from '@/lib/sounds';
 import { strings } from '@/strings/pt-BR';
 
 import { DashboardCard } from './DashboardCard';
@@ -90,7 +91,12 @@ export function TimeBlockingCard() {
     const id = setInterval(() => {
       const left = Math.max(0, Math.round((deadlineRef.current! - Date.now()) / 1000));
       setRemaining(left);
-      if (left === 0) setRunning(false);
+      if (left === 0) {
+        setRunning(false);
+        // The point of a focus timer is that you are looking at something else,
+        // so reaching zero has to be audible.
+        playAlarm();
+      }
     }, 250);
 
     return () => clearInterval(id);
@@ -148,8 +154,11 @@ export function TimeBlockingCard() {
         </div>
       }
     >
+      {/* text-3xl font-semibold matches the counts on the task-summary tiles —
+          the app's one size for a headline number. py-3 on top of the card's own
+          gap keeps it from sitting tight against the header and preset grid. */}
       <p
-        className="text-center text-5xl font-semibold tabular-nums text-foreground transition-colors"
+        className="py-3 text-center text-3xl font-semibold tabular-nums text-foreground transition-colors"
         aria-live="polite"
       >
         {format(remaining)}

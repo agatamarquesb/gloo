@@ -4,6 +4,7 @@ import { Button, Modal } from '@heroui/react';
 import { useCreateTask } from '@/hooks/queries/tasks';
 import { useSectors } from '@/hooks/queries/sectors';
 import { useUsers } from '@/hooks/queries/users';
+import { SecondaryButton } from '@/components/common/SecondaryButton';
 import { strings } from '@/strings/pt-BR';
 
 import { TaskFieldsEditor, type TaskFieldsValue } from './TaskFieldsEditor';
@@ -70,9 +71,9 @@ export function CreateTaskModal({
           </Modal.Body>
 
           <Modal.Footer>
-            <Button variant="secondary" slot="close">
+            <SecondaryButton slot="close">
               {strings.common.cancel}
-            </Button>
+            </SecondaryButton>
             <Button isDisabled={!canSubmit || createTask.isPending} onPress={handleCreate}>
               {strings.common.save}
             </Button>

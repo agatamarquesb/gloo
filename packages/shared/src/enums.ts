@@ -36,3 +36,35 @@ export const RoutineRecurrence = {
   MONTHLY: 'MONTHLY',
 } as const;
 export type RoutineRecurrence = (typeof RoutineRecurrence)[keyof typeof RoutineRecurrence];
+
+/**
+ * The colors a label can take. Keys, never hex — each one maps to a
+ * `--label-<key>` custom property defined in the web package's globals.css,
+ * which stays the only place a color value is written down.
+ */
+export const LABEL_COLORS = [
+  'green',
+  'lime',
+  'yellow',
+  'orange',
+  'red',
+  'pink',
+  'purple',
+  'blue',
+  'teal',
+  'gray',
+] as const;
+export type LabelColor = (typeof LABEL_COLORS)[number];
+
+export const DEFAULT_LABEL_COLOR: LabelColor = 'green';
+
+export function isLabelColor(value: unknown): value is LabelColor {
+  return typeof value === 'string' && (LABEL_COLORS as readonly string[]).includes(value);
+}
+
+/** A link the user pasted, or a file they uploaded. */
+export const AttachmentKind = {
+  LINK: 'LINK',
+  FILE: 'FILE',
+} as const;
+export type AttachmentKind = (typeof AttachmentKind)[keyof typeof AttachmentKind];

@@ -35,15 +35,20 @@ model User {
   email        String   @unique
   passwordHash String
   name         String
+  /// Permission level. Not user-editable — see `jobTitle` for the display one.
   role         Role     @default(EMPLOYEE)
+  /// Free-text job title shown under the user's name ("Designer"). Purely
+  /// cosmetic: it carries no authorization meaning, which is why the user is
+  /// allowed to edit their own.
+  jobTitle     String?
   avatarUrl    String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  createdTasks     Task[]         @relation("TaskCreator")
+  createdTasks     Task[]            @relation("TaskCreator")
   assignedTasks    TaskAssignee[]
-  createdRoutines  Routine[]      @relation("RoutineCreator")
-  assignedRoutines Routine[]      @relation("RoutineAssignee")
+  createdRoutines  Routine[]         @relation("RoutineCreator")
+  assignedRoutines RoutineAssignee[]
 
   @@map("users")
 }
@@ -105,19 +110,66 @@ model Subtask {
 
 model Routine {
   id              String            @id @default(uuid())
+  /// Shown as "Título" in the UI; kept as `description` because it is the
+  /// routine's only text and every consumer already reads it by that name.
   description     String
   recurrence      RoutineRecurrence
   weekday         Int?
   dayOfMonth      Int?
+  /// Free-text annotation shown in the routine's edit modal.
+  notes           String?
+  /// Up to five checklists, as `[{ title, items: [{ text, done }] }]`.
+  /// Embedded rather than its own table (unlike Task/Subtask): they belong to
+  /// one routine, are never queried or filtered on, and save in the routine's
+  /// own PATCH — a join table would buy nothing here.
+  checklists      Json?
+  /// Links and uploaded files, as `[{ id, kind, url, title }]`. Embedded for
+  /// the same reasons as `checklist`; the files themselves live in UPLOADS_DIR.
+  attachments     Json?
   done            Boolean           @default(false)
   lastCompletedAt DateTime?
-  assigneeId      String
-  assignee        User              @relation("RoutineAssignee", fields: [assigneeId], references: [id])
   createdById     String
   createdBy       User              @relation("RoutineCreator", fields: [createdById], references: [id])
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  @@index([assigneeId])
+  assignees RoutineAssignee[]
+  labels    RoutineLabel[]
+
   @@map("routines")
+}
+
+/// Routines carry multiple assignees, exactly like tasks.
+model RoutineAssignee {
+  routineId String
+  userId    String
+  routine   Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([routineId, userId])
+  @@map("routine_assignees")
+}
+
+/// User-defined tag, shared across routines rather than owned by one — the
+/// picker lists every label that exists so they can be reused.
+model Label {
+  id        String   @id @default(uuid())
+  name      String
+  /// A key into the `--label-*` palette in globals.css, never a hex value.
+  color     String
+  createdAt DateTime @default(now())
+
+  routines RoutineLabel[]
+
+  @@map("labels")
+}
+
+model RoutineLabel {
+  routineId String
+  labelId   String
+  routine   Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  label     Label   @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([routineId, labelId])
+  @@map("routine_labels")
 }

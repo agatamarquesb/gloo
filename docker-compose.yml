@@ -28,6 +28,10 @@ services:
       NODE_ENV: development
       PORT: 3001
       UPLOADS_DIR: /app/uploads
+      # tsx watch (chokidar) misses edits made on the host, because Docker
+      # Desktop's bind mounts don't deliver inotify events reliably on macOS —
+      # so new routes would 404 until the container was restarted by hand.
+      CHOKIDAR_USEPOLLING: 'true'
     ports:
       - '3001:3001'
     volumes:

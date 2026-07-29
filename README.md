@@ -135,6 +135,15 @@ Open **http://localhost:5173** and sign in with the seeded admin account
 Both containers run `pnpm install` at startup, so after adding a dependency on
 the host just `docker compose restart api web` — no image rebuild needed.
 
+**File watching uses polling on purpose.** Docker Desktop's bind mounts don't
+deliver inotify events reliably on macOS, so both watchers were missing host
+edits: `tsx watch` served 404s for routes that existed on disk, and Vite served a
+*stale transform* of `packages/shared` — which surfaces as a blank page
+("does not provide an export named …"), not a build error. `usePolling` in
+`vite.config.ts` and `CHOKIDAR_USEPOLLING` on the api service fix both. If you
+ever see a blank page right after a change to `packages/shared`, that is the
+symptom to suspect; `docker compose restart web` clears it.
+
 ### Environment variables
 
 | Variable | Used by | Purpose |
@@ -231,6 +240,20 @@ documented reason:
 | `AppCheckbox` | HeroUI 3.2.2 / react-aria 3.50.0 ship a checkbox that is keyboard-only — the label press never fires for mouse input. This forwards the row click to the underlying input. Delete it once upstream is fixed, or it will double-toggle. |
 | `DateField` | Wraps HeroUI's `DatePicker` composition tree behind the ISO-date (`YYYY-MM-DD`) string API the rest of the app uses. |
 | `UserAvatar` | HeroUI `Avatar` plus initials fallback and `assetUrl` resolution for uploaded photos. |
+| `SecondaryButton` | The counterpart to a primary action — Cancelar beside Salvar, and anything that dismisses rather than commits. Exists because these had drifted into three different looks (`secondary`, `ghost`, and an outline with a near-black border), so a dialog's two buttons read as unrelated controls. Use it for every cancel; never hand-roll one. |
+| `SearchField` | The app's one search input. At rest it is an outline pill matching the status filter buttons; focus brings in the shadow. Magnifier sits inside the field. Shared by the Tasks filter bar and the "Minhas tarefas" card so they can't drift apart. |
+| `ImageCropper` | 1:1 crop-and-zoom for a picked image. HeroUI has no cropper, and the whole interaction is a CSS transform over an `<img>` plus one `drawImage` — not worth a dependency. |
+
+`ImageCropper` is worth knowing in detail, since it is the app's only piece of
+canvas work. Geometry is one model shared by the preview and the export: a
+`zoom` factor over a cover-fit baseline, plus a pan `offset` in viewport pixels,
+clamped so the image always covers the square — which is what guarantees the
+exported crop is exactly what the round mask showed. Panning is pointer events
+(mouse, touch and pen in one path, with `touch-none` so dragging doesn't scroll
+the modal); zoom is a HeroUI `Slider`; the viewport width is measured into state
+with a `ResizeObserver` rather than read off a ref during render. Export draws
+the mapped source square onto an offscreen canvas at up to 512px — never
+upscaling — and emits a JPEG `File`.
 
 ### 5.2 Color palette
 
@@ -258,6 +281,34 @@ rings, checked states and links pick it up automatically:
 `danger` is a separate HeroUI semantic slot, not a brand color. It is used for
 genuinely alarming affordances: the HIGH priority chip, the delete button
 (`variant="danger-soft"`), inline form errors, and the notes dot on a task row.
+
+**Two outline tokens, both per-mode.** `--outline-control` is the edge of a
+control that is *defined* by its edge — the action pills, "Limpar", "Escolher
+arquivo", the link field. HeroUI's `--border` is tuned for dividers and sits at
+28% lightness in dark mode, which all but vanishes against a near-black surface;
+a button findable only by its label is not really outlined. So this one goes
+brighter in dark and is unchanged in light. Use `border-outline-control` (or the
+`outlineControl` / `actionPill` constants) on any such control.
+
+**Green as an outline.** `--outline-green` is the token for every green
+*hairline* — card borders, the rules under editable titles, the checkbox ring —
+as opposed to green as a fill. It is `--green` on a light surface, but stepped
+down to a desaturated `#6d7350` in dark mode: the brand value is bright enough
+that a 1px line of it on near-black reads as neon and pulls focus from the
+content it frames. Fills stay `--green` in both themes; only the hairlines
+change. Reach for `border-outline-green`, never `border-green`.
+
+**Label colors.** The third sanctioned exception to "five colors", for a
+different reason than `--tile-*`: labels are named by the user, so the set has to
+be wide enough that two of them can be told apart. Ten `--label-*` tokens are
+defined in `globals.css` — the first *is* `--green` — all pastel, all carrying
+black text, all mode-invariant so a label keeps its identity between themes.
+
+Two rules keep them honest. The keys must match `LABEL_COLORS` in `@gloo/shared`,
+which is what the API validates against, so a color is always a key and never a
+hex. And the key → class mapping in `theme/labelColors.ts` is **written out
+longhand**, not interpolated as `` `bg-label-${color}` `` — Tailwind only emits
+classes it can see as literal strings, so a template would compile to nothing.
 
 **Chart colors.** Charts do not have their own palette. They colour marks from
 the tile set via `useTileColors()`, so a sector's donut slice matches the
@@ -344,7 +395,23 @@ titles are `text-xl font-semibold`, card titles `text-lg font-semibold`, body
 copy `text-sm`, secondary copy `text-sm text-muted`. Padding is generous by
 default — cramped content is a design bug.
 
-### 5.5 Motion
+### 5.5 Sound
+
+Two effects, both in `lib/sounds.ts` and both **synthesised with the Web Audio
+API rather than shipped as files** — each is a fraction of a second of noise or
+tone, so generating one costs less than the request for an asset would.
+
+| Sound | Where | Shape |
+|---|---|---|
+| `playWoosh()` | Clearing the notes field | White noise through a band-pass sweeping 1800→320Hz over 280ms |
+| `playAlarm()` | Time blocking hitting zero | Five 880Hz beeps over ~2s |
+
+The `AudioContext` is created lazily and resumed on use: browsers refuse to
+start audio before a user gesture, and both callers are gesture-driven, so by
+the time either runs the page has the permission. If audio is unavailable the
+functions return silently — a decorative sound is not worth an error.
+
+### 5.6 Motion
 
 Animation is a priority, and it must be cheap. Rules, all enforced in
 `globals.css`:
@@ -360,7 +427,7 @@ Animation is a priority, and it must be cheap. Rules, all enforced in
 - Chart entry animation is 450ms (`isAnimationActive` + `animationDuration` on
   the Recharts `Pie`).
 
-### 5.6 Responsiveness
+### 5.7 Responsiveness
 
 - The `md` breakpoint is the structural pivot: at and above it the desktop
   sidebar shows and the mobile bottom bar hides; below it, the reverse. `main`
@@ -375,7 +442,7 @@ Animation is a priority, and it must be cheap. Rules, all enforced in
 - Resizing the window must never break a layout. Check the whole range, not
   just the two extremes.
 
-### 5.7 Copy and i18n
+### 5.8 Copy and i18n
 
 All copy comes from `strings/pt-BR.ts`, grouped by area (`nav`, `auth`, `task`,
 `routine`, `dashboard`, `profile`, `timeBlocking`, `theme`, `common`). The UI
@@ -405,17 +472,37 @@ rows.
 routed `Outlet`, mobile bottom bar — and owns the profile modal, exposed to
 descendants through `ProfileContext` so both navs can open it.
 
-- **`Sidebar`** (desktop, `w-60`, hidden below `md`): "G" mark and app name,
-  nav links, then a footer with the current user (opens the profile modal), the
-  theme toggle, and Sign Out. The active link is a filled `bg-accent` pill.
+- **`Sidebar`** (desktop, `w-60`, hidden below `md`): "G" mark and app name, nav
+  links, and Sign Out. The active link is a filled `bg-accent` pill.
 - **`MobileNav`** (below `md`): fixed bottom bar with the same nav items plus
-  profile, theme and Sign Out, respecting `env(safe-area-inset-bottom)`.
+  Sign Out, respecting `env(safe-area-inset-bottom)`.
 - **`navItems.ts`** is the single source of nav entries for both. **Adding a
   page is one entry here** — do not add a link to either nav directly.
-- **`PageHeader`**: page title on the left, optional actions and the user chip
-  on the right. Every page renders it as its first child.
-- **`ProfileModal`**: avatar, name, e-mail, and a PNG/JPEG/WebP upload (2MB cap,
-  enforced server-side) posted to `/api/users/me/avatar`.
+- **`PageHeader`**: a `rounded-4xl bg-surface` bar floating on the page
+  background, with the page's own padding on three sides and a bottom gap equal
+  to the gap between cards (`gap-4` / `md:gap-5`), so it sits in the same rhythm
+  as everything below it rather than reading as chrome bolted on top. Page title
+  on the left; on the right, optional actions then a fixed trio — **user chip →
+  theme toggle → notifications bell**. Every page renders it as its first child.
+  **This header is the app's single home for identity, appearance and alerts**,
+  so none of the three is repeated in either nav. The user chip stacks the name
+  over the job title ([§7](#7-domain-model)); both are hidden below `sm`, where
+  only the avatar fits. The two icon buttons are round and carry their label via
+  `aria-label` only.
+- **`NotificationsBell`**: bell icon with a red dot (`bg-danger`, ringed in the
+  header backdrop) whenever there is anything to report — presence only, never a
+  count. Clicking opens a popover; each item is an outlined card matching the
+  Dashboard's task rows, with a paired **eye** (open the entity's own modal) and
+  **X** (dismiss) in its top-right corner. See [§6.6](#66-notifications).
+- **`ProfileModal`**: opened from the user chip. Shows the avatar, a photo
+  picker (PNG/JPEG/WebP, **no size cap**), editable **name** and **função**
+  (job title) fields, and the e-mail. Clearing the job title stores `NULL`. Picking a photo hands it straight to `ImageCropper`, which takes over
+  the dialog until the crop is applied. Edits are staged locally — the cropped
+  photo renders as a local `blob:` preview and nothing is sent until **Salvar**,
+  which uploads the avatar and then patches the name. Closing discards the
+  draft; the form is keyed on the open state so it remounts fresh each time.
+  Saving publishes the updated user through `syncUserCaches`, refreshing the
+  header, task and routine payloads, and the assignee pickers together.
 
 ### 6.3 Dashboard (`/`)
 
@@ -436,9 +523,10 @@ navigates to `/tasks?status=<STATUS>`. This card is the origin of the
 `--tile-*` palette described in [§5.3](#53-dark-mode-night-mode).
 
 **My Tasks Card** — the logged user's tasks (`assigneeId` filter), with slim
-status pills and no search or sort controls, capped at five visible rows. Its
-header action is an icon-only "+" shortcut to the create modal. Rows are the
-same `TaskCard` used on the Tasks page.
+status pills and no sort or filter controls, capped at five visible rows. Its
+header carries a `SearchField` (debounced 300ms, same as the Tasks page) beside
+an icon-only "+" shortcut to the create modal. Rows are the same `TaskCard` used
+on the Tasks page.
 
 **Open Tasks By Sector Card** — Recharts donut on the left, sector pills on the
 right, from `/tasks/by-sector` (non-`DONE` counts). Slice order is fixed by
@@ -450,18 +538,196 @@ placeholder ring rather than collapsing the card. The donut hole holds a
 recessive neutral icon — never a tile color, which would read as a fifth
 category.
 
-**Routines Card** — timeline of the user's routines from `/routines`, grouped
-by month with the soonest occurrence first, inside a HeroUI `ScrollShadow`
-capped at roughly four rows. Routines store a cadence, not a date, so
-`routineSchedule.ts` projects each onto its next occurrence to sort and group
-them (clamping e.g. the 31st in a 30-day month). Each row has an inline
-checkbox, the description, the occurrence date, and always-visible edit/delete
-buttons — hover-only controls hide that a row is editable at all and are
-unreachable on touch. Editing and creation both go through `RoutineModal`.
+**Routines Card** — timeline of the user's routines from `/routines`, grouped by
+month with the soonest occurrence first, inside a HeroUI `ScrollShadow`. Routines
+store a cadence, not a date, so `routineSchedule.ts` projects each onto its next
+occurrence to sort and group them (clamping e.g. the 31st in a 30-day month).
+
+Layout details that are load-bearing, not incidental:
+
+- The list has a **fixed** height (`h-40`), sized to show two rows plus a sliver
+  of the third — so it always reads as scrollable and the card's height never
+  depends on how many routines exist. `overflow-y-scroll` with
+  `[scrollbar-width:thin]` keeps the scrollbar permanently visible instead of
+  letting the platform hide it until you scroll.
+- `-mt-2` pulls the list into the card's header gap, close enough to the title
+  that the `ScrollShadow` top fade reads against it.
+- A row is checkbox → title (wrapping, plus up to three label pills underneath)
+  → date → delete. The checkbox and the date/delete cluster both carry `mt-0.5`,
+  putting them on the title's first line, so a title that wraps grows downward
+  from a fixed top edge instead of dragging them out of alignment. The title
+  wraps rather than truncating; the flex siblings keep it clear of the date.
+- **The whole row opens the routine**, via a button stretched behind the content
+  rather than a wrapper around it — the row also holds a checkbox and a delete
+  button, and buttons can't nest. The content layer is `pointer-events-none` and
+  those two opt back in.
+- Rows use the same hover treatment as a task row in "Minhas tarefas" — color
+  plus a slight lift, the lift behind `motion-safe:` since it is decoration. The
+  scroll container carries `px-1.5 py-1` for that: padding *inside* the scroller,
+  because the lifted edge is otherwise clipped by it.
+- **Clicking the description opens the edit modal** — there is no pencil icon.
+  It is a `<button>` around the text rather than a handler on the row, because
+  the row already contains a checkbox and a delete button and buttons can't nest.
+- The "Adicionar rotina" button carries `mt-auto`, pinning it to the bottom of
+  the card so it lines up with the preset grid in the Time blocking card beside
+  it instead of floating up when the list is short.
+
 Controls appear only when `canMutateEntity` allows it.
 
+**`RoutineModal`** handles both create and edit, in this order: **Título** →
+selected label pills → **Responsável**, **Recorrência** and the weekday /
+day-of-month select as one stacked property list → a three-up pill row → the
+notes field → whichever blocks the pill row has opened.
+
+The dialog header is a quiet "Editar"/"Adicionar rotina" with a pencil, sitting
+top-left — the routine's own title carries the weight instead. The footer pairs
+**Copiar link** and **Excluir** on the left with Cancelar/Salvar on the right,
+both left-hand actions shown only for a routine that already exists. Since
+routines have no route of their own, the copied link is the Dashboard plus a
+`?rotina=<id>` param, which `RoutinesCard` consumes once the routine has loaded
+and then strips from the URL so a later close doesn't reopen the dialog.
+
+The title owns the top row alone: a larger icon, a larger input, and its green
+rule. **Everything below is indented to where that rule starts** (`TITLE_INDENT`,
+= the icon's width plus its gap), so the icon has its own column and no box sits
+under it; the dialog is widened to `max-w-xl`, with a matching `pr-7` on the body
+so the side margins stay even.
+
+The three properties are rows, not columns. Each shares the action-pill row's
+three columns — label with its icon in the first, value at the head of the
+second — so values begin on the middle pill's left edge, near their labels
+rather than stranded against the far side. The value carries no border, fill or
+shadow in any state; `w-fit` keeps it as narrow as its text so the chevron
+trails the value, and `pr-6` reserves the lane HeroUI's absolutely-positioned
+chevron would otherwise share with the last character.
+
+Field styling is done by re-pointing HeroUI's custom properties rather than
+fighting its classes with `!important` — that is the supported seam. The shared
+combinations live in `theme/fieldStyles.ts`, and three things about them cost a
+round trip each to discover, so they are worth reading before restyling a field:
+
+- **The fill is partly an inset shadow.** Clearing `--field-background` alone
+  still leaves a visible rounded rectangle; `--field-shadow` has to go too.
+- **Hover and focus backgrounds are `--field-hover` and `--field-focus`** —
+  *not* `-hover`/`-focus` suffixes on `--field-background`, which is the natural
+  guess and leaves the field greying under the cursor while measuring clean at
+  rest.
+- **Each component also layers its own background variable** over the shared
+  set — `--input-bg`, `--textarea-bg`, `--select-trigger-bg`, each with `-hover`
+  and `-focus`. `FLAT_INPUT` / `FLAT_TEXTAREA` / `FLAT_SELECT_TRIGGER` bundle
+  the right combination per component; use those rather than assembling one.
+- **An underline needs an explicit `border-b`.** The field's own border width
+  comes from `--border-width-field`, which resolves to nothing once the other
+  three sides are zeroed, so the rule is invisible even with its color set.
+
+Applied: the routine title and each checklist title are a single green rule
+under the text — the app's marker for "this line is editable", pinned to the
+same green on hover since these are typed into, not clicked — while the three
+selects are green-outlined, softly-rounded controls of a fixed height. Their
+icons sit on the **labels**, not inside the controls, so the fields stay plain
+text. The attachments link field borrows `BUTTON_LIKE_FIELD` to match the
+outline Button beside it exactly.
+
+The three blocks share `blockBox` from `theme/styleConstants.ts`. Its asymmetric
+padding (`pr-3 pl-5`) is deliberate: each header ends in an icon-only button
+that carries its own padding, so the left edge needs that much more to make the
+two margins read as equal.
+
+The pill row (`Checklist` · `Etiquetas` · `Anexos`) uses the same `grid-cols-3`
+of outline pills as the Time blocking presets. Adding a block **scrolls it into
+view** — it lands below the fold, so without that the button looks inert. Each
+button opens something different:
+
+- **Checklist** appends a `RoutineChecklist` block below the notes, up to five;
+  the button disables at the cap. Every block shares one header shape with the
+  notes and attachment blocks — icon, name, delete — and the item rows are flat,
+  with no field chrome of their own. Item checkboxes are round with a green
+  rule, filling green once ticked (`AppCheckbox round`). The "add item" button
+  carries `-ml-3` to cancel its own padding, so its icon lands on the same left
+  edge as the header icon and every checkbox above it.
+- **Etiquetas** opens `LabelPicker`, a popover that is either browsing or
+  editing, never both. Browsing lists every label with a checkbox to attach it
+  and a pencil to edit it, over a search field, with "Criar uma nova etiqueta"
+  at the foot. Editing shows a live pill preview, the name, a 5×2 color grid,
+  Salvar and — when editing an existing label — Excluir.
+- **Anexos** opens `RoutineAttachments`, below the checklists when both are
+  present. The link field is styled as the twin of the "choose file" button
+  beside it — same outline, same height — with the add button *inside* it, so
+  the row reads as two controls rather than three; it is a `<form>`, so Enter
+  adds the link exactly like pressing "+". Rows have no fill of their own: the
+  icon's green tile is what marks them. Each carries a pencil and a trash, and
+  the pencil opens a small modal to retitle the attachment or swap the
+  link/file.
+
+The notes field wears the same outlined box and header row as the checklist and
+attachment blocks, so the three read as one family — the only difference being
+that its name is fixed text rather than an editable field. It is **the app's one
+rich-text field**: `RichNotes` is a `contentEditable` (not a textarea, which
+cannot hold formatting) with bold/italic/underline/strike buttons sharing the
+header row, and a **Limpar** button that empties it with a woosh.
+
+That makes `notes` the only column storing markup, so the API sanitises it on
+write — `lib/sanitizeHtml.ts`. It works by **escaping everything first and then
+re-allowing a closed list of tags** (`b i u s strong em br`), rather than
+stripping dangerous ones: anything not on that list is already inert text by the
+time the allowlist runs, and attributes are never re-allowed at all, which
+removes `href`, `on*` and `style` as a category rather than one at a time. Two
+knock-on rules: the editor writes into the DOM only when the value arrives from
+outside (assigning on every render would reset the caret), and "empty" means
+*renders as nothing*, so a note of only `<br>` is stored as `null`. The dialog body masks
+its own scroll edges (`mask-image`), so long content fades out instead of ending
+in a hard cut at the margins.
+
+**Opening a routine shows it; it does not hand you a form.** The dialog starts
+read-only and only "Editar" in its header unlocks it — `isEditing`, threaded into
+`RichNotes`, `RoutineChecklist` and `RoutineAttachments`. Read-only means the
+action pills, the formatting toolbar, Limpar, "add item", the block delete
+icons, the attachment controls and the property chevrons are all gone, and the
+title, notes and item text are read-only.
+
+**The one exception is the checkboxes**, which stay live in both modes: ticking
+something off is *using* a routine, not editing it. The selects are disabled
+rather than hidden, with HeroUI's dimming overridden — the value still has to
+read as the routine's content, not as a greyed-out field.
+
+The header row carries the whole action set — **Copiar link**, **Deletar**, and
+a single button that is **Editar** while reading and **Salvar** (primary) while
+editing — sharing that row with the dialog's close button. The dialog's own
+heading is `sr-only`: the routine's title carries it visually, but the dialog
+still needs a name. The footer is only **Cancelar**.
+
+Salvar on an existing routine commits and drops back to reading it rather than
+closing — it is the counterpart of Editar now, not of Cancelar, and autosave
+means the write has usually already happened. On a *new* routine it closes,
+since creating it is the whole point of the dialog.
+
+**Editing an existing routine autosaves.** Any change at all — a ticked
+checklist item, a new attachment, a swapped assignee, a typed note — persists
+~800ms after you stop, and closing the dialog by any route (backdrop, X,
+Cancelar) flushes whatever the debounce hasn't written yet. The dirty check
+compares a serialised payload against the last state known to be on the server,
+so it catches every field without enumerating them, and never fires a no-op
+PATCH.
+
+**Creating one does not**, deliberately: a new routine has no id to PATCH, and
+autosaving would litter the list with untitled rows. Salvar is what creates it.
+That is also why Cancelar only closes — on an existing routine the work is
+already saved.
+
+**Empty blocks are saved as empty.** Adding a checklist or opening the
+attachments block is itself the edit, so neither is filtered away on save and
+both round-trip: a title-less, item-less checklist survives `parseChecklist`,
+and `attachments` is nullable end to end — `null` means "no block", `[]` means
+"an open but empty one". Nothing is dropped for being blank.
+
+Two things save outside the autosave flow, both deliberate: **files upload immediately** (they need a URL before they
+can be listed, which is what `POST /uploads` exists for) and **label edits save
+immediately**, since a label is shared and not owned by this routine.
+
 **Calendar Card** — HeroUI `Calendar` for the focused month, fed by
-`/tasks/calendar?from&to`. Days with due tasks carry up to three dots colored by
+`/tasks/calendar?from&to`. The month heading is centred between the two nav
+buttons (`flex-1 text-center`) so it holds still as you page through months of
+differing name lengths. Days with due tasks carry up to three dots colored by
 sector, using the same fixed sector→slot mapping as the donut. Selecting a day
 navigates to `/tasks?dueDateFrom=<date>&dueDateTo=<date>`.
 
@@ -516,7 +782,42 @@ Behaviour worth preserving:
 - When `canMutateEntity` is false, fields are disabled and the Save/Delete
   buttons are not rendered — but the server is still the gate.
 
-### 6.6 URL contract
+### 6.6 Notifications
+
+Notifications are **derived, never stored**: there is no notifications table, no
+read/unread state, and no endpoint. `hooks/queries/notifications.ts` recomputes
+them from data the app already caches, so ticking off a routine or closing a
+task clears its notification on the next refetch, with nothing to reconcile.
+
+Two conditions raise one:
+
+| Condition | Scope | Opens |
+|---|---|---|
+| A task is overdue (past due, not `DONE`) | All tasks — same scope as the Dashboard's "Atrasadas" tile | `TaskModal` |
+| A routine falls due within 2 days | The signed-in user's own — same scope as the Routines card | `RoutineModal` |
+
+Routine timing reuses `nextOccurrence` from `components/dashboard/routineSchedule.ts`
+rather than reimplementing the cadence projection; both conditions compare whole
+calendar days, not elapsed hours. The list is sorted most-urgent-first.
+
+**Opening one does not navigate.** A notification carries the entity itself
+(`target`), not a route, and the bell renders the matching modal as a sibling of
+the popover — so it overlays whatever page you were on, and closing it (X or a
+click on the backdrop) drops you straight back there rather than on the Tasks
+page. This is deliberately unlike `TaskCard`, which does navigate.
+
+**Dismissal is client-side**, persisted under `gloo-dismissed-notifications` in
+`localStorage`, because the server has no notification to mark read. The trick
+that makes it behave is in the id: it includes the occurrence — a task's due
+date, a routine's next date — so dismissing means "this one", not "this task
+forever". Reschedule the task, or let the routine come round again next week,
+and a fresh notification appears. The stored list is pruned against the live
+(unfiltered) set on each dismissal so it cannot grow without bound.
+
+If a third condition is added, put it in that hook — the bell renders whatever
+the hook returns and holds no logic of its own.
+
+### 6.7 URL contract
 
 | Route | Renders |
 |---|---|
@@ -534,12 +835,36 @@ Defined in `packages/api/prisma/schema.prisma`; DTOs mirroring it in
 
 | Model | Key fields |
 |---|---|
-| `User` | email (unique), passwordHash, name, `role: ADMIN \| EMPLOYEE`, avatarUrl |
+| `User` | email (unique), passwordHash, name, `role: ADMIN \| EMPLOYEE`, jobTitle, avatarUrl |
 | `Sector` | name (unique). Seeded: Gestão, Comercial, Marketing & Aquisição, Produto & Serviço |
 | `Task` | title, description, `priority: HIGH \| MEDIUM \| LOW`, dueDate, `status: TODO \| IN_PROGRESS \| IN_REVIEW \| DONE`, sector, createdBy |
 | `TaskAssignee` | join table, cascades on task/user delete |
 | `Subtask` | text, done, order — cascades with its task |
-| `Routine` | description, `recurrence: WEEKLY \| MONTHLY`, weekday (0–6) or dayOfMonth (1–31), done, lastCompletedAt, assignee, createdBy |
+| `Routine` | description (shown as "Título"), `recurrence: WEEKLY \| MONTHLY`, weekday (0–6) or dayOfMonth (1–31), done, lastCompletedAt, notes, checklists (Json), attachments (Json), createdBy |
+| `RoutineAssignee` | join table — routines carry multiple assignees, exactly like tasks |
+| `Label` | name, color (a key into the `--label-*` palette, never a hex). Shared across routines |
+| `RoutineLabel` | join table, cascades on either side |
+
+**Two embedded `Json` columns, deliberately unlike `Task`/`Subtask`.** A
+routine's `checklists` (`[{ title, items: [{ text, done }] }]`, capped at
+`MAX_ROUTINE_CHECKLISTS` = 5) and `attachments` (`[{ id, kind, url, title }]`)
+each belong to exactly one routine, are never queried or filtered on, and save
+inside the routine's own PATCH — a join table would buy nothing. The cost is
+that Json holds whatever was last written, so `modules/routines/mapper.ts`
+re-validates both on the way out and **drops anything malformed** rather than
+passing it to the client. The cap is enforced there too, not only in the UI.
+
+Labels go the other way — a real table with a join — because they are *shared*:
+the picker lists every label that exists so they can be reused, and editing or
+deleting one changes it on every routine wearing it. That is the intent, not a
+side effect.
+
+**`role` vs `jobTitle` — do not conflate them.** `role` is the permission level
+(`ADMIN`/`EMPLOYEE`) that `canMutate` reads; it is a DB-only change and is
+deliberately not accepted by any endpoint. `jobTitle` is the free-text label
+shown under the user's name in the header ("Designer") — the "função" field in
+the profile modal. It is cosmetic, carries no authorization meaning, and is
+therefore safe for a user to edit on themselves.
 
 Two fields are **computed, never stored**:
 
@@ -568,7 +893,8 @@ and `<img>` cannot send a token).
 | `POST` | `/auth/logout` | Public. Clears the cookie |
 | `GET` | `/auth/me` | Current user |
 | `GET` | `/users` | All users (for assignee pickers) |
-| `POST` | `/users/me/avatar` | Multipart upload, PNG/JPEG/WebP, ≤2MB |
+| `PATCH` | `/users/me` | Edit the authenticated user's `name` (1–60 chars) and `jobTitle` (≤60, empty string clears it). Never `role` |
+| `POST` | `/users/me/avatar` | Multipart upload, PNG/JPEG/WebP, no size cap |
 | `GET` | `/sectors` · `POST` `/sectors` | List / create |
 | `GET` | `/tasks` | Filters: `search`, `status` (incl. `OVERDUE`), `sectorId`, `assigneeId`, `dueDateFrom`, `dueDateTo`, `sortBy`, `sortDir` |
 | `GET` | `/tasks/summary` | Counts for the four tiles; optional `assigneeId` |
@@ -580,8 +906,10 @@ and `<img>` cannot send a token).
 | `POST` | `/tasks/:taskId/subtasks` | Add a subtask |
 | `PATCH` / `DELETE` | `/subtasks/:id` | Update text/done, delete |
 | `GET` | `/routines` | Optional `assigneeId`; `done` reflects the current period |
-| `POST` | `/routines` · `PATCH` `/routines/:id` · `DELETE` `/routines/:id` | Mutations gated by `canMutate` |
+| `POST` | `/routines` · `PATCH` `/routines/:id` · `DELETE` `/routines/:id` | Mutations gated by `canMutate`. `assigneeIds`/`labelIds` replace the full set; a routine must keep ≥1 assignee |
 | `PATCH` | `/routines/:id/toggle` | Toggle done for the current period |
+| `GET` | `/labels` · `POST` `/labels` · `PATCH` `/labels/:id` · `DELETE` `/labels/:id` | Shared labels. Deleting one detaches it from every routine |
+| `POST` | `/uploads` | Multipart, any type, no size cap. Returns `{ url, filename }` **without touching a record**, so an attachment can be added to an unsaved routine |
 | `GET` | `/health` | Public liveness check |
 
 Sorting for the task list is applied after DTO mapping, because `progress` and

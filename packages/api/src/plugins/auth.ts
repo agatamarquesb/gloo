@@ -13,6 +13,7 @@ export interface AuthUser {
   email: string;
   name: string;
   role: Role;
+  jobTitle: string | null;
   avatarUrl: string | null;
 }
 
@@ -77,6 +78,7 @@ export const authPlugin = fp(async (app) => {
       email: user.email,
       name: user.name,
       role: user.role,
+      jobTitle: user.jobTitle,
       avatarUrl: user.avatarUrl,
     };
   });

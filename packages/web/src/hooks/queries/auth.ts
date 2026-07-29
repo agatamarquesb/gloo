@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import type { LoginInput, UserDto } from '@gloo/shared';
 
@@ -7,6 +7,18 @@ import { ApiError, apiClient, API_BASE } from '@/lib/apiClient';
 export const authKeys = {
   me: ['auth', 'me'] as const,
 };
+
+/**
+ * Publishes an updated profile everywhere it is cached. Name and avatar are
+ * embedded in task/routine payloads and in the assignee pickers, so refreshing
+ * only `auth/me` would leave the old values on screen until those refetch.
+ */
+function syncUserCaches(queryClient: QueryClient, user: UserDto) {
+  queryClient.setQueryData(authKeys.me, user);
+  queryClient.invalidateQueries({ queryKey: ['tasks'] });
+  queryClient.invalidateQueries({ queryKey: ['routines'] });
+  queryClient.invalidateQueries({ queryKey: ['users'] });
+}
 
 export function useMe() {
   return useQuery({
@@ -45,13 +57,16 @@ export function useUploadAvatar() {
       }
       return (await response.json()) as UserDto;
     },
-    onSuccess: (user) => {
-      queryClient.setQueryData(authKeys.me, user);
-      // Assignee avatars are embedded in task/routine payloads too.
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['routines'] });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-    },
+    onSuccess: (user) => syncUserCaches(queryClient, user),
+  });
+}
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; jobTitle: string | null }) =>
+      apiClient.patch<UserDto>('/users/me', input),
+    onSuccess: (user) => syncUserCaches(queryClient, user),
   });
 }
 

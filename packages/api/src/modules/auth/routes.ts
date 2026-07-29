@@ -1,19 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 
-import type { LoginInput, UserDto } from '@gloo/shared';
+import type { LoginInput } from '@gloo/shared';
 
 import { verifyPassword } from '../../lib/hash';
 import { prisma } from '../../lib/prisma';
-
-function toUserDto(user: { id: string; email: string; name: string; role: string; avatarUrl: string | null }): UserDto {
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role as UserDto['role'],
-    avatarUrl: user.avatarUrl,
-  };
-}
+import { toUserDto } from '../../lib/userDto';
 
 export async function authRoutes(app: FastifyInstance) {
   app.post<{ Body: LoginInput }>(

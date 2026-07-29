@@ -40,6 +40,11 @@
      and overdue chips — need a color that reads as alarming. They keep HeroUI's
      saturated red. Use bg-red for the soft status tint, `danger` for danger. */
   --accent: var(--green);
+  /* Hover goes *up*, not down: the brand green is already mid-tone, and
+     darkening it on hover made a primary button look pressed before it was.
+     Lifting it reads as the surface catching the light. Same value in both
+     themes, like every other brand colour. */
+  --accent-hover: #d6e179;
   --accent-foreground: var(--black);
   --success: var(--green);
   --success-foreground: var(--black);
@@ -62,12 +67,48 @@
      lines the icon up with the count and label below it. */
   --tile-icon-backdrop: #ffffff;
   --tile-icon-border: transparent;
+
+  /* The green *outline* — card borders, the rules under editable titles — as
+     opposed to green as a fill. It is the brand green on a light surface, but
+     on a dark one that same value glows: a bright 1px line on near-black reads
+     as neon and pulls focus from the content it is supposed to frame. Hence its
+     own token, stepped down in dark mode. Fills stay --green in both themes;
+     only the hairlines change. */
+  --outline-green: var(--green);
+
+  /* Outline for controls that are defined by their edge — the action pills,
+     "Limpar", "Escolher arquivo", the link field. HeroUI's --border is tuned
+     for dividers and sits at 28% lightness in dark mode, which all but
+     disappears against a near-black surface: a button you can only find by
+     its label is not really outlined. Brighter here, unchanged in light. */
+  --outline-control: var(--border);
+
+  /* Label palette. The second sanctioned exception to "five colors", and for a
+     different reason than --tile-*: these are picked by the user, so the set has
+     to be wide enough that two labels can be told apart. Kept pastel and in the
+     same key as the brand colors — the first entry IS --green — so a wall of
+     labels still reads as this app. Black text sits on all of them, which is why
+     none goes darker than these values.
+
+     Mode-invariant like the brand colors: a label keeps its identity between
+     themes. Keys here must match LABEL_COLORS in @gloo/shared. */
+  --label-green: var(--green);
+  --label-lime: #d8e8a0;
+  --label-yellow: var(--yellow);
+  --label-orange: #ffd2a1;
+  --label-red: var(--red);
+  --label-pink: #ffcfe3;
+  --label-purple: #ddd0ff;
+  --label-blue: var(--blue);
+  --label-teal: #b6ece0;
+  --label-gray: #dcdcdc;
 }
 
 .dark {
   /* Brand colors are mode-invariant, so this only re-asserts the semantic
      wiring — otherwise HeroUI's own .dark value for --warning would take over. */
   --accent: var(--green);
+  --accent-hover: #d6e179;
   --accent-foreground: var(--black);
   --success: var(--green);
   --success-foreground: var(--black);
@@ -90,6 +131,13 @@
      out of line with the text. The ring keeps the alignment without the mass. */
   --tile-icon-backdrop: transparent;
   --tile-icon-border: #ffffff;
+
+  /* Desaturated and dimmed: still recognisably the brand hue, but reading as a
+     quiet edge rather than a lit one. */
+  --outline-green: #6d7350;
+
+  /* Bright enough to read as an edge, short of the muted text above it. */
+  --outline-control: oklch(48% 0.006 286.033);
 }
 
 @theme inline {
@@ -106,6 +154,19 @@
   --color-tile-foreground: var(--tile-foreground);
   --color-tile-icon-backdrop: var(--tile-icon-backdrop);
   --color-tile-icon-border: var(--tile-icon-border);
+  --color-outline-green: var(--outline-green);
+  --color-outline-control: var(--outline-control);
+
+  --color-label-green: var(--label-green);
+  --color-label-lime: var(--label-lime);
+  --color-label-yellow: var(--label-yellow);
+  --color-label-orange: var(--label-orange);
+  --color-label-red: var(--label-red);
+  --color-label-pink: var(--label-pink);
+  --color-label-purple: var(--label-purple);
+  --color-label-blue: var(--label-blue);
+  --color-label-teal: var(--label-teal);
+  --color-label-gray: var(--label-gray);
 }
 
 /*

@@ -1,5 +1,6 @@
-import type { TaskDetailDto, TaskListItemDto, UserDto } from '@gloo/shared';
+import type { TaskDetailDto, TaskListItemDto } from '@gloo/shared';
 
+import { toUserDto } from '../../lib/userDto';
 import type { Prisma } from '../../../generated/prisma/client';
 
 const taskWithRelations = {
@@ -13,22 +14,6 @@ const taskWithRelations = {
 export type TaskWithRelations = Prisma.TaskGetPayload<typeof taskWithRelations>;
 
 export const taskInclude = taskWithRelations.include;
-
-function toUserDto(user: {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-  avatarUrl: string | null;
-}): UserDto {
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role as UserDto['role'],
-    avatarUrl: user.avatarUrl,
-  };
-}
 
 export function computeProgress(subtasks: { done: boolean }[]): number {
   if (subtasks.length === 0) return 0;

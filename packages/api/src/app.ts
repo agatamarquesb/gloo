@@ -7,10 +7,12 @@ import Fastify from 'fastify';
 
 import { env } from './config/env';
 import { authRoutes } from './modules/auth/routes';
+import { labelRoutes } from './modules/labels/routes';
 import { routineRoutes } from './modules/routines/routes';
 import { sectorRoutes } from './modules/sectors/routes';
 import { subtaskRoutes } from './modules/subtasks/routes';
 import { taskRoutes } from './modules/tasks/routes';
+import { uploadRoutes } from './modules/uploads/routes';
 import { avatarRoutes } from './modules/users/avatar';
 import { userRoutes } from './modules/users/routes';
 import { authPlugin } from './plugins/auth';
@@ -52,6 +54,8 @@ export function buildApp() {
   app.register(taskRoutes, { prefix: '/api/tasks' });
   app.register(subtaskRoutes, { prefix: '/api/subtasks' });
   app.register(routineRoutes, { prefix: '/api/routines' });
+  app.register(labelRoutes, { prefix: '/api/labels' });
+  app.register(uploadRoutes, { prefix: '/api/uploads' });
 
   return app;
 }

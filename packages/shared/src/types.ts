@@ -1,10 +1,22 @@
-import type { Role, RoutineRecurrence, TaskPriority, TaskSortBy, TaskStatus, TaskStatusFilter } from './enums';
+import type {
+  AttachmentKind,
+  LabelColor,
+  Role,
+  RoutineRecurrence,
+  TaskPriority,
+  TaskSortBy,
+  TaskStatus,
+  TaskStatusFilter,
+} from './enums';
 
 export interface UserDto {
   id: string;
   email: string;
   name: string;
+  /** Permission level (ADMIN/EMPLOYEE). Never user-editable. */
   role: Role;
+  /** Free-text job title shown under the name. Cosmetic only. */
+  jobTitle: string | null;
   avatarUrl: string | null;
 }
 
@@ -84,14 +96,58 @@ export interface TaskCalendarEntryDto {
   sectorIds: string[];
 }
 
+/** One line of a routine's checklist. */
+export interface ChecklistItemDto {
+  text: string;
+  done: boolean;
+}
+
+/** One of a routine's checklist blocks: a title plus its lines. */
+export interface RoutineChecklistDto {
+  title: string;
+  items: ChecklistItemDto[];
+}
+
+/** A routine may carry at most this many checklists. */
+export const MAX_ROUTINE_CHECKLISTS = 5;
+
+export interface AttachmentDto {
+  /** Client-generated, so a row stays addressable for edit/delete before saving. */
+  id: string;
+  kind: AttachmentKind;
+  /** An external href for LINK, an `/uploads/...` path for FILE. */
+  url: string;
+  /** What the user sees, so a long URL doesn't become the label. */
+  title: string;
+}
+
+export interface LabelDto {
+  id: string;
+  name: string;
+  color: LabelColor;
+}
+
+export interface LabelInput {
+  name: string;
+  color: LabelColor;
+}
+
 export interface RoutineDto {
   id: string;
+  /** Shown as "Título" in the UI. */
   description: string;
   recurrence: RoutineRecurrence;
   weekday: number | null;
   dayOfMonth: number | null;
   done: boolean;
-  assignee: UserDto;
+  /** Free-text annotation. */
+  notes: string | null;
+  /** Empty when the routine has no checklist blocks. */
+  checklists: RoutineChecklistDto[];
+  /** Null when the routine has no attachments block; `[]` when it has an empty one. */
+  attachments: AttachmentDto[] | null;
+  labels: LabelDto[];
+  assignees: UserDto[];
   createdById: string;
 }
 
@@ -100,7 +156,17 @@ export interface CreateRoutineInput {
   recurrence: RoutineRecurrence;
   weekday?: number | null;
   dayOfMonth?: number | null;
-  assigneeId: string;
+  notes?: string | null;
+  checklists?: RoutineChecklistDto[];
+  attachments?: AttachmentDto[] | null;
+  labelIds?: string[];
+  assigneeIds: string[];
+}
+
+/** What `POST /uploads` returns for an attached file. */
+export interface UploadedFileDto {
+  url: string;
+  filename: string;
 }
 
 export type UpdateRoutineInput = Partial<CreateRoutineInput>;

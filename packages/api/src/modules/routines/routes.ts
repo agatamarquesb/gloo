@@ -1,46 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 
-import type { CreateRoutineInput, RoutineDto, UpdateRoutineInput, UserDto } from '@gloo/shared';
+import type { CreateRoutineInput, UpdateRoutineInput } from '@gloo/shared';
 
 import { canMutate } from '../../lib/authorize';
 import { prisma } from '../../lib/prisma';
+import { sanitizeNotes } from '../../lib/sanitizeHtml';
+
+import {
+  routineInclude,
+  toJsonAttachments,
+  toJsonChecklists,
+  toRoutineDto,
+  type RoutineWithRelations,
+} from './mapper';
 import { isCurrentlyDone } from './reset';
 
-const routineInclude = { assignee: true } as const;
-
-type RoutineWithAssignee = {
-  id: string;
-  description: string;
-  recurrence: 'WEEKLY' | 'MONTHLY';
-  weekday: number | null;
-  dayOfMonth: number | null;
-  done: boolean;
-  lastCompletedAt: Date | null;
-  createdById: string;
-  assignee: { id: string; email: string; name: string; role: string; avatarUrl: string | null };
-};
-
-function toRoutineDto(routine: RoutineWithAssignee): RoutineDto {
-  return {
-    id: routine.id,
-    description: routine.description,
-    recurrence: routine.recurrence,
-    weekday: routine.weekday,
-    dayOfMonth: routine.dayOfMonth,
-    // Effective state for "now", not the stored flag — see reset.ts.
-    done: isCurrentlyDone(routine),
-    assignee: {
-      id: routine.assignee.id,
-      email: routine.assignee.email,
-      name: routine.assignee.name,
-      role: routine.assignee.role as UserDto['role'],
-      avatarUrl: routine.assignee.avatarUrl,
-    },
-    createdById: routine.createdById,
-  };
-}
-
-async function loadRoutineOrThrow(id: string) {
+async function loadRoutineOrThrow(id: string): Promise<RoutineWithRelations> {
   const routine = await prisma.routine.findUnique({ where: { id }, include: routineInclude });
   if (!routine) {
     const error = new Error('Routine not found');
@@ -48,6 +23,14 @@ async function loadRoutineOrThrow(id: string) {
     throw error;
   }
   return routine;
+}
+
+/** The shape `canMutate` expects, from a routine's join rows. */
+function mutationSubject(routine: RoutineWithRelations) {
+  return {
+    createdById: routine.createdById,
+    assigneeIds: routine.assignees.map(({ userId }) => userId),
+  };
 }
 
 function validateRecurrenceFields(
@@ -75,7 +58,7 @@ export async function routineRoutes(app: FastifyInstance) {
     const { assigneeId } = request.query as { assigneeId?: string };
 
     const routines = await prisma.routine.findMany({
-      where: assigneeId ? { assigneeId } : {},
+      where: assigneeId ? { assignees: { some: { userId: assigneeId } } } : {},
       include: routineInclude,
       orderBy: { createdAt: 'asc' },
     });
@@ -84,12 +67,22 @@ export async function routineRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Body: CreateRoutineInput }>('/', async (request, reply) => {
-    const { description, recurrence, weekday, dayOfMonth, assigneeId } = request.body;
+    const {
+      description,
+      recurrence,
+      weekday,
+      dayOfMonth,
+      notes,
+      checklists,
+      attachments,
+      labelIds,
+      assigneeIds,
+    } = request.body;
 
-    if (!description || !recurrence || !assigneeId) {
+    if (!description || !recurrence || !assigneeIds?.length) {
       return reply
         .code(400)
-        .send({ error: 'description, recurrence e assigneeId são obrigatórios' });
+        .send({ error: 'description, recurrence e assigneeIds são obrigatórios' });
     }
     const invalid = validateRecurrenceFields(recurrence, weekday, dayOfMonth);
     if (invalid) return reply.code(400).send({ error: invalid });
@@ -100,8 +93,12 @@ export async function routineRoutes(app: FastifyInstance) {
         recurrence,
         weekday: recurrence === 'WEEKLY' ? (weekday ?? null) : null,
         dayOfMonth: recurrence === 'MONTHLY' ? (dayOfMonth ?? null) : null,
-        assigneeId,
+        notes: sanitizeNotes(notes),
+        checklists: toJsonChecklists(checklists),
+        attachments: toJsonAttachments(attachments),
         createdById: request.authUser.id,
+        assignees: { create: assigneeIds.map((userId) => ({ userId })) },
+        labels: { create: (labelIds ?? []).map((labelId) => ({ labelId })) },
       },
       include: routineInclude,
     });
@@ -114,16 +111,26 @@ export async function routineRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const existing = await loadRoutineOrThrow(request.params.id);
 
-      if (
-        !canMutate(request.authUser, {
-          createdById: existing.createdById,
-          assigneeIds: [existing.assigneeId],
-        })
-      ) {
+      if (!canMutate(request.authUser, mutationSubject(existing))) {
         return reply.code(403).send({ error: 'Sem permissão para editar esta rotina' });
       }
 
-      const { description, recurrence, weekday, dayOfMonth, assigneeId } = request.body;
+      const {
+        description,
+        recurrence,
+        weekday,
+        dayOfMonth,
+        notes,
+        checklists,
+        attachments,
+        labelIds,
+        assigneeIds,
+      } = request.body;
+
+      if (assigneeIds !== undefined && assigneeIds.length === 0) {
+        return reply.code(400).send({ error: 'A rotina precisa de ao menos um responsável' });
+      }
+
       const nextRecurrence = recurrence ?? existing.recurrence;
       const invalid = validateRecurrenceFields(
         nextRecurrence,
@@ -136,8 +143,18 @@ export async function routineRoutes(app: FastifyInstance) {
         where: { id: request.params.id },
         data: {
           ...(description !== undefined ? { description } : {}),
-          ...(assigneeId !== undefined ? { assigneeId } : {}),
           ...(recurrence !== undefined ? { recurrence } : {}),
+          ...(notes !== undefined ? { notes: sanitizeNotes(notes) } : {}),
+          ...(checklists !== undefined ? { checklists: toJsonChecklists(checklists) } : {}),
+          ...(attachments !== undefined ? { attachments: toJsonAttachments(attachments) } : {}),
+          // Replace rather than merge: the modal always sends the full set, so
+          // deleting the last assignee or label has to be expressible.
+          ...(assigneeIds !== undefined
+            ? { assignees: { deleteMany: {}, create: assigneeIds.map((userId) => ({ userId })) } }
+            : {}),
+          ...(labelIds !== undefined
+            ? { labels: { deleteMany: {}, create: labelIds.map((labelId) => ({ labelId })) } }
+            : {}),
           // Keep the unused cadence field null so a switched routine can't keep
           // a stale weekday/day-of-month around.
           ...(recurrence !== undefined || weekday !== undefined || dayOfMonth !== undefined
@@ -160,12 +177,7 @@ export async function routineRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const existing = await loadRoutineOrThrow(request.params.id);
 
-      if (
-        !canMutate(request.authUser, {
-          createdById: existing.createdById,
-          assigneeIds: [existing.assigneeId],
-        })
-      ) {
+      if (!canMutate(request.authUser, mutationSubject(existing))) {
         return reply.code(403).send({ error: 'Sem permissão para editar esta rotina' });
       }
 
@@ -184,12 +196,7 @@ export async function routineRoutes(app: FastifyInstance) {
   app.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
     const existing = await loadRoutineOrThrow(request.params.id);
 
-    if (
-      !canMutate(request.authUser, {
-        createdById: existing.createdById,
-        assigneeIds: [existing.assigneeId],
-      })
-    ) {
+    if (!canMutate(request.authUser, mutationSubject(existing))) {
       return reply.code(403).send({ error: 'Sem permissão para excluir esta rotina' });
     }
 

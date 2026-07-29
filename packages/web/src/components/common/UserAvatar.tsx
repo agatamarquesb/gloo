@@ -12,15 +12,18 @@ export function UserAvatar({
   name,
   avatarUrl,
   size = 'md',
+  className,
 }: {
   name: string;
   avatarUrl?: string | null;
   size?: 'sm' | 'md' | 'lg';
+  /** Overrides the preset size where the avatar has to match a line of text. */
+  className?: string;
 }) {
   const src = assetUrl(avatarUrl);
 
   return (
-    <Avatar size={size}>
+    <Avatar size={size} className={className}>
       {src ? <Avatar.Image src={src} alt={name} /> : null}
       <Avatar.Fallback>{getInitials(name)}</Avatar.Fallback>
     </Avatar>

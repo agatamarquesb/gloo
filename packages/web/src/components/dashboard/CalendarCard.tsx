@@ -61,7 +61,10 @@ export function CalendarCard() {
       >
         <Calendar.Header>
           <Calendar.NavButton slot="previous" />
-          <Calendar.Heading />
+          {/* flex-1 + text-center rather than letting the heading size to its
+              text: the month names have different widths, so without this the
+              title shifts sideways as you page through the year. */}
+          <Calendar.Heading className="flex-1 text-center" />
           <Calendar.NavButton slot="next" />
         </Calendar.Header>
         <Calendar.Grid>

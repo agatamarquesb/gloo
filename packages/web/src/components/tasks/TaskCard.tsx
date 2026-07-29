@@ -28,7 +28,7 @@ export function TaskCard({ task }: { task: TaskListItemDto }) {
       onClick={() => navigate(`/tasks/${task.id}`, { state: { from: location.pathname } })}
       // motion-safe on the hover lift: it's decoration, so it goes away under
       // prefers-reduced-motion while the color change stays.
-      className="gloo-rise flex w-full flex-col gap-3 rounded-2xl border border-green bg-transparent p-4 text-left transition-[background-color,transform] duration-200 hover:bg-default/40 active:scale-[0.995] motion-safe:hover:scale-[1.015] sm:flex-row sm:items-center sm:gap-4"
+      className="gloo-rise flex w-full flex-col gap-3 rounded-2xl border border-outline-green bg-transparent p-4 text-left transition-[background-color,transform] duration-200 hover:bg-default/40 active:scale-[0.995] motion-safe:hover:scale-[1.015] sm:flex-row sm:items-center sm:gap-4"
     >
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-surface-foreground">{task.title}</p>

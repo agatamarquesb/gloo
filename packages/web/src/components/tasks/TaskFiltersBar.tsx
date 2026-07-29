@@ -1,9 +1,9 @@
-import { ArrowDownAZ, ArrowUpAZ, Filter, Search } from 'lucide-react';
-import { Button, Input, Label, ListBox, Popover, Select } from '@heroui/react';
-import { TextField } from 'react-aria-components';
+import { ArrowDownAZ, ArrowUpAZ, Filter } from 'lucide-react';
+import { Button, Label, ListBox, Popover, Select } from '@heroui/react';
 
 import type { SectorDto, TaskSortBy, UserDto } from '@gloo/shared';
 
+import { SearchField } from '@/components/common/SearchField';
 import { strings } from '@/strings/pt-BR';
 
 const SORT_OPTIONS: { id: TaskSortBy; label: string }[] = [
@@ -41,17 +41,7 @@ export function TaskFiltersBar({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <TextField
-        aria-label={strings.common.search}
-        value={search}
-        onChange={onSearchChange}
-        className="w-full max-w-xs"
-      >
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
-          <Input fullWidth className="pl-9" placeholder={strings.common.search} />
-        </div>
-      </TextField>
+      <SearchField value={search} onChange={onSearchChange} className="w-full max-w-xs" />
 
       <div className="flex items-center gap-2">
         <Popover>
