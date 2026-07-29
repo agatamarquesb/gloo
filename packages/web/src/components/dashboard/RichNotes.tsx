@@ -56,6 +56,22 @@ export function RichNotes({
     if (editor && editor.innerHTML !== value) editor.innerHTML = value;
   }, [value]);
 
+  /**
+   * Pasting brings the source's markup with it — a couple of paragraphs out of
+   * Notion arrive as `<p>`s and a tracking comment. None of that survives the
+   * API's sanitiser, so taking the plain text here is what the note was going to
+   * end up as anyway; doing it at the paste means the editor shows that straight
+   * away instead of markup that disappears on save.
+   *
+   * `insertText` rather than writing to the DOM, so the paste stays on the
+   * browser's own undo stack.
+   */
+  function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
+    onChange(editorRef.current?.innerHTML ?? '');
+  }
+
   function run(command: string) {
     // The selection has to be inside the editor for the command to apply, and
     // pressing a toolbar button moves focus to the button.
@@ -97,9 +113,12 @@ export function RichNotes({
         {isEditing ? actions : null}
       </div>
 
+      {/* Flush with the block's own edge, which is where the heading's icon
+          starts — the note is the block's content, so it runs the full width
+          rather than hanging off the word above it. */}
       <div className="relative">
         {isNotesEmpty(value) ? (
-          <span className="pointer-events-none absolute top-1 left-0 text-sm text-muted">
+          <span className="pointer-events-none absolute top-0 left-0 text-sm text-muted">
             {placeholder}
           </span>
         ) : null}
@@ -116,7 +135,8 @@ export function RichNotes({
           contentEditable={isEditing}
           suppressContentEditableWarning
           onInput={(event) => onChange(event.currentTarget.innerHTML)}
-          className="min-h-16 pt-1 text-sm break-words text-foreground outline-none"
+          onPaste={handlePaste}
+          className="min-h-16 text-sm break-words text-foreground outline-none"
         />
       </div>
     </>

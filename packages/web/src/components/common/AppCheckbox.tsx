@@ -23,6 +23,7 @@ export function AppCheckbox({
   className = '',
   accent = false,
   round = false,
+  quiet = false,
 }: {
   isSelected: boolean;
   onChange: (selected: boolean) => void;
@@ -33,8 +34,15 @@ export function AppCheckbox({
   accent?: boolean;
   /** Circular rather than the default rounded square. Implies `accent`. */
   round?: boolean;
+  /**
+   * The light control edge at 1px instead of the brand green at 2px, still
+   * filling green once ticked. For lists where the boxes are the repeated
+   * element and a green rule on each one adds up to a lot of colour. Implies
+   * `accent`.
+   */
+  quiet?: boolean;
 }) {
-  const isAccent = accent || round;
+  const isAccent = accent || round || quiet;
   const rootRef = useRef<HTMLDivElement>(null);
 
   function forwardClickToInput(event: React.MouseEvent) {
@@ -71,14 +79,28 @@ export function AppCheckbox({
             // states have to be the same colour or the box appears to change
             // hue as you check it.
             //
-            // The square variant takes a 2px ring because a 1px line of a pale
-            // green barely registers at that size; the round one reads fine at
-            // 1px, where 2px looked heavy against the checklist's small rows.
-            className={`${
+            // One hairline for every shape and every list: the checklist inside
+            // the routine modal sets the weight, and a routine row carrying a
+            // heavier ring than the items inside it read as two different
+            // controls for the same gesture.
+            className={[
+              // A ring and a fill, nothing else. HeroUI paints part of a
+              // field as an inset shadow, so clearing that needs
+              // --field-shadow as well as the box-shadow utility — see the note
+              // at the top of fieldStyles.ts. Left in, it reads as a raised
+              // chip rather than as a box drawn on the page.
               isAccent
-                ? 'border-green [--field-border:var(--green)] [--field-border-hover:var(--green)] group-data-[selected=true]:bg-green'
-                : ''
-            } ${round ? 'rounded-full border' : ''} ${isAccent && !round ? 'border-2' : ''}`}
+                ? 'shadow-none [--field-shadow:none] group-data-[selected=true]:bg-green'
+                : '',
+              quiet
+                ? // Squarer than HeroUI's default radius, which reads almost
+                  // round at this size.
+                  'border rounded-sm [--field-radius:0.25rem] [--field-border:var(--outline-control)] [--field-border-hover:var(--outline-control)]'
+                : isAccent
+                  ? 'border border-green [--field-border:var(--green)] [--field-border-hover:var(--green)]'
+                  : '',
+              round ? 'rounded-full' : '',
+            ].join(' ')}
           >
             <Checkbox.Indicator />
           </Checkbox.Control>

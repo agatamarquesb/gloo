@@ -68,6 +68,15 @@
   --tile-icon-backdrop: #ffffff;
   --tile-icon-border: transparent;
 
+  /* The brand green taken down to where it can carry text.
+   *
+   * --green is a mid-tone pastel: fine as a fill with black on top, but as a
+   * *text* colour on a light surface it is barely legible. This is the same
+   * value dark mode already steps --outline-green down to, promoted to a token
+   * of its own and fixed in both themes, so "Recuperar" and anything else that
+   * has to say green in words has something to say it with. */
+  --green-deep: #6d7350;
+
   /* The green *outline* — card borders, the rules under editable titles — as
      opposed to green as a fill. It is the brand green on a light surface, but
      on a dark one that same value glows: a bright 1px line on near-black reads
@@ -154,6 +163,7 @@
   --color-tile-foreground: var(--tile-foreground);
   --color-tile-icon-backdrop: var(--tile-icon-backdrop);
   --color-tile-icon-border: var(--tile-icon-border);
+  --color-green-deep: var(--green-deep);
   --color-outline-green: var(--outline-green);
   --color-outline-control: var(--outline-control);
 

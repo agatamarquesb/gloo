@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { RoutineDto } from '@gloo/shared';
 
@@ -6,6 +6,7 @@ import { nextOccurrence } from '@/components/dashboard/routineSchedule';
 import { useMe } from '@/hooks/queries/auth';
 import { useRoutines } from '@/hooks/queries/routines';
 import { useTasks } from '@/hooks/queries/tasks';
+import { playSound } from '@/lib/sounds';
 import { strings } from '@/strings/pt-BR';
 
 /**
@@ -135,6 +136,30 @@ export function useNotifications(): {
     () => all.filter((notification) => !dismissed.includes(notification.id)),
     [all, dismissed],
   );
+
+  /**
+   * Sounds an arrival, once per notification.
+   *
+   * Notifications are derived rather than pushed, so "new" has to be worked out
+   * here: any id in the current set that was not in the last one. The very first
+   * pass only records what is already there — opening the app to four overdue
+   * tasks should not play four chimes for things that were waiting anyway.
+   */
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const ids = new Set(notifications.map((notification) => notification.id));
+
+    if (seen.current === null) {
+      seen.current = ids;
+      return;
+    }
+
+    const previous = seen.current;
+    seen.current = ids;
+    if (notifications.some((notification) => !previous.has(notification.id))) {
+      playSound('notification');
+    }
+  }, [notifications]);
 
   return { notifications, dismiss };
 }

@@ -10,8 +10,10 @@ import type {
   TaskSummaryDto,
   UpdateTaskInput,
 } from '@gloo/shared';
+import { TaskStatus } from '@gloo/shared';
 
 import { apiClient } from '@/lib/apiClient';
+import { playSound } from '@/lib/sounds';
 import { taskKeys } from '@/lib/queryKeys';
 
 function toQueryString(filters: TaskFilters): string {
@@ -93,6 +95,11 @@ export function useUpdateTaskStatus(id: string) {
   return useMutation({
     mutationFn: (status: string) => apiClient.patch<TaskDetailDto>(`/tasks/${id}/status`, { status }),
     onMutate: async (status: string) => {
+      // Here rather than at any one of the four places a status can be changed
+      // from — every one of them comes through this hook. Alongside the
+      // optimistic update below, so the sound and the chip change together.
+      if (status === TaskStatus.DONE) playSound('taskCompleted');
+
       await queryClient.cancelQueries({ queryKey: taskKeys.all });
       const previous = queryClient.getQueriesData({ queryKey: taskKeys.all });
 

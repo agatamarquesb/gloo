@@ -128,6 +128,12 @@ model Routine {
   attachments     Json?
   done            Boolean           @default(false)
   lastCompletedAt DateTime?
+  /// When the routine was moved to the trash. Null for a live one.
+  ///
+  /// Deleting is reversible from the Routines card, so "Deletar" sets this and
+  /// the row stays put — only "Esvaziar lixeira" actually removes it. Every
+  /// query for live routines has to filter on it.
+  deletedAt       DateTime?
   createdById     String
   createdBy       User              @relation("RoutineCreator", fields: [createdById], references: [id])
   createdAt       DateTime          @default(now())

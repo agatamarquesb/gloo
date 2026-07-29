@@ -1,0 +1,6 @@
+# The effects themselves are licensed per-account and stay out of the
+# repository — see README.md. Everything here is audio except these two files.
+*.mp3
+*.wav
+*.ogg
+!README.md

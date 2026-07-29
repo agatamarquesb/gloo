@@ -3,7 +3,7 @@ import { Check, Pause, Play, RotateCcw, X } from 'lucide-react';
 import { Button, Input } from '@heroui/react';
 import { TextField } from 'react-aria-components';
 
-import { playAlarm } from '@/lib/sounds';
+import { playSound } from '@/lib/sounds';
 import { strings } from '@/strings/pt-BR';
 
 import { DashboardCard } from './DashboardCard';
@@ -95,7 +95,7 @@ export function TimeBlockingCard() {
         setRunning(false);
         // The point of a focus timer is that you are looking at something else,
         // so reaching zero has to be audible.
-        playAlarm();
+        playSound('countdownEnd');
       }
     }, 250);
 

@@ -9,6 +9,8 @@ import { useMe } from '@/hooks/queries/auth';
 import { useSectors } from '@/hooks/queries/sectors';
 import { useUsers } from '@/hooks/queries/users';
 import { canMutateEntity } from '@/lib/permissions';
+import { playSound } from '@/lib/sounds';
+import { RedButton } from '@/components/common/RedButton';
 import { strings } from '@/strings/pt-BR';
 
 import { SubtaskChecklist } from './SubtaskChecklist';
@@ -107,10 +109,16 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
             {strings.task.copyLink}
           </Button>
           {canEdit ? (
-            <Button variant="danger-soft" isDisabled={deleteTask.isPending} onPress={handleDelete}>
+            <RedButton
+              isDisabled={deleteTask.isPending}
+              onPress={() => {
+                playSound('delete');
+                handleDelete();
+              }}
+            >
               <Trash2 className="size-4" />
               {strings.common.delete}
-            </Button>
+            </RedButton>
           ) : null}
         </div>
 

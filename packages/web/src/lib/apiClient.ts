@@ -39,5 +39,8 @@ export const apiClient = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>(path, 'POST', body),
   patch: <T>(path: string, body?: unknown) => request<T>(path, 'PATCH', body),
-  delete: <T>(path: string) => request<T>(path, 'DELETE'),
+  // A body is optional and usually absent — but a bulk delete has to say what it
+  // is deleting, and the alternative is either a POST that means DELETE or a
+  // list of ids in the query string.
+  delete: <T>(path: string, body?: unknown) => request<T>(path, 'DELETE', body),
 };

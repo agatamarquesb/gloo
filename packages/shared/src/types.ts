@@ -149,6 +149,14 @@ export interface RoutineDto {
   labels: LabelDto[];
   assignees: UserDto[];
   createdById: string;
+  /** ISO timestamp of the last write, shown at the foot of the routine modal. */
+  updatedAt: string;
+  /**
+   * When the routine was moved to the trash, or null while it is live. Takes the
+   * place of `updatedAt` at the foot of the modal for a trashed routine: what
+   * matters about one is when it went, not when it last changed.
+   */
+  deletedAt: string | null;
 }
 
 export interface CreateRoutineInput {

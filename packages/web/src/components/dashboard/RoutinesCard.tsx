@@ -1,19 +1,33 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Copy, Plus, Trash2 } from 'lucide-react';
 import { Button, ScrollShadow } from '@heroui/react';
 import { useSearchParams } from 'react-router';
 
 import type { RoutineDto } from '@gloo/shared';
 
 import { AppCheckbox } from '@/components/common/AppCheckbox';
-import { useDeleteRoutine, useRoutines, useToggleRoutine } from '@/hooks/queries/routines';
+import {
+  useCreateRoutine,
+  useDeleteRoutine,
+  useRoutines,
+  useToggleRoutine,
+} from '@/hooks/queries/routines';
 import { useMe } from '@/hooks/queries/auth';
 import { canMutateEntity } from '@/lib/permissions';
-import { LABEL_BG_CLASS, LABEL_PILL } from '@/theme/labelColors';
+import { playSound } from '@/lib/sounds';
+import {
+  quietTextButton,
+  routineRow,
+  routineRowTarget,
+  routineRowTitle,
+} from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 import { DashboardCard } from './DashboardCard';
+import { duplicateRoutineName } from './duplicateRoutineName';
+import { RoutineLabels } from './RoutineLabels';
 import { RoutineModal } from './RoutineModal';
+import { RoutineTrash } from './RoutineTrash';
 import { formatRoutineDay, groupRoutinesByMonth } from './routineSchedule';
 
 /**
@@ -26,45 +40,42 @@ const LIST_HEIGHT = 'h-40';
 /** Query param that reopens a routine from a shared link. */
 export const ROUTINE_PARAM = 'rotina';
 
-/** Beyond three, the pills crowd the row and push the title into a second line. */
-const MAX_VISIBLE_LABELS = 3;
-
 function RoutineRow({
   routine,
   date,
   canEdit,
   onEdit,
+  onDuplicate,
+  areLabelsCollapsed,
+  onToggleLabels,
 }: {
   routine: RoutineDto;
   date: Date;
   canEdit: boolean;
   onEdit: () => void;
+  /** Owned by the card, which is the only thing that knows the names in use. */
+  onDuplicate: () => void;
+  /** Shared with every other row — see RoutineLabels. */
+  areLabelsCollapsed: boolean;
+  onToggleLabels: () => void;
 }) {
   const toggleRoutine = useToggleRoutine();
   const deleteRoutine = useDeleteRoutine();
 
   return (
-    // Same hover treatment as a task row in "Minhas tarefas": color plus a
-    // slight lift, with the lift behind motion-safe since it is decoration.
-    // Dark mode shifts the pair up a step: the row takes what used to be its
-    // hover grey, and hover goes lighter still — on a near-black surface the
-    // old base was too close to the card behind it to read as a card at all.
-    <li className="relative flex items-start gap-3 rounded-2xl bg-background/50 p-3 transition-[background-color,transform] duration-200 hover:bg-default/40 motion-safe:hover:scale-[1.015] dark:bg-default/40 dark:hover:bg-default/70">
-      {/* The whole row opens the routine, not just its text. A button stretched
-          behind the content rather than a wrapper around it, because the row
-          also holds a checkbox and a delete button and buttons can't nest — the
-          content layer is click-through, and those two opt back in. */}
+    <li className={routineRow}>
+      {/* The whole row opens the routine, not just its text. */}
       <button
         type="button"
         onClick={onEdit}
         aria-label={routine.description}
-        className="absolute inset-0 cursor-pointer rounded-2xl"
+        className={routineRowTarget}
       />
 
-      {/* mt-0.5 on the checkbox and the right-hand cluster puts both on the
-          title's first line, so a wrapped title grows downward from a fixed
-          top edge instead of dragging them out of alignment. */}
-      <div className="pointer-events-auto relative mt-0.5">
+      {/* The same h-5 band as the cluster on the right, so the checkbox, the
+          title and the date all sit on one line — and a wrapped title grows
+          downward from it rather than dragging anything out of place. */}
+      <div className="pointer-events-auto relative flex h-5 items-center">
         <AppCheckbox
           accent
           isSelected={routine.done}
@@ -79,40 +90,55 @@ function RoutineRow({
         {/* Wraps rather than truncating; the flex siblings on the right keep it
             from running underneath them. */}
         <span
-          className={`text-sm break-words ${
+          className={`${routineRowTitle} ${
             routine.done ? 'text-muted line-through' : 'text-foreground'
           }`}
         >
           {routine.description}
         </span>
 
-        {routine.labels.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {routine.labels.slice(0, MAX_VISIBLE_LABELS).map((label) => (
-              // The same pill as inside the routine — one shared style, so a
-              // label looks identical wherever it appears.
-              <span key={label.id} className={`${LABEL_PILL} ${LABEL_BG_CLASS[label.color]}`}>
-                {label.name}
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <RoutineLabels
+          labels={routine.labels}
+          isCollapsed={areLabelsCollapsed}
+          onToggle={onToggleLabels}
+        />
       </div>
 
-      <div className="relative mt-0.5 flex shrink-0 items-center gap-1">
+      {/* Date, then the two icons, all on the title's own line — h-5 is that
+          line box and the contents centre in it.
+
+          The icons are bare buttons rather than ghost ones — see
+          quietTextButton — so they carry no padding of their own and take only
+          the width of the glyph, instead of eating the right-hand end of the row
+          with two hover discs. */}
+      <div className="relative flex h-5 shrink-0 items-center gap-2">
         <span className="pointer-events-none text-xs text-muted">{formatRoutineDay(date)}</span>
 
         {canEdit ? (
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            className="pointer-events-auto text-muted"
-            aria-label={strings.common.delete}
-            onPress={() => deleteRoutine.mutate(routine.id)}
-          >
-            <Trash2 className="size-4" />
-          </Button>
+          <>
+            {/* Mirrored, so the copy reads as coming off the routine rather than
+                going onto it — and it leads the pair, since duplicating is the
+                one of the two you might do casually. */}
+            <button
+              type="button"
+              className={`${quietTextButton} pointer-events-auto`}
+              aria-label={strings.routine.duplicate}
+              onClick={onDuplicate}
+            >
+              <Copy className="size-4 -scale-x-100" />
+            </button>
+            <button
+              type="button"
+              className={`${quietTextButton} pointer-events-auto`}
+              aria-label={strings.common.delete}
+              onClick={() => {
+                playSound('delete');
+                deleteRoutine.mutate(routine.id);
+              }}
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </>
         ) : null}
       </div>
     </li>
@@ -122,8 +148,16 @@ function RoutineRow({
 export function RoutinesCard() {
   const { data: me } = useMe();
   const { data: routines = [], isLoading } = useRoutines(me?.id);
+  const createRoutine = useCreateRoutine();
   const [editing, setEditing] = useState<RoutineDto | null>(null);
   const [isModalOpen, setModalOpen] = useState(false);
+  const [isTrashOpen, setTrashOpen] = useState(false);
+  /**
+   * Whether the tag rows are folded down to bars — one flag for the whole list,
+   * because the gesture switches how you read the card rather than dressing a
+   * single routine. See RoutineLabels.
+   */
+  const [areLabelsCollapsed, setLabelsCollapsed] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const groups = groupRoutinesByMonth(routines);
@@ -160,8 +194,61 @@ export function RoutinesCard() {
     setModalOpen(true);
   }
 
+  /**
+   * A copy of everything the routine is, under the next free "(n)".
+   *
+   * It needs no position of its own: the list is ordered by creation and grouped
+   * by when each routine next falls due, and a copy shares the original's
+   * schedule — so it lands in the same group, immediately after the routine it
+   * came from.
+   *
+   * Attachments are copied by reference, with fresh ids. Both routines then
+   * point at the same uploaded file, which is what duplicating means here; the
+   * ids are per-routine and only have to be unique within one.
+   */
+  function duplicate(routine: RoutineDto) {
+    createRoutine.mutate({
+      description: duplicateRoutineName(
+        routine.description,
+        routines.map(({ description }) => description),
+      ),
+      recurrence: routine.recurrence,
+      weekday: routine.weekday,
+      dayOfMonth: routine.dayOfMonth,
+      notes: routine.notes,
+      checklists: routine.checklists,
+      attachments:
+        routine.attachments?.map((attachment) => ({
+          ...attachment,
+          id: crypto.randomUUID(),
+        })) ?? null,
+      labelIds: routine.labels.map(({ id }) => id),
+      assigneeIds: routine.assignees.map(({ id }) => id),
+    });
+  }
+
   return (
-    <DashboardCard title={strings.routine.title}>
+    // `relative` so the trash panel can cover the card and nothing else, and
+    // `overflow-hidden` so its square corners are clipped to the card's rounded
+    // ones. Plain text rather than a button for the trigger: it is a way in to
+    // somewhere quiet, not an action on the routines you are looking at.
+    <DashboardCard
+      title={strings.routine.title}
+      className="relative overflow-hidden"
+      action={
+        // h-7 is the title's own line height, so the two sit on one axis: the
+        // header aligns its children by their top edges, and left to itself this
+        // much smaller text rides above the word it belongs beside.
+        <button
+          type="button"
+          className="flex h-7 cursor-pointer items-center gap-0.5 text-xs text-muted hover:font-medium hover:text-surface-foreground"
+          onClick={() => setTrashOpen(true)}
+        >
+          {strings.routine.trash.open}
+          <ChevronRight className="size-3.5" />
+        </button>
+      }
+    >
       {isLoading ? (
         <p className="py-6 text-center text-muted">{strings.common.loading}</p>
       ) : routines.length === 0 ? (
@@ -181,8 +268,11 @@ export function RoutinesCard() {
           size={28}
           // px/py inside the scroller, not margins outside it: the rows lift on
           // hover, and without that padding the scaled edge is clipped by the
-          // scroll container.
-          className={`${LIST_HEIGHT} -mt-2 overflow-y-scroll px-1.5 py-1 [scrollbar-width:thin]`}
+          // scroll container. The matching -mx pulls the scroller back out by
+          // exactly that padding, so the rows and the month heading start and
+          // end on the card's own margins — the same edges as "Adicionar
+          // rotina" below them — while the lift keeps its room.
+          className={`${LIST_HEIGHT} -mx-1.5 -mt-2 overflow-y-scroll px-1.5 py-1 [scrollbar-width:thin]`}
         >
           {groups.map((group) => (
             <section key={group.key} className="mb-3 last:mb-0">
@@ -200,6 +290,9 @@ export function RoutinesCard() {
                       assigneeIds: routine.assignees.map((assignee) => assignee.id),
                     })}
                     onEdit={() => openEdit(routine)}
+                    onDuplicate={() => duplicate(routine)}
+                    areLabelsCollapsed={areLabelsCollapsed}
+                    onToggleLabels={() => setLabelsCollapsed((current) => !current)}
                   />
                 ))}
               </ul>
@@ -221,6 +314,10 @@ export function RoutinesCard() {
         onClose={() => setModalOpen(false)}
         routine={editing ?? undefined}
       />
+
+      {/* Mounted only while open, so closing it drops the trash query rather
+          than leaving it to refetch behind a panel nobody is looking at. */}
+      {isTrashOpen ? <RoutineTrash onClose={() => setTrashOpen(false)} /> : null}
     </DashboardCard>
   );
 }

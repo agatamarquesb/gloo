@@ -58,12 +58,64 @@ export async function routineRoutes(app: FastifyInstance) {
     const { assigneeId } = request.query as { assigneeId?: string };
 
     const routines = await prisma.routine.findMany({
-      where: assigneeId ? { assignees: { some: { userId: assigneeId } } } : {},
+      // Trashed routines are still rows — see `deletedAt` in the schema — so
+      // every list of live ones has to say so.
+      where: {
+        deletedAt: null,
+        ...(assigneeId ? { assignees: { some: { userId: assigneeId } } } : {}),
+      },
       include: routineInclude,
       orderBy: { createdAt: 'asc' },
     });
 
     return routines.map(toRoutineDto);
+  });
+
+  /**
+   * The trash, newest first — what you just deleted is what you are most likely
+   * to want back. Company-wide rather than scoped to the caller, like the
+   * Routines card itself: a routine is shared, so anyone who could delete it can
+   * see it sitting in the bin.
+   */
+  app.get('/deleted', async () => {
+    const routines = await prisma.routine.findMany({
+      where: { deletedAt: { not: null } },
+      include: routineInclude,
+      orderBy: { deletedAt: 'desc' },
+    });
+
+    return routines.map(toRoutineDto);
+  });
+
+  /**
+   * Empties the trash for good — all of it, or just the `ids` the caller names.
+   *
+   * Guarded per routine rather than wholesale either way: a user clears the ones
+   * they could have deleted themselves and leaves anyone else's where they are,
+   * so one person's tidying can never destroy another's work. Naming ids that
+   * are live, absent, or someone else's is not an error; they are simply not
+   * among the ones deleted, and the count says so.
+   */
+  app.delete<{ Body?: { ids?: string[] } }>('/deleted', async (request) => {
+    const ids = request.body?.ids;
+
+    const trashed = await prisma.routine.findMany({
+      where: {
+        deletedAt: { not: null },
+        ...(Array.isArray(ids) ? { id: { in: ids } } : {}),
+      },
+      include: routineInclude,
+    });
+
+    const removable = trashed
+      .filter((routine) => canMutate(request.authUser, mutationSubject(routine)))
+      .map(({ id }) => id);
+
+    if (removable.length > 0) {
+      await prisma.routine.deleteMany({ where: { id: { in: removable } } });
+    }
+
+    return { deleted: removable.length };
   });
 
   app.post<{ Body: CreateRoutineInput }>('/', async (request, reply) => {
@@ -193,7 +245,15 @@ export async function routineRoutes(app: FastifyInstance) {
     },
   );
 
-  app.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
+  /**
+   * Destroys one routine outright, for the "Deletar permanente" in the trash.
+   *
+   * Its own route rather than a flag on DELETE /:id: that one is what the
+   * Routines card calls, and the difference between the two is the difference
+   * between reversible and not. Nothing that can destroy a routine should be
+   * reachable by getting an argument wrong.
+   */
+  app.delete<{ Params: { id: string } }>('/:id/permanent', async (request, reply) => {
     const existing = await loadRoutineOrThrow(request.params.id);
 
     if (!canMutate(request.authUser, mutationSubject(existing))) {
@@ -201,6 +261,39 @@ export async function routineRoutes(app: FastifyInstance) {
     }
 
     await prisma.routine.delete({ where: { id: request.params.id } });
+    return reply.code(204).send();
+  });
+
+  /** Puts a trashed routine back. Same rule as deleting it in the first place. */
+  app.post<{ Params: { id: string } }>('/:id/restore', async (request, reply) => {
+    const existing = await loadRoutineOrThrow(request.params.id);
+
+    if (!canMutate(request.authUser, mutationSubject(existing))) {
+      return reply.code(403).send({ error: 'Sem permissão para editar esta rotina' });
+    }
+
+    const routine = await prisma.routine.update({
+      where: { id: request.params.id },
+      data: { deletedAt: null },
+      include: routineInclude,
+    });
+
+    return toRoutineDto(routine);
+  });
+
+  // Reversible: this moves the routine to the trash rather than removing it.
+  // DELETE /deleted above is the one that actually destroys anything.
+  app.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
+    const existing = await loadRoutineOrThrow(request.params.id);
+
+    if (!canMutate(request.authUser, mutationSubject(existing))) {
+      return reply.code(403).send({ error: 'Sem permissão para excluir esta rotina' });
+    }
+
+    await prisma.routine.update({
+      where: { id: request.params.id },
+      data: { deletedAt: new Date() },
+    });
     return reply.code(204).send();
   });
 }

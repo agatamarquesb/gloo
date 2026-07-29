@@ -104,6 +104,8 @@ export function toRoutineDto(routine: RoutineWithRelations): RoutineDto {
     })),
     assignees: routine.assignees.map(({ user }) => toUserDto(user)),
     createdById: routine.createdById,
+    updatedAt: routine.updatedAt.toISOString(),
+    deletedAt: routine.deletedAt?.toISOString() ?? null,
   };
 }
 
