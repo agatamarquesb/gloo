@@ -22,7 +22,18 @@ export const LABEL_BG_CLASS: Record<LabelColor, string> = {
 };
 
 /**
+ * The app's pill: a routine's tags, and a task's status.
+ *
+ * Only the geometry, because the two differ in one thing — a tag's palette is
+ * light enough to take black text in either theme, while a status wears the
+ * Dashboard tile colours, which step down in dark mode and carry white there.
+ * Everything that makes it the same shape lives here; each caller adds its own
+ * foreground.
+ */
+export const PILL_SHAPE = 'rounded-lg px-2.5 py-1 text-xs';
+
+/**
  * A label pill. Shared so the ones under a routine's title in the modal and the
  * ones on its Dashboard row are the same object, not two lookalikes.
  */
-export const LABEL_PILL = 'rounded-lg px-2.5 py-1 text-xs text-black';
+export const LABEL_PILL = `${PILL_SHAPE} text-black`;

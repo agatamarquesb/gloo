@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { isTaskStatus } from '@gloo/shared';
 import type { CreateTaskInput, TaskBySectorDto, TaskSummaryDto, UpdateTaskInput } from '@gloo/shared';
 
 import { canMutate } from '../../lib/authorize';
@@ -195,9 +196,17 @@ export async function taskRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'Sem permissão para editar esta tarefa' });
     }
 
+    // Checked rather than cast straight through: an unknown status used to reach
+    // Postgres and come back as a 500, which said "we broke" about a request that
+    // was simply wrong. IN_REVIEW made this real — it was a valid status once, so
+    // anything still asking for it deserves a straight answer.
+    if (!isTaskStatus(request.body.status)) {
+      return reply.code(400).send({ error: 'Status inválido' });
+    }
+
     const task = await prisma.task.update({
       where: { id },
-      data: { status: request.body.status as Prisma.TaskUpdateInput['status'] },
+      data: { status: request.body.status },
       include: taskInclude,
     });
 

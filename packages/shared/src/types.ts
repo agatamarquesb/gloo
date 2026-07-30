@@ -48,10 +48,18 @@ export interface TaskListItemDto {
    * itself so list responses stay small — the body only comes with the detail DTO.
    */
   hasDescription: boolean;
+  /**
+   * How many links and files are attached. A count for the same reason
+   * `hasDescription` is a flag: the row shows the number, and the attachments
+   * themselves only come with the detail DTO.
+   */
+  attachmentCount: number;
 }
 
 export interface TaskDetailDto extends TaskListItemDto {
   description: string | null;
+  /** Null when the task has no attachments block; `[]` when it has an empty one. */
+  attachments: AttachmentDto[] | null;
   subtasks: SubtaskDto[];
   createdAt: string;
   updatedAt: string;

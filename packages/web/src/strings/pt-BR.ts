@@ -24,18 +24,23 @@ export const strings = {
       LOW: 'Baixa',
     },
     status: {
-      TODO: 'To Do',
-      IN_PROGRESS: 'Em Progresso',
-      IN_REVIEW: 'Em Review',
-      DONE: 'Concluído',
+      TODO: 'A fazer',
+      IN_PROGRESS: 'Em andamento',
+      DONE: 'Feita',
     },
     filters: {
       all: 'Todas',
       overdue: 'Atrasada',
+      /**
+       * Plural, unlike the status itself: the pill filters a list of tasks
+       * ("show me the done ones"), while the chip labels one task.
+       */
+      done: 'Feitas',
     },
     fields: {
       title: 'Título',
       description: 'Descrição',
+      status: 'Status',
       dueDate: 'Data de vencimento',
       sector: 'Setor',
       assignees: 'Responsáveis',
@@ -47,6 +52,7 @@ export const strings = {
     deleteRoutine: 'Deletar',
     hasNotes: 'Tem anotações',
     noNotes: 'Sem anotações',
+    attachmentCount: 'Anexos',
   },
   routine: {
     recurrence: {

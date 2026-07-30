@@ -52,10 +52,15 @@ export function RoutineLabels({
     >
       {labels.slice(0, MAX_VISIBLE_LABELS).map((label) => (
         // Expanded, the same pill as inside the routine — one shared style, so a
-        // label looks identical wherever it appears.
+        // label looks identical wherever it appears. It answers the row's hover
+        // alongside the title (see routineRowTitle): the two are one block of
+        // text about one routine, and only half of it thickening looked like a
+        // mistake.
         <span
           key={label.id}
-          className={`${isCollapsed ? COLLAPSED_PILL : LABEL_PILL} ${LABEL_BG_CLASS[label.color]}`}
+          className={`${isCollapsed ? COLLAPSED_PILL : LABEL_PILL} ${
+            LABEL_BG_CLASS[label.color]
+          } transition-[font-weight] group-hover:font-medium`}
         >
           {isCollapsed ? null : label.name}
         </span>

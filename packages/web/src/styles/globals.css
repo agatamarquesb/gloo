@@ -68,6 +68,28 @@
   --tile-icon-backdrop: #ffffff;
   --tile-icon-border: transparent;
 
+  /* Task status pills.
+   *
+   * A tint of each brand colour rather than the colour itself, because the
+   * --tile-* set is already spoken for twice over: the Dashboard's summary tiles
+   * *and* the sector donut's slices, which read those same tokens so a slice
+   * matches a tile. A status pill in the same value was a third meaning for one
+   * colour, and on a page showing all three at once there was no telling which
+   * a swatch belonged to.
+   *
+   * Lightened rather than shifted in hue: a status keeps the association — blue
+   * is still to do, yellow still in progress — while sitting a clear step back
+   * from the fuller values the tiles and the chart use. Black text gains
+   * contrast on all four.
+   *
+   * Mode-invariant like the brand colours themselves. The tiles step down in
+   * dark mode because they are large filled panels; a pill this small does not
+   * glare, and keeping it fixed means a status is one colour everywhere. */
+  --status-todo: #d6f2ff;
+  --status-progress: #fff6c2;
+  --status-done: #e4ecb4;
+  --status-overdue: #ffece4;
+
   /* The brand green taken down to where it can carry text.
    *
    * --green is a mid-tone pastel: fine as a fill with black on top, but as a
@@ -163,6 +185,10 @@
   --color-tile-foreground: var(--tile-foreground);
   --color-tile-icon-backdrop: var(--tile-icon-backdrop);
   --color-tile-icon-border: var(--tile-icon-border);
+  --color-status-todo: var(--status-todo);
+  --color-status-progress: var(--status-progress);
+  --color-status-done: var(--status-done);
+  --color-status-overdue: var(--status-overdue);
   --color-green-deep: var(--green-deep);
   --color-outline-green: var(--outline-green);
   --color-outline-control: var(--outline-control);

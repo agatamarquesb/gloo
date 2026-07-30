@@ -14,10 +14,13 @@ export type TaskPriority = (typeof TaskPriority)[keyof typeof TaskPriority];
 export const TaskStatus = {
   TODO: 'TODO',
   IN_PROGRESS: 'IN_PROGRESS',
-  IN_REVIEW: 'IN_REVIEW',
   DONE: 'DONE',
 } as const;
 export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
+
+export function isTaskStatus(value: unknown): value is TaskStatus {
+  return typeof value === 'string' && Object.hasOwn(TaskStatus, value);
+}
 
 /** Not a stored status - computed at query time from dueDate + status. */
 export const TASK_FILTER_OVERDUE = 'OVERDUE' as const;

@@ -1,36 +1,84 @@
-import { NotebookText } from 'lucide-react';
+import { NotebookText, Paperclip } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 
-import type { TaskListItemDto } from '@gloo/shared';
+import type { TaskListItemDto, TaskStatus } from '@gloo/shared';
 
+import { useMe } from '@/hooks/queries/auth';
+import { useUpdateTaskStatus } from '@/hooks/queries/tasks';
+import { canMutateEntity } from '@/lib/permissions';
 import { strings } from '@/strings/pt-BR';
 
 import { AssigneeAvatars } from './AssigneeAvatars';
-import { StatusChip } from './StatusChip';
 import { TaskProgressBar } from './TaskProgressBar';
+import { TaskStatusChipSelect } from './TaskStatusChipSelect';
 
+/**
+ * The status pill hugs its own label, so no two are the same width. This is the
+ * cell it sits in: fixed, and left-aligned inside, so every row's pill starts on
+ * one edge however long its label is. Sized to the longest — "em andamento".
+ */
+const STATUS_COLUMN = 'flex w-28 shrink-0 justify-start';
+
+/** "1 de agosto" — pt-BR writes the day and month as a phrase, not a list. */
+const dayAndMonth = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' });
+
+/** "1 de agosto, 2026". The year is set off by a comma rather than a second "de". */
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+  const date = new Date(iso);
+  return `${dayAndMonth.format(date)}, ${date.getFullYear()}`;
 }
 
-export function TaskCard({ task }: { task: TaskListItemDto }) {
+export function TaskCard({
+  task,
+  onOpen,
+}: {
+  task: TaskListItemDto;
+  /**
+   * How to show the task. Given, the caller opens it where it stands — which is
+   * what the Dashboard wants, so its modal lays over the Dashboard rather than
+   * over the Tasks page. Omitted, the row routes to /tasks/:id.
+   */
+  onOpen?: () => void;
+}) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { data: me } = useMe();
+  const updateStatus = useUpdateTaskStatus(task.id);
+
   const dueDate = formatDate(task.dueDate);
+  const canEdit = canMutateEntity(me, {
+    createdById: task.createdById,
+    assigneeIds: task.assignees.map((assignee) => assignee.id),
+  });
+
+  function open() {
+    if (onOpen) {
+      onOpen();
+      return;
+    }
+    // Carry where the row was clicked from, so closing the task modal returns
+    // here rather than dumping you on the Tasks page.
+    navigate(`/tasks/${task.id}`, { state: { from: location.pathname } });
+  }
 
   return (
-    <button
-      type="button"
-      // Carry where the row was clicked from, so closing the task modal returns
-      // here — the Dashboard shows these rows too, and it used to dump you on the
-      // Tasks page instead.
-      onClick={() => navigate(`/tasks/${task.id}`, { state: { from: location.pathname } })}
-      // motion-safe on the hover lift: it's decoration, so it goes away under
-      // prefers-reduced-motion while the color change stays.
-      className="gloo-rise flex w-full flex-col gap-3 rounded-2xl border border-outline-green bg-transparent p-4 text-left transition-[background-color,transform] duration-200 hover:bg-default/40 active:scale-[0.995] motion-safe:hover:scale-[1.015] sm:flex-row sm:items-center sm:gap-4"
-    >
-      <div className="min-w-0 flex-1">
+    // A div with a click target stretched behind it, not a button around
+    // everything: the row now holds a status dropdown, and a control cannot live
+    // inside a button. The content layer is click-through and the status opts
+    // back in — see `pointer-events-auto` below.
+    //
+    // motion-safe on the hover lift: it's decoration, so it goes away under
+    // prefers-reduced-motion while the colour change stays.
+    <div className="gloo-rise relative flex w-full flex-col gap-3 rounded-2xl border border-outline-green bg-transparent p-4 text-left transition-[background-color,transform] duration-200 hover:bg-default/40 motion-safe:hover:scale-[1.015] sm:flex-row sm:items-center sm:gap-4">
+      <button
+        type="button"
+        onClick={open}
+        aria-label={task.title}
+        className="absolute inset-0 cursor-pointer rounded-2xl active:scale-[0.995]"
+      />
+
+      <div className="pointer-events-none relative min-w-0 flex-1">
         <p className="truncate font-medium text-surface-foreground">{task.title}</p>
         <p className="truncate text-sm text-muted">
           {dueDate ? `${dueDate} · ` : ''}
@@ -40,15 +88,24 @@ export function TaskCard({ task }: { task: TaskListItemDto }) {
 
       {/* Meta collapses under the title on phones instead of squeezing the
           title into an unreadable column beside it. */}
-      <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end sm:gap-4">
-        <StatusChip status={task.status} isOverdue={task.isOverdue} />
-        <TaskProgressBar value={task.progress} className="w-20 sm:w-28" />
+      <div className="relative flex shrink-0 items-center justify-between gap-3 sm:justify-end sm:gap-4">
+        <TaskProgressBar value={task.progress} className="pointer-events-none w-20 sm:w-28" />
+
+        {/* The one thing on the row you can change without opening it: pressing
+            the status opens the three options rather than the task. */}
+        <div className={`pointer-events-auto ${STATUS_COLUMN}`}>
+          <TaskStatusChipSelect
+            status={task.status}
+            isOverdue={task.isOverdue}
+            isDisabled={!canEdit}
+            onChange={(status: TaskStatus) => updateStatus.mutate(status)}
+          />
+        </div>
 
         {/* Notes marker, always shown so the row's columns stay aligned; only the
-            dot is conditional. A span rather than a button — the whole row is
-            already one, and nesting buttons is invalid. */}
+            dot is conditional. */}
         <span
-          className="relative shrink-0 text-muted"
+          className="pointer-events-none relative shrink-0 text-muted"
           title={task.hasDescription ? strings.task.hasNotes : strings.task.noNotes}
         >
           <NotebookText className="size-5" aria-hidden />
@@ -65,8 +122,21 @@ export function TaskCard({ task }: { task: TaskListItemDto }) {
           ) : null}
         </span>
 
-        <AssigneeAvatars assignees={task.assignees} />
+        {/* Attachment count, beside the notes marker: the two answer the same
+            question — what else is in here — so they read as a pair. Always
+            shown, zero included, so the row's columns stay aligned. */}
+        <span
+          className="pointer-events-none flex shrink-0 items-center gap-1 text-muted"
+          title={strings.task.attachmentCount}
+        >
+          <Paperclip className="size-4" aria-hidden />
+          <span className="text-xs">{task.attachmentCount}</span>
+        </span>
+
+        <div className="pointer-events-none">
+          <AssigneeAvatars assignees={task.assignees} />
+        </div>
       </div>
-    </button>
+    </div>
   );
 }

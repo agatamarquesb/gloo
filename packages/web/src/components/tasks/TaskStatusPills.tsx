@@ -11,21 +11,31 @@ const PILLS: { value: StatusPillValue; label: string }[] = [
   { value: 'TODO', label: strings.task.status.TODO },
   { value: 'IN_PROGRESS', label: strings.task.status.IN_PROGRESS },
   { value: 'OVERDUE', label: strings.task.filters.overdue },
-  { value: 'DONE', label: strings.task.status.DONE },
+  { value: 'DONE', label: strings.task.filters.done },
 ];
 
 export function TaskStatusPills({
   value,
   onChange,
   slim = false,
+  withOverdue = true,
 }: {
   value: StatusPillValue;
   onChange: (value: StatusPillValue) => void;
   slim?: boolean;
+  /**
+   * Whether "Atrasada" is one of the filters. The Dashboard leaves it out — it
+   * has a tile counting overdue tasks a few centimetres above, and a filter for
+   * the same thing on the card below was the second answer to a question the
+   * page had already answered.
+   */
+  withOverdue?: boolean;
 }) {
+  const pills = withOverdue ? PILLS : PILLS.filter((pill) => pill.value !== 'OVERDUE');
+
   return (
     <div className="flex flex-wrap gap-2">
-      {PILLS.map((pill) => (
+      {pills.map((pill) => (
         <Button
           key={pill.value}
           size={slim ? 'sm' : 'md'}

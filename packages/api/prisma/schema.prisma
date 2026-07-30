@@ -21,7 +21,6 @@ enum TaskPriority {
 enum TaskStatus {
   TODO
   IN_PROGRESS
-  IN_REVIEW
   DONE
 }
 
@@ -76,6 +75,11 @@ model Task {
   createdBy   User         @relation("TaskCreator", fields: [createdById], references: [id])
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+
+  /// Links and uploaded files, as `[{ id, kind, url, title }]` — the same shape
+  /// and the same reasoning as a routine's, so both read through the one parser
+  /// in the routines mapper. The files themselves live in UPLOADS_DIR.
+  attachments Json?
 
   subtasks  Subtask[]
   assignees TaskAssignee[]

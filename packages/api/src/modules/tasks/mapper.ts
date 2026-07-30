@@ -1,6 +1,7 @@
 import type { TaskDetailDto, TaskListItemDto } from '@gloo/shared';
 
 import { toUserDto } from '../../lib/userDto';
+import { parseAttachments } from '../routines/mapper';
 import type { Prisma } from '../../../generated/prisma/client';
 
 const taskWithRelations = {
@@ -38,6 +39,10 @@ export function toTaskListItemDto(task: TaskWithRelations): TaskListItemDto {
     createdById: task.createdById,
     // Whitespace-only descriptions don't count as notes.
     hasDescription: Boolean(task.description?.trim()),
+    // Through the routines parser rather than trusting the column: it is Json, so
+    // what comes back is whatever was last written, and anything malformed has to
+    // be dropped before it can be counted.
+    attachmentCount: parseAttachments(task.attachments)?.length ?? 0,
   };
 }
 
@@ -45,6 +50,7 @@ export function toTaskDetailDto(task: TaskWithRelations): TaskDetailDto {
   return {
     ...toTaskListItemDto(task),
     description: task.description,
+    attachments: parseAttachments(task.attachments),
     subtasks: task.subtasks
       .toSorted((a, b) => a.order - b.order)
       .map((s) => ({ id: s.id, text: s.text, done: s.done, order: s.order })),
