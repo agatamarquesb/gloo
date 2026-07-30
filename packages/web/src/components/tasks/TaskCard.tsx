@@ -1,10 +1,11 @@
-import { NotebookText, Paperclip } from 'lucide-react';
+import { ClipboardList, Paperclip } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 
 import type { TaskListItemDto, TaskStatus } from '@gloo/shared';
 
 import { useMe } from '@/hooks/queries/auth';
 import { useUpdateTaskStatus } from '@/hooks/queries/tasks';
+import { formatLongDate, formatShortDate } from '@/lib/formatDate';
 import { canMutateEntity } from '@/lib/permissions';
 import { strings } from '@/strings/pt-BR';
 
@@ -19,19 +20,10 @@ import { TaskStatusChipSelect } from './TaskStatusChipSelect';
  */
 const STATUS_COLUMN = 'flex w-28 shrink-0 justify-start';
 
-/** "1 de agosto" — pt-BR writes the day and month as a phrase, not a list. */
-const dayAndMonth = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' });
-
-/** "1 de agosto, 2026". The year is set off by a comma rather than a second "de". */
-function formatDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  return `${dayAndMonth.format(date)}, ${date.getFullYear()}`;
-}
-
 export function TaskCard({
   task,
   onOpen,
+  shortDate = false,
 }: {
   task: TaskListItemDto;
   /**
@@ -40,13 +32,19 @@ export function TaskCard({
    * over the Tasks page. Omitted, the row routes to /tasks/:id.
    */
   onOpen?: () => void;
+  /**
+   * "31 de jul. 2026" rather than the date written out in full. For the
+   * Dashboard card, where the row is half the width it has on the Tasks page and
+   * the date was the first thing to start crowding the sector beside it.
+   */
+  shortDate?: boolean;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
   const updateStatus = useUpdateTaskStatus(task.id);
 
-  const dueDate = formatDate(task.dueDate);
+  const dueDate = shortDate ? formatShortDate(task.dueDate) : formatLongDate(task.dueDate);
   const canEdit = canMutateEntity(me, {
     createdById: task.createdById,
     assigneeIds: task.assignees.map((assignee) => assignee.id),
@@ -102,14 +100,16 @@ export function TaskCard({
           />
         </div>
 
-        {/* Notes marker, always shown so the row's columns stay aligned; only the
-            dot is conditional. */}
+        {/* Subtask marker, always shown so the row's columns stay aligned; only
+            the dot is conditional. A checklist rather than a notebook of lines:
+            what it answers is "is there a list inside this one?", which is also
+            what the progress bar to its left is measuring. */}
         <span
           className="pointer-events-none relative shrink-0 text-muted"
-          title={task.hasDescription ? strings.task.hasNotes : strings.task.noNotes}
+          title={task.subtaskCount > 0 ? strings.task.hasSubtasks : strings.task.noSubtasks}
         >
-          <NotebookText className="size-5" aria-hidden />
-          {task.hasDescription ? (
+          <ClipboardList className="size-5" aria-hidden />
+          {task.subtaskCount > 0 ? (
             <>
               {/* ring in the row's own backdrop so the dot stays legible against
                   whatever the icon overlaps. */}
@@ -117,12 +117,12 @@ export function TaskCard({
                 aria-hidden
                 className="absolute -right-1 -top-1 size-2.5 rounded-full bg-danger ring-2 ring-surface"
               />
-              <span className="sr-only">{strings.task.hasNotes}</span>
+              <span className="sr-only">{strings.task.hasSubtasks}</span>
             </>
           ) : null}
         </span>
 
-        {/* Attachment count, beside the notes marker: the two answer the same
+        {/* Attachment count, beside the subtask marker: the two answer the same
             question — what else is in here — so they read as a pair. Always
             shown, zero included, so the row's columns stay aligned. */}
         <span

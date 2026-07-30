@@ -36,6 +36,7 @@ export function RichNotes({
   isEditing,
   /** Rendered at the end of the toolbar, after the formatting buttons. */
   actions,
+  contentClassName = '',
 }: {
   value: string;
   onChange: (html: string) => void;
@@ -45,6 +46,12 @@ export function RichNotes({
   /** Read-only outside edit mode: no toolbar, no caret. */
   isEditing: boolean;
   actions?: ReactNode;
+  /**
+   * The area the note is written in. Given `flex-1 min-h-0 overflow-y-auto`, the
+   * note scrolls inside the block instead of growing it — which is how the task
+   * modal keeps the rule under Notas level with the one across the dialog.
+   */
+  contentClassName?: string;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
 
@@ -116,7 +123,7 @@ export function RichNotes({
       {/* Flush with the block's own edge, which is where the heading's icon
           starts — the note is the block's content, so it runs the full width
           rather than hanging off the word above it. */}
-      <div className="relative">
+      <div className={`relative ${contentClassName}`}>
         {isNotesEmpty(value) ? (
           <span className="pointer-events-none absolute top-0 left-0 text-sm text-muted">
             {placeholder}

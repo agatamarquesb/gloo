@@ -62,8 +62,9 @@ suggestions — a change that breaks one of them is a change that needs redoing.
 ### 1.2 Coding standards
 
 - Components stay small, single-purpose and self-contained. If a component
-  grows past its one job, split it — `TaskModal` composing `TaskFieldsEditor`,
-  `SubtaskChecklist` and `TaskStatusSelect` is the reference shape.
+  grows past its one job, split it — `TaskModal` composing `NotesBlock`,
+  `AttachmentsBlock`, `TaskSubtasks` and `TaskStatusChipSelect` is the
+  reference shape.
 - Reuse before adding. Before writing a card, chip, checkbox, date field or
   avatar, check `components/common/`, `components/dashboard/DashboardCard.tsx`
   and `components/tasks/`.
@@ -441,6 +442,12 @@ Animation is a priority, and it must be cheap. Rules, all enforced in
   below `sm` instead of squeezing the title into an unreadable column.
 - Resizing the window must never break a layout. Check the whole range, not
   just the two extremes.
+- **No page scrolls sideways.** `main` in `AppShell` carries `min-w-0` (so the
+  content column can shrink inside the shell's flex row instead of being held
+  open by its widest child) plus `overflow-x-hidden`, which catches what is
+  left: a control that deliberately overhangs its column, or a value that
+  refuses to wrap. Vertical scrolling is untouched. Fix the cause when you find
+  one — this is the floor, not a licence to overflow.
 
 ### 5.8 Copy and i18n
 
@@ -526,17 +533,55 @@ navigates to `/tasks?status=<STATUS>`. This card is the origin of the
 status pills and no sort or filter controls, capped at five visible rows. Its
 header carries a `SearchField` (debounced 300ms, same as the Tasks page) beside
 an icon-only "+" shortcut to the create modal. Rows are the same `TaskCard` used
-on the Tasks page.
+on the Tasks page, in its `shortDate` form ("31 de jul. 2026") — the row is half
+the width it has on the Tasks page.
+
+Three behaviours belong to this card and nowhere else:
+
+- **Rows are dragged into order.** Press a row and drag it up or down; the whole
+  row is the handle, because it already carries a click target and a grip would
+  be one more thing to miss. The order lives in `localStorage`
+  (`myTasksOrder.ts`) — it is one person's arrangement of a shared list, and the
+  server has no column for it, the same reasoning as the dismissed
+  notifications. Tasks the order has never seen sort *first*, so a task created
+  a moment ago is not hidden off the bottom of a scrolling card.
+- **Completing a task sinks it.** `sortByManualOrder` puts DONE last whatever
+  the arrangement says: a finished row has nothing left to do on it, and leaving
+  it among the live ones means reading past it every time.
+- **…and lights "Feitas" for two seconds**, so the row you just ticked off has
+  somewhere to go. The green edge eases back to grey over the best part of a
+  second (`transition-[border-color]` on the pill), and ticking off four tasks
+  in a row flashes once rather than four times — see `useCompletedFlash`, which
+  watches for a task that was not DONE and now is, rather than being told by
+  whichever of the three places changed it.
+
+Its pills also carry `outlineSelected`: the current filter is marked by a green
+edge instead of a green fill. A solid pill directly above a list of green-edged
+task rows outweighed everything it was filtering.
 
 **Open Tasks By Sector Card** — Recharts donut on the left, sector pills on the
 right, from `/tasks/by-sector` (non-`DONE` counts). Slice order is fixed by
 `sortBySectorOrder`, never by value, so a sector keeps its slot and color as
-counts change. Hovering a slice or pill dims the others; clicking either
-navigates to `/tasks?sectorId=<id>&status=TODO`. The pills double as the legend
-so identity never rests on color alone. An all-zero dataset renders a flat
-placeholder ring rather than collapsing the card. The donut hole holds a
-recessive neutral icon — never a tile color, which would read as a fifth
-category.
+counts change. Hovering a slice or pill dims the others **and paints that pill's
+edge in the slice's own colour** — which is what ties row to slice, in both
+directions, without a tooltip. Clicking either navigates to
+`/tasks?sectorId=<id>&status=TODO`. The pills double as the legend so identity
+never rests on color alone. An all-zero dataset renders a flat placeholder ring
+rather than collapsing the card. The donut hole holds a recessive neutral icon —
+never a tile color, which would read as a fifth category — on the same quiet
+grey a routine row and a hovered pill take (`quietSurface`).
+
+Two things about the marks themselves:
+
+- **No stroke, in either theme.** It used to be drawn in the card's own surface
+  to widen the gap between slices; that passes for a gap on white and reads as a
+  hard black outline around every slice on near-black. The padding angle does
+  the separating.
+- **`isAnimationActive={false}`, and not by preference.** With recharts 3 the
+  entrance animation leaves every sector group empty — no `path` is ever drawn —
+  once the data changes shape under it, and the chart silently disappears.
+  Verified by toggling that prop alone. Re-enable it only with a recharts
+  upgrade and a check that the donut survives a task changing sector.
 
 **Routines Card** — timeline of the user's routines from `/routines`, grouped by
 month with the soonest occurrence first, inside a HeroUI `ScrollShadow`. Routines
@@ -650,8 +695,8 @@ button opens something different:
   and a pencil to edit it, over a search field, with "Criar uma nova etiqueta"
   at the foot. Editing shows a live pill preview, the name, a 5×2 color grid,
   Salvar and — when editing an existing label — Excluir.
-- **Anexos** opens `RoutineAttachments`, below the checklists when both are
-  present. The link field is styled as the twin of the "choose file" button
+- **Anexos** opens `AttachmentsBlock` (`components/common/`, shared with the
+  task modal), below the checklists when both are present. The link field is styled as the twin of the "choose file" button
   beside it — same outline, same height — with the add button *inside* it, so
   the row reads as two controls rather than three; it is a `<form>`, so Enter
   adds the link exactly like pressing "+". Rows have no fill of their own: the
@@ -661,13 +706,15 @@ button opens something different:
 
 The notes field wears the same outlined box and header row as the checklist and
 attachment blocks, so the three read as one family — the only difference being
-that its name is fixed text rather than an editable field. It is **the app's one
-rich-text field**: `RichNotes` is a `contentEditable` (not a textarea, which
-cannot hold formatting) with bold/italic/underline/strike buttons sharing the
-header row, and a **Limpar** button that empties it with a woosh.
+that its name is fixed text rather than an editable field. It is **the app's
+rich-text field**, and `NotesBlock` (`components/common/`) is that whole block —
+box, heading, Limpar — so the routine modal and the task modal wear the same one.
+Inside it, `RichNotes` is a `contentEditable` (not a textarea, which cannot hold
+formatting) with bold/italic/underline/strike buttons sharing the header row, and
+a **Limpar** button that empties it with a woosh.
 
-That makes `notes` the only column storing markup, so the API sanitises it on
-write — `lib/sanitizeHtml.ts`. It works by **escaping everything first and then
+`routines.notes` and `tasks.description` are therefore the two columns storing
+markup, and the API sanitises both on write — `lib/sanitizeHtml.ts`. It works by **escaping everything first and then
 re-allowing a closed list of tags** (`b i u s strong em br`), rather than
 stripping dangerous ones: anything not on that list is already inert text by the
 time the allowlist runs, and attributes are never re-allowed at all, which
@@ -680,7 +727,7 @@ in a hard cut at the margins.
 
 **Opening a routine shows it; it does not hand you a form.** The dialog starts
 read-only and only "Editar" in its header unlocks it — `isEditing`, threaded into
-`RichNotes`, `RoutineChecklist` and `RoutineAttachments`. Read-only means the
+`NotesBlock`, `RoutineChecklist` and `AttachmentsBlock`. Read-only means the
 action pills, the formatting toolbar, Limpar, "add item", the block delete
 icons, the attachment controls and the property chevrons are all gone, and the
 title, notes and item text are read-only.
@@ -756,8 +803,9 @@ bookmarkable. Recognised params: `status`, `search`, `sectorId`, `assigneeId`,
 `sortBy`, `sortDir`, `dueDateFrom`, `dueDateTo`. Keep new filters in the URL.
 
 **`TaskCard`** shows title, due date · sector, status chip, progress bar, a
-notes marker (always rendered so columns stay aligned; only the dot is
-conditional), and assignee avatars. Below `sm` the meta collapses under the
+**subtask marker** (a checklist glyph with a dot when the task has any — always
+rendered so columns stay aligned; only the dot is conditional), an attachment
+count, and assignee avatars. Below `sm` the meta collapses under the
 title. Clicking navigates to `/tasks/:taskId` and stamps the originating route
 in router state, so a task opened from the Dashboard closes back to the
 Dashboard — a URL pasted straight into the address bar falls back to `/tasks`.
@@ -766,21 +814,97 @@ Dashboard — a URL pasted straight into the address bar falls back to `/tasks`.
 
 `TaskModal` renders over whichever page opened it, driven by the `:taskId`
 route param — so any task is directly addressable by URL, and "Copiar link"
-in the footer copies that address.
+in the header copies that address.
 
-Body: status select and progress bar; then `TaskFieldsEditor` (title,
-description, priority, due date, sector, multi-select assignees); then
-`SubtaskChecklist`. Progress is derived from subtask completion and is not
-editable directly.
+**It is the routine modal in a second column.** Same header (Copiar link ·
+Deletar · Editar/Editando, then the close button and a rule), same title on a
+green underline, same property rows, same blocks — and it shares the code for all
+of them: `theme/propertyRow.ts` for the rows, `NotesBlock` and `AttachmentsBlock`
+for the blocks. Changing how a property looks means changing it once, for both.
+
+The layout, at `md` and up, is the title across the top and then **one grid of
+two rows and two columns**, with the vertical rule as a third column spanning
+both rows (inset top and bottom by the same 1.5rem the gap gives it either side).
+Below `md` it all stacks and the rule goes away.
+
+|  | Left — what the task *is* | Right — what it *carries* |
+|---|---|---|
+| Row 1 | Prioridade · Deadline · Setor · Projeto · Status · Responsável · Barra de progresso | `NotesBlock` |
+| Row 2 | `TaskSubtasks` | `AttachmentsBlock` |
+
+**One grid rather than two columns of their own**, because the four blocks line
+up across as well as down: the rule under the properties and the rule under
+Notas are the same line, and they only stay one line if both cells belong to one
+row. That row's height is pinned (`TOP_COLUMN_HEIGHT` = seven rows at
+`PROPERTY_ROW_HEIGHT` plus a rem of air), the properties set it, and **Notas
+scrolls inside whatever is left** rather than growing and dragging its side of
+the line down the page. Property rows are a fixed height for the same reason
+they are one pitch: a status chip is taller than a line of text and a progress
+bar shorter, so padding-driven rows let either shift everything below it.
+
+The footer is only Cancelar and Salvar, with no padding above it — **the last
+change scrolls with the content**, as the final line of the body, and slides
+under the footer where the body's own mask fades it out.
+
+Every value in the column reads at the routine modal's **14px, in lower case**,
+which is why the three selects write their own value instead of leaving it to
+`Select.Value` (whose size shifts with the component's own type scale). Every chevron —
+HeroUI's on a Select, and `ValueIndicator` on the two properties that open a
+popover — is placed the same way: absolute, 8px in from the trigger's right edge,
+which the trigger overhangs its column by. That is what keeps the column of
+chevrons straight across four different kinds of control.
+
+Property rows worth knowing:
+
+- **Deadline** writes the date out in full — "30 de julho, 2026" — and opens a
+  calendar in a popover rather than a segmented date field, because a property
+  row shows a *value*, not a field. Due dates are stored as midnight UTC on the
+  day chosen and formatted in UTC (`lib/formatDate.ts`); formatting them locally
+  showed a task due on the 30th as due on the 29th everywhere in Brazil.
+- **Projeto** has nothing to pick yet: there is no projects page or model, so the
+  row exists and says "Nenhum projeto criado ainda." when pressed. It is here
+  rather than waiting because the property list is the shape of a task.
+- Both of those use **react-aria's `Button`, not HeroUI's**: HeroUI's brings its
+  own padding, radius and hover fill, and a value that lights up under the
+  cursor was the loudest thing in the column.
+- **Status** is live in *both* modes, like a routine's checkboxes — moving a task
+  along is using it, not editing it, and the same chip select sits on every task
+  row. Its four options include **Atrasada**, which is a stored status as well as
+  something a passed due date implies; see §5 for how the two coexist.
+- **Responsável** shows one person as a face and a name, more than one as the
+  faces alone. Once anyone is assigned, a dashed **"+"** takes the chevron's
+  place beside them — the way to add the second person belongs next to the
+  first, not at the far side of the row. With nobody assigned the chevron stays:
+  an empty property still has to say it opens.
+- **Barra de progresso** is read-only in both modes: it is what the subtasks come
+  to, so it is set by ticking them off.
+
+`TaskSubtasks` wears a routine checklist's clothes and behaves differently
+underneath: a routine's items are form state that saves with the routine, while a
+subtask is a row with its own endpoints. Text edits are held locally and written
+**on blur** — a PATCH per keystroke would be one request per letter, each
+response re-rendering the task. Ticking a box stays live outside edit mode. Its
+checkboxes sit on the row's **right** edge, so the text starts on the column's
+own left edge and the boxes stack into a column of their own; its heading carries
+no icon, there being nothing in that column to line up against.
+
+`NotesBlock` is shared with the routine modal and takes `compact` here: the icon
+loses its fixed lead column and Limpar loses its label, because heading plus four
+format buttons plus a labelled button is one item too many for half a dialog's
+width — and a wrapped toolbar costs the block a line it cannot spare.
 
 Behaviour worth preserving:
 
-- Status changes save immediately and optimistically. Field edits are staged in
-  local form state, and Save is enabled only while the form is dirty.
-- The form re-syncs whenever the server copy changes, so it never shows stale
-  values against a newer revision.
-- When `canMutateEntity` is false, fields are disabled and the Save/Delete
-  buttons are not rendered — but the server is still the gate.
+- **Autosave**, as in the routine modal: an edit persists ~800ms after you stop
+  making it, and closing by any route flushes what the debounce hasn't written.
+  Salvar commits and drops back to reading the task rather than closing.
+- The form is seeded **once per task**, not from every server copy — re-seeding
+  from an autosave's response would overwrite whatever was typed while it was in
+  flight. Status, progress and subtasks are read straight from the server copy
+  and stay live.
+- When `canMutateEntity` is false there is no Editar and no Deletar, the status
+  is fixed, and the dialog never leaves read-only — but the server is still the
+  gate.
 
 ### 6.6 Notifications
 
@@ -837,7 +961,7 @@ Defined in `packages/api/prisma/schema.prisma`; DTOs mirroring it in
 |---|---|
 | `User` | email (unique), passwordHash, name, `role: ADMIN \| EMPLOYEE`, jobTitle, avatarUrl |
 | `Sector` | name (unique). Seeded: Gestão, Comercial, Marketing & Aquisição, Produto & Serviço |
-| `Task` | title, description, `priority: HIGH \| MEDIUM \| LOW`, dueDate, `status: TODO \| IN_PROGRESS \| IN_REVIEW \| DONE`, sector, createdBy |
+| `Task` | title, description (markup — the task's notes), `priority: HIGH \| MEDIUM \| LOW`, dueDate, `status: TODO \| IN_PROGRESS \| DONE \| OVERDUE`, attachments (Json), workedMs, startedAt, completedAt, sector, createdBy |
 | `TaskAssignee` | join table, cascades on task/user delete |
 | `Subtask` | text, done, order — cascades with its task |
 | `Routine` | description (shown as "Título"), `recurrence: WEEKLY \| MONTHLY`, weekday (0–6) or dayOfMonth (1–31), done, lastCompletedAt, notes, checklists (Json), attachments (Json), createdBy |
@@ -870,8 +994,26 @@ Two fields are **computed, never stored**:
 
 - **`progress`** — percentage of completed subtasks, from `computeProgress` in
   `modules/tasks/mapper.ts`. Zero when a task has no subtasks.
-- **`isOverdue`** — `dueDate` in the past and status not `DONE`. `OVERDUE` is a
-  filter and a display state, not a stored status.
+- **`isOverdue`** — true when the status *is* `OVERDUE`, or when `dueDate` is in
+  the past and the status is not `DONE`.
+
+**Late means two things, and they answer as one.** `OVERDUE` is a status you can
+set in the task modal — for work that is late without a deadline that says so —
+*and* the state a passed due date puts an unfinished task in. `isOverdue` covers
+both, so a row shows the same "atrasada" chip either way; the "Atrasada" filter
+and the Dashboard's overdue tile both ask for the union (`buildWhere` and
+`/tasks/summary` in `modules/tasks/routes.ts`). Keep the two in step: a query
+that tests only one of them is a bug.
+
+**The task clock** — `workedMs`, `startedAt`, `completedAt` — is written *only*
+by `PATCH /tasks/:id/status`, in `timeTracking()`. Moving a task into
+`IN_PROGRESS` starts a stretch (`startedAt`); moving it out banks the elapsed
+milliseconds into `workedMs` and clears it; reaching `DONE` stamps
+`completedAt`, and reopening the task clears that stamp. Nothing in the UI shows
+any of it — it is collected for the **Gráfico de produtividade** planned for the
+Tasks page. A stretch rather than one duration, because a task is not worked on
+in one sitting; the live total is `elapsedMs()` in `@gloo/shared`, which is the
+only place that sum is written down.
 
 **Routine resets** are also derived at read time (`modules/routines/reset.ts`).
 Weekly routines uncheck when the ISO week flips, monthly ones when the month
@@ -900,9 +1042,9 @@ and `<img>` cannot send a token).
 | `GET` | `/tasks/summary` | Counts for the four tiles; optional `assigneeId` |
 | `GET` | `/tasks/by-sector` | Pending (non-`DONE`) count per sector |
 | `GET` | `/tasks/calendar` | `from`/`to`; returns `{ date, sectorIds }` per day |
-| `GET` | `/tasks/:id` | Detail DTO (description + subtasks) |
-| `POST` | `/tasks` · `PATCH` `/tasks/:id` · `DELETE` `/tasks/:id` | Mutations gated by `canMutate` |
-| `PATCH` | `/tasks/:id/status` | Status-only update, used by the optimistic hook |
+| `GET` | `/tasks/:id` | Detail DTO (description + attachments + subtasks) |
+| `POST` | `/tasks` · `PATCH` `/tasks/:id` · `DELETE` `/tasks/:id` | Mutations gated by `canMutate`. `description` is sanitised as markup; `attachments` replaces the full list |
+| `PATCH` | `/tasks/:id/status` | Status-only update, used by the optimistic hook — and the only writer of the task clock |
 | `POST` | `/tasks/:taskId/subtasks` | Add a subtask |
 | `PATCH` / `DELETE` | `/subtasks/:id` | Update text/done, delete |
 | `GET` | `/routines` | Optional `assigneeId`; `done` reflects the current period |

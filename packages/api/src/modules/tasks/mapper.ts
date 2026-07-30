@@ -21,7 +21,12 @@ export function computeProgress(subtasks: { done: boolean }[]): number {
   return Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100);
 }
 
+/**
+ * Late either way: because somebody said so, or because the due date passed on a
+ * task nobody has finished. The chip on a row reads the same for both.
+ */
 export function computeIsOverdue(dueDate: Date | null, status: string): boolean {
+  if (status === 'OVERDUE') return true;
   return Boolean(dueDate) && dueDate! < new Date() && status !== 'DONE';
 }
 
@@ -37,12 +42,16 @@ export function toTaskListItemDto(task: TaskWithRelations): TaskListItemDto {
     sector: { id: task.sector.id, name: task.sector.name },
     assignees: task.assignees.map((a) => toUserDto(a.user)),
     createdById: task.createdById,
-    // Whitespace-only descriptions don't count as notes.
-    hasDescription: Boolean(task.description?.trim()),
+    subtaskCount: task.subtasks.length,
     // Through the routines parser rather than trusting the column: it is Json, so
     // what comes back is whatever was last written, and anything malformed has to
     // be dropped before it can be counted.
     attachmentCount: parseAttachments(task.attachments)?.length ?? 0,
+    // On the list DTO rather than only the detail one: the productivity chart
+    // reads a whole page of tasks at once, and these are three scalars.
+    workedMs: task.workedMs,
+    startedAt: task.startedAt ? task.startedAt.toISOString() : null,
+    completedAt: task.completedAt ? task.completedAt.toISOString() : null,
   };
 }
 

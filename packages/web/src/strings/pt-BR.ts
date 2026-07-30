@@ -27,6 +27,7 @@ export const strings = {
       TODO: 'A fazer',
       IN_PROGRESS: 'Em andamento',
       DONE: 'Feita',
+      OVERDUE: 'Atrasada',
     },
     filters: {
       all: 'Todas',
@@ -42,17 +43,39 @@ export const strings = {
       description: 'Descrição',
       status: 'Status',
       dueDate: 'Data de vencimento',
+      /** The modal's name for the same date: what the task is due by. */
+      deadline: 'Deadline',
+      priority: 'Prioridade',
       sector: 'Setor',
+      project: 'Projeto',
       assignees: 'Responsáveis',
-      progress: 'Progresso',
+      /** Singular in the modal's property list, as on a routine. */
+      assignee: 'Responsável',
+      progress: 'Barra de progresso',
       subtasks: 'Subtarefas',
     },
     addTask: 'Adicionar tarefa',
     copyLink: 'Copiar link',
-    deleteRoutine: 'Deletar',
-    hasNotes: 'Tem anotações',
-    noNotes: 'Sem anotações',
+    deleteTask: 'Deletar',
+    hasSubtasks: 'Tem subtarefas',
+    noSubtasks: 'Sem subtarefas',
     attachmentCount: 'Anexos',
+    /** Replaces "Editar" in the modal header while the dialog is unlocked. */
+    editing: 'Editando',
+    lastUpdated: 'Última alteração',
+    notesTitle: 'Notas da tarefa',
+    notesPlaceholder: 'Notas sobre esta tarefa',
+    subtasksTitle: 'Subtarefas:',
+    addSubtask: 'Adicionar subtarefa',
+    subtaskPlaceholder: 'Subtarefa',
+    removeSubtask: 'Remover subtarefa',
+    /**
+     * Projects have no page of their own yet, so the picker opens on this and
+     * nothing else — the row exists, and says plainly that there is nothing to
+     * choose from rather than opening an empty list.
+     */
+    projectsEmpty: 'Nenhum projeto criado ainda.',
+    noAssignees: 'Ninguém',
   },
   routine: {
     recurrence: {

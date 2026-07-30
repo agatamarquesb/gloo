@@ -71,6 +71,18 @@ export function blockTitle(isEditing: boolean): string {
 }
 
 /**
+ * The app's one "sitting on the card" surface: a routine row's fill, the disc in
+ * the sector donut's hole, and what a sector row takes on hover.
+ *
+ * Dark mode shifts it a step — on a near-black card the light value is too close
+ * to the surface behind it to read as anything at all.
+ */
+export const quietSurface = 'bg-background/50 dark:bg-default/40';
+
+/** The same fill, applied on hover. */
+export const quietSurfaceHover = 'hover:bg-background/50 dark:hover:bg-default/40';
+
+/**
  * A routine's row, on the Dashboard's list and in its trash alike — a deleted
  * routine is the same object in a different place, and should look like it.
  *

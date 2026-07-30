@@ -3,10 +3,9 @@ import { TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 
-import { useIsDarkMode } from '@/hooks/ui/useIsDarkMode';
 import { useTileColors } from '@/hooks/ui/useTileColors';
 import { useTasksBySector } from '@/hooks/queries/tasks';
-import { CHART_SURFACE } from '@/theme/chartColors';
+import { quietSurface, quietSurfaceHover } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 import { DashboardCard } from './DashboardCard';
@@ -14,7 +13,6 @@ import { sortBySectorOrder } from './sectorOrder';
 
 export function SectorDonutCard() {
   const navigate = useNavigate();
-  const isDark = useIsDarkMode();
   const tileColors = useTileColors();
   const { data: unordered = [] } = useTasksBySector();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -57,16 +55,24 @@ export function SectorDonutCard() {
                 nameKey="sector.name"
                 innerRadius="62%"
                 outerRadius="100%"
-                // 2px of surface between slices: the gap does the separating,
-                // never a stroke drawn around each mark.
-                paddingAngle={2}
-                stroke={CHART_SURFACE[isDark ? 'dark' : 'light']}
-                strokeWidth={2}
+                // The gap does the separating, never a stroke drawn around each
+                // mark — so it is a little wider now that there is no stroke to
+                // help it.
+                paddingAngle={3}
+                // No stroke at all, in either theme. It used to be drawn in the
+                // card's own surface to widen that gap, which passes for a gap
+                // on white and reads as a hard black outline around every slice
+                // on near-black.
+                stroke="none"
+                strokeWidth={0}
                 // Rounds each slice's four corners. Needs the padding angle above
                 // to have somewhere to round into, which is why it isn't larger.
                 cornerRadius={8}
-                isAnimationActive
-                animationDuration={450}
+                // Off, and not by preference: with recharts 3 the entrance
+                // animation leaves the sector groups empty — no `path` is ever
+                // drawn — as soon as the data changes shape under it, and the
+                // chart simply disappears. Verified by toggling this alone.
+                isAnimationActive={false}
               >
                 {slices.map((entry, index) => (
                   <Cell
@@ -86,13 +92,17 @@ export function SectorDonutCard() {
           {/* Echoes the "Em progresso" summary tile's icon in the donut's hole, on
               a neutral disc. Recessive ink rather than a tile color: the slices
               already carry the palette, and a colored glyph here would read as a
-              fifth category. bg-default rather than a literal gray so the disc
-              follows the theme. pointer-events-none so it never steals a hover. */}
+              fifth category. The disc takes a routine row's own light grey — the
+              app's one "raised off the card" surface — so the hole reads as part
+              of the page rather than as a hole cut in it. pointer-events-none so
+              it never steals a hover. */}
           <span
             aria-hidden
             className="pointer-events-none absolute inset-0 flex items-center justify-center"
           >
-            <span className="flex size-14 items-center justify-center rounded-full bg-default text-muted">
+            <span
+              className={`flex size-14 items-center justify-center rounded-full text-muted ${quietSurface}`}
+            >
               <TrendingUp className="size-6" />
             </span>
           </span>
@@ -106,19 +116,27 @@ export function SectorDonutCard() {
         {/* Grouped and centered rather than spread across the full height: the
             even distribution left ~55px between pills, too airy to read as a list. */}
         <ul className="flex w-full min-w-0 flex-1 flex-col justify-center gap-2">
-          {bySector.map((entry, index) => (
+          {bySector.map((entry, index) => {
+            const color = tileColors[index % tileColors.length];
+            const isActive = activeIndex === index;
+
+            return (
             <li key={entry.sector.id}>
               <button
                 type="button"
                 onMouseEnter={() => setActiveIndex(index)}
                 onMouseLeave={() => setActiveIndex(null)}
                 onClick={() => navigate(`/tasks?sectorId=${entry.sector.id}&status=TODO`)}
-                className="flex w-full items-center gap-2 rounded-full border border-border px-2.5 py-2 text-left transition-colors hover:bg-default"
+                // The row's edge takes the slice's own colour while either of
+                // them is hovered — which is what says *this* row is *that*
+                // slice, in both directions, without a tooltip.
+                style={isActive ? { borderColor: color } : undefined}
+                className={`flex w-full items-center gap-2 rounded-full border border-border px-2.5 py-2 text-left transition-colors ${quietSurfaceHover}`}
               >
                 <span
                   aria-hidden
                   className="size-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: tileColors[index % tileColors.length] }}
+                  style={{ backgroundColor: color }}
                 />
                 <span className="flex-1 text-xs text-foreground">{entry.sector.name}</span>
                 <span className="shrink-0 text-xs font-semibold text-foreground">
@@ -126,7 +144,8 @@ export function SectorDonutCard() {
                 </span>
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
         </div>
       </div>

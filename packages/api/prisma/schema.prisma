@@ -22,6 +22,9 @@ enum TaskStatus {
   TODO
   IN_PROGRESS
   DONE
+  /// Late by hand, as opposed to the lateness a passed due date implies. See
+  /// TaskStatus in the shared package for why both exist.
+  OVERDUE
 }
 
 enum RoutineRecurrence {
@@ -80,6 +83,20 @@ model Task {
   /// and the same reasoning as a routine's, so both read through the one parser
   /// in the routines mapper. The files themselves live in UPLOADS_DIR.
   attachments Json?
+
+  /// How long the task has spent in IN_PROGRESS, in milliseconds — the raw
+  /// material for the productivity chart on the Tasks page.
+  ///
+  /// Three columns rather than one, because a task can be started, stopped and
+  /// started again: `workedMs` is what previous stretches added up to,
+  /// `startedAt` marks the one currently running (null when none is), and the
+  /// live total is `workedMs` plus the time since `startedAt`. Only the status
+  /// route writes them — see the transitions there.
+  workedMs    Int          @default(0)
+  startedAt   DateTime?
+  /// When the task last reached DONE. Cleared if it is reopened, so it always
+  /// pairs with the status rather than remembering a completion that was undone.
+  completedAt DateTime?
 
   subtasks  Subtask[]
   assignees TaskAssignee[]

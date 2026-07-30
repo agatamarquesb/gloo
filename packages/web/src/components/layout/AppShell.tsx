@@ -15,7 +15,13 @@ export function AppShell() {
       <div className="flex h-screen bg-background">
         <Sidebar />
         {/* Bottom padding clears the fixed mobile nav so the last row stays reachable. */}
-        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        {/* No page ever scrolls sideways: `min-w-0` lets the column shrink inside
+            the shell's flex row rather than being held open by its widest child,
+            and `overflow-x-hidden` catches what is left — a control that
+            deliberately overhangs its column by a few pixels (the property rows'
+            chevrons) or a value that refuses to wrap. Vertical scrolling is
+            unaffected. */}
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 md:pb-0">
           <Outlet />
         </main>
         <MobileNav />

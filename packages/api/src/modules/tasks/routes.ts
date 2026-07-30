@@ -5,6 +5,8 @@ import type { CreateTaskInput, TaskBySectorDto, TaskSummaryDto, UpdateTaskInput 
 
 import { canMutate } from '../../lib/authorize';
 import { prisma } from '../../lib/prisma';
+import { sanitizeNotes } from '../../lib/sanitizeHtml';
+import { toJsonAttachments } from '../routines/mapper';
 import type { Prisma } from '../../../generated/prisma/client';
 import { taskInclude, toTaskDetailDto, toTaskListItemDto } from './mapper';
 
@@ -21,8 +23,14 @@ function buildWhere(query: Record<string, string | undefined>): Prisma.TaskWhere
   if (dueDateTo) dueDateFilter.lte = new Date(dueDateTo);
 
   if (status === 'OVERDUE') {
-    dueDateFilter.lt = new Date();
-    where.status = { not: 'DONE' };
+    // Both kinds of late — the status somebody set, and the due date that ran
+    // out on an unfinished task. The date bound goes inside the OR rather than
+    // on `where.dueDate`, because a task marked late by hand may have no due
+    // date at all and must still be in the answer.
+    where.OR = [
+      { status: 'OVERDUE' },
+      { status: { notIn: ['DONE', 'OVERDUE'] }, dueDate: { lt: new Date() } },
+    ];
   } else if (status && status !== 'ALL') {
     where.status = status as Prisma.EnumTaskStatusFilter['equals'];
   }
@@ -50,6 +58,40 @@ function sortTasks<T extends { dueDate: string | null; priority: string; progres
   };
 
   return tasks.toSorted((a, b) => (value(a) - value(b)) * dir);
+}
+
+/**
+ * What a status change does to the task's clock — the one the productivity
+ * chart will read. Nothing about it is shown while it runs: moving a task to
+ * "Em andamento" starts it silently, and moving it off stops it.
+ *
+ * Written as a transition rather than a duration computed at the end, because a
+ * task is not worked on in one sitting: it can be started, put back, and picked
+ * up again days later, and only the stretches it actually spent in progress
+ * should count. `startedAt` is the stretch in flight; `workedMs` is what the
+ * finished ones came to.
+ */
+function timeTracking(
+  existing: { status: string; workedMs: number; startedAt: Date | null },
+  next: string,
+): { workedMs?: number; startedAt?: Date | null; completedAt?: Date | null } {
+  if (next === existing.status) return {};
+
+  const now = new Date();
+  const wasRunning = existing.status === 'IN_PROGRESS' && existing.startedAt !== null;
+  // Guarded against a clock that went backwards between the two writes: a
+  // negative stretch would eat time the task had genuinely spent.
+  const stretch = wasRunning ? Math.max(0, now.getTime() - existing.startedAt!.getTime()) : 0;
+
+  return {
+    // Starting: the clock runs from now. Anything else: it stops, and whatever
+    // it measured is banked.
+    startedAt: next === 'IN_PROGRESS' ? now : null,
+    ...(stretch > 0 ? { workedMs: existing.workedMs + stretch } : {}),
+    // Cleared when a finished task is reopened, so the field never claims a
+    // completion that was undone.
+    completedAt: next === 'DONE' ? now : null,
+  };
 }
 
 async function loadTaskOrThrow(id: string) {
@@ -83,7 +125,14 @@ export async function taskRoutes(app: FastifyInstance) {
       prisma.task.count({ where: { ...assigneeFilter, status: 'IN_PROGRESS' } }),
       prisma.task.count({ where: { ...assigneeFilter, status: 'DONE' } }),
       prisma.task.count({
-        where: { ...assigneeFilter, status: { not: 'DONE' }, dueDate: { lt: now } },
+        // Same two kinds of late as the "Atrasada" filter — see buildWhere.
+        where: {
+          ...assigneeFilter,
+          OR: [
+            { status: 'OVERDUE' },
+            { status: { notIn: ['DONE', 'OVERDUE'] }, dueDate: { lt: now } },
+          ],
+        },
       }),
     ]);
 
@@ -138,7 +187,8 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Body: CreateTaskInput }>('/', async (request, reply) => {
-    const { title, description, priority, dueDate, sectorId, assigneeIds } = request.body;
+    const { title, description, priority, dueDate, sectorId, assigneeIds, attachments } =
+      request.body;
 
     if (!title || !priority || !sectorId) {
       return reply.code(400).send({ error: 'title, priority e sectorId são obrigatórios' });
@@ -147,7 +197,10 @@ export async function taskRoutes(app: FastifyInstance) {
     const task = await prisma.task.create({
       data: {
         title,
-        description: description ?? null,
+        // Through the sanitiser like a routine's notes: the task modal writes
+        // this field with the same rich-text editor, so it arrives as markup.
+        description: sanitizeNotes(description),
+        attachments: toJsonAttachments(attachments),
         priority,
         dueDate: dueDate ? new Date(dueDate) : null,
         sectorId,
@@ -168,13 +221,15 @@ export async function taskRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'Sem permissão para editar esta tarefa' });
     }
 
-    const { title, description, priority, dueDate, sectorId, assigneeIds } = request.body;
+    const { title, description, priority, dueDate, sectorId, assigneeIds, attachments } =
+      request.body;
 
     const task = await prisma.task.update({
       where: { id },
       data: {
         ...(title !== undefined ? { title } : {}),
-        ...(description !== undefined ? { description } : {}),
+        ...(description !== undefined ? { description: sanitizeNotes(description) } : {}),
+        ...(attachments !== undefined ? { attachments: toJsonAttachments(attachments) } : {}),
         ...(priority !== undefined ? { priority } : {}),
         ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
         ...(sectorId !== undefined ? { sectorId } : {}),
@@ -206,7 +261,7 @@ export async function taskRoutes(app: FastifyInstance) {
 
     const task = await prisma.task.update({
       where: { id },
-      data: { status: request.body.status },
+      data: { status: request.body.status, ...timeTracking(existing, request.body.status) },
       include: taskInclude,
     });
 

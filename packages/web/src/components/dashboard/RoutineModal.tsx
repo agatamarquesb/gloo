@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BrushCleaning,
   CalendarDays,
   Link2,
   Paperclip,
@@ -33,33 +32,32 @@ import {
 import { useLabels } from '@/hooks/queries/labels';
 import { useMe } from '@/hooks/queries/auth';
 import { useUsers } from '@/hooks/queries/users';
+import { FLAT_INPUT, GREEN_UNDERLINE } from '@/theme/fieldStyles';
+// The property list is shared with the task modal — see theme/propertyRow.ts.
 import {
-  FLAT_INPUT,
-  FLAT_SELECT_TRIGGER,
-  GREEN_UNDERLINE,
-  NO_FIELD_BORDER,
-} from '@/theme/fieldStyles';
+  LABEL_ICON,
+  PROPERTY_LIST,
+  SELECT_POPOVER,
+  VALUE_CELL,
+  propertyStyles,
+} from '@/theme/propertyRow';
+import { formatTimestamp } from '@/lib/formatDate';
 import { playSound } from '@/lib/sounds';
 import { LABEL_BG_CLASS, LABEL_PILL } from '@/theme/labelColors';
 import {
   actionPill,
-  blockBox,
-  blockBoxBare,
-  blockDivider,
-  blockLeadColumn,
-  blockTitle,
   modalDivider,
   modalDividerGap,
-  outlineControl,
   quietTextButton,
 } from '@/theme/styleConstants';
 import { SecondaryButton } from '@/components/common/SecondaryButton';
 import { strings } from '@/strings/pt-BR';
 
+import { AttachmentsBlock } from '@/components/common/AttachmentsBlock';
+import { NotesBlock } from '@/components/common/NotesBlock';
+
 import { LabelPicker } from './LabelPicker';
-import { RoutineAttachments } from './RoutineAttachments';
 import { emptyChecklist, RoutineChecklist } from './RoutineChecklist';
-import { isNotesEmpty, RichNotes } from './RichNotes';
 
 const WEEKDAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 /**
@@ -71,87 +69,6 @@ const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => ({
   value: String(i + 1),
   label: String(i + 1).padStart(2, '0'),
 }));
-
-const PROPERTY_LIST = 'flex flex-col';
-
-/**
- * A property row shares the action-pill row's three columns: the label sits in
- * the first, the value starts at the head of the second. Values therefore begin
- * on the middle pill's left edge — near their labels rather than stranded
- * against the far side of the dialog.
- */
-const PROPERTY_ROW = 'grid grid-cols-3 items-center gap-2';
-
-/**
- * A row's own vertical padding, and so the gap between two of them: the header
- * group has no gap of its own and leans entirely on this. Tighter once locked —
- * a list you read wants to hold together, while the same rows as controls need
- * the room to be separately clickable.
- */
-const ROW_PADDING_EDIT = 'py-1';
-const ROW_PADDING_VIEW = 'py-0.5';
-
-/**
- * The value side carries no chrome at all — no border, fill or shadow in any
- * state. It is a value you can change, not a form control.
- *
- * `w-full` makes the control span its whole grid column, so the chevron lands on
- * the column's right edge — the same edge as the middle action pill — while the
- * value itself stays left-aligned at the column's start. `pr-6` keeps a long
- * value from running under the chevron.
- *
- * HeroUI insets the chevron 8px from the control's right edge, which would leave
- * it short of the column. Rather than fight that from outside the component, the
- * control is widened by exactly that inset so the chevron lands on the edge.
- */
-const BARE_TRIGGER = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} w-[calc(100%+0.5rem)] items-center gap-1 pr-6 pl-0 text-left`;
-
-/**
- * The trigger's height, which sets the row's. Locked it comes down to just clear
- * the assignee avatar (size-5), since nothing there has to be a comfortable
- * click target any more.
- */
-const TRIGGER_HEIGHT_EDIT = 'h-8';
-const TRIGGER_HEIGHT_VIEW = 'h-7';
-
-/**
- * Outside edit mode the control stays in place but stops being one: no pointer
- * affordance, and none of HeroUI's dimming, since the value still has to read
- * as the routine's actual content rather than as a disabled field.
- */
-const VIEW_TRIGGER =
-  'cursor-default disabled:opacity-100 data-[disabled=true]:opacity-100';
-
-/**
- * The same opt-out for the rest of a disabled Select.
- *
- * `isDisabled` is what stops a locked property from opening, but HeroUI dims
- * everything inside it — so the label and its icon faded out too, and the whole
- * column read a shade lighter locked than editing. The trigger already opted out
- * (above); these are its label and the Select's own root, which is where the
- * dimming can also sit. Marked important because the component sets it from its
- * own data attribute and would otherwise win on order.
- */
-const VIEW_UNDIMMED = 'opacity-100! data-[disabled=true]:opacity-100!';
-
-/**
- * The value's grid column. A wrapper rather than putting the control straight in
- * the cell, because the control deliberately overhangs its column by the
- * chevron's inset and the column itself must not.
- */
-const VALUE_CELL = 'w-full';
-
-/** The dropdown itself, squared off a little from HeroUI's default. */
-const SELECT_POPOVER = 'rounded-xl';
-
-/** Labels carry the icon, not the control — the value stays plain text. */
-const FIELD_LABEL = 'flex shrink-0 items-center gap-2 text-sm text-muted';
-
-/**
- * The icons read at full text colour while their labels stay grey: at 16px a
- * muted glyph is mostly gone, and these are what you scan the column by.
- */
-const LABEL_ICON = 'size-4 shrink-0 text-foreground';
 
 /**
  * The dialog's horizontal padding, applied to the header, body and footer alike
@@ -188,15 +105,6 @@ const HEADER_ROW_VIEW = 'py-1.5';
 
 /** How long after the last edit an autosave fires. */
 const AUTOSAVE_DELAY_MS = 800;
-
-/** "28/07/2026, 14:32" — the date the modal reports at its foot. */
-const timestampFormatter = new Intl.DateTimeFormat('pt-BR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 
 const ATTACHMENTS_ANCHOR = 'routine-attachments';
 const checklistAnchor = (index: number) => `routine-checklist-${index}`;
@@ -282,7 +190,10 @@ export function RoutineModal({
           }
         : emptyForm(me?.id ?? ''),
     );
-  }, [isOpen, routine, me?.id]);
+    // isTrashed decides whether the dialog opens unlocked, so a routine opened
+    // from the trash and the same one opened from the list have to seed
+    // differently — it belongs in the list.
+  }, [isOpen, routine, me?.id, isTrashed]);
 
   // Adding a block below the fold is invisible without this — the new box is
   // outside the dialog's scroll viewport, so the button appears to do nothing.
@@ -292,12 +203,13 @@ export function RoutineModal({
     setScrollTo(null);
   }, [scrollTo]);
 
-  /** The row rhythm and control height both follow the mode — see their consts. */
-  const rowPadding = isEditing ? ROW_PADDING_EDIT : ROW_PADDING_VIEW;
-  const propertyRow = `${PROPERTY_ROW} ${rowPadding}`;
-  const undimmed = isEditing ? '' : VIEW_UNDIMMED;
-  const fieldLabel = `${FIELD_LABEL} ${undimmed}`;
-  const trigger = `${BARE_TRIGGER} ${isEditing ? TRIGGER_HEIGHT_EDIT : `${TRIGGER_HEIGHT_VIEW} ${VIEW_TRIGGER}`}`;
+  /** The row rhythm and control height both follow the mode — see propertyRow.ts. */
+  const {
+    row: propertyRow,
+    label: fieldLabel,
+    trigger,
+    undimmed,
+  } = propertyStyles(isEditing);
 
   const isWeekly = form.recurrence === RoutineRecurrence.WEEKLY;
   const canSubmit = form.description.trim() && form.assigneeIds.length > 0;
@@ -393,13 +305,13 @@ export function RoutineModal({
     // when deciding whether to bring it back.
     if (isTrashed) {
       return routine?.deletedAt
-        ? `${strings.routine.trash.deletedAt}: ${timestampFormatter.format(new Date(routine.deletedAt))}`
+        ? `${strings.routine.trash.deletedAt}: ${formatTimestamp(routine.deletedAt)}`
         : null;
     }
 
     const iso = saved && saved.id === routine?.id ? saved.updatedAt : routine?.updatedAt;
     return iso
-      ? `${strings.routine.lastUpdated}: ${timestampFormatter.format(new Date(iso))}`
+      ? `${strings.routine.lastUpdated}: ${formatTimestamp(iso)}`
       : null;
   }, [isTrashed, saved, routine?.id, routine?.updatedAt, routine?.deletedAt]);
 
@@ -434,11 +346,6 @@ export function RoutineModal({
     const url = new URL(window.location.origin);
     url.searchParams.set('rotina', routine.id);
     navigator.clipboard.writeText(url.toString());
-  }
-
-  function clearNotes() {
-    set('notes', '');
-    playSound('sweep');
   }
 
   function handleDelete() {
@@ -819,51 +726,14 @@ export function RoutineModal({
 
             {/* Notes wear the same box and the same header row as the checklist
                 and attachment blocks, so the three read as one family — outlined
-                while editing, bare once locked. The name is fixed here, so it is
-                text rather than a field. */}
-            <section className={isEditing ? blockBox : blockBoxBare}>
-              <RichNotes
-                isEditing={isEditing}
-                value={form.notes}
-                onChange={(notes) => set('notes', notes)}
-                placeholder={strings.routine.notesPlaceholder}
-                title={
-                  /* One flex of its own rather than two children of the toolbar:
-                     the toolbar's gap is tuned for the formatting buttons, and
-                     this heading has to sit on the same left edge as the
-                     checklist's and Anexos', which means the shared column and
-                     the gap that goes with it. */
-                  <div className="flex flex-1 items-center gap-2">
-                    <span className={blockLeadColumn}>
-                      <Pencil className="size-4 text-foreground" aria-hidden />
-                    </span>
-                    <span className={`text-foreground ${blockTitle(isEditing)}`}>
-                      {strings.routine.notesTitle}
-                    </span>
-                  </div>
-                }
-                actions={
-                  /* Outlined like "Escolher arquivo", and labelled: emptying a
-                     field the user has typed into deserves a word, not just an
-                     icon. The woosh is the feedback that it actually happened —
-                     the field simply going blank is easy to miss. */
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className={`h-9 shrink-0 rounded-full ${outlineControl}`}
-                    isDisabled={isNotesEmpty(form.notes)}
-                    onPress={clearNotes}
-                  >
-                    <BrushCleaning className="size-4" />
-                    {strings.routine.clearNotes}
-                  </Button>
-                }
-              />
-
-              {/* Same rule, and the same clearance, as the one that closes a
-                  checklist. Locked only: editing, the box's own edge does it. */}
-              {isEditing ? null : <div className={blockDivider} />}
-            </section>
+                while editing, bare once locked. The task modal wears the very
+                same block; see NotesBlock. */}
+            <NotesBlock
+              isEditing={isEditing}
+              value={form.notes}
+              onChange={(notes) => set('notes', notes)}
+              placeholder={strings.routine.notesPlaceholder}
+            />
 
             {form.checklists.map((checklist, index) => (
               // Index keys: checklists are only appended and removed, never
@@ -892,7 +762,7 @@ export function RoutineModal({
 
               {form.attachments ? (
                 <div id={ATTACHMENTS_ANCHOR}>
-                  <RoutineAttachments
+                  <AttachmentsBlock
                     isEditing={isEditing}
                     canOpen={!isTrashed}
                     attachments={form.attachments}

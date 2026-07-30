@@ -44,16 +44,46 @@ export interface TaskListItemDto {
   assignees: UserDto[];
   createdById: string;
   /**
-   * Whether the task has notes in its description. A flag rather than the text
-   * itself so list responses stay small — the body only comes with the detail DTO.
+   * How many subtasks the task has. A count rather than the rows themselves so
+   * list responses stay small — the subtasks come with the detail DTO. The task
+   * row marks the ones that have any.
    */
-  hasDescription: boolean;
+  subtaskCount: number;
   /**
    * How many links and files are attached. A count for the same reason
-   * `hasDescription` is a flag: the row shows the number, and the attachments
-   * themselves only come with the detail DTO.
+   * `subtaskCount` is: the row shows the number, and the attachments themselves
+   * only come with the detail DTO.
    */
   attachmentCount: number;
+  /**
+   * How long the task has spent in "Em andamento", in milliseconds, counting
+   * only the stretches that have ended. Never shown anywhere — it is collected
+   * for the productivity chart on the Tasks page.
+   */
+  workedMs: number;
+  /**
+   * When the stretch currently running began, or null when the task is not in
+   * progress. The live total is `workedMs` plus the time since this — see
+   * elapsedMs below, which is the one place that sum is written down.
+   */
+  startedAt: string | null;
+  /** When the task last reached "Feita"; null once it is reopened. */
+  completedAt: string | null;
+}
+
+/**
+ * The task's total time in progress right now: the stretches that have finished,
+ * plus the one still running if there is one.
+ *
+ * Here rather than in the chart, so the API's accounting and anything that reads
+ * it agree on what "how long did this take" means.
+ */
+export function elapsedMs(
+  task: Pick<TaskListItemDto, 'workedMs' | 'startedAt'>,
+  now: number = Date.now(),
+): number {
+  const running = task.startedAt ? now - new Date(task.startedAt).getTime() : 0;
+  return task.workedMs + Math.max(0, running);
 }
 
 export interface TaskDetailDto extends TaskListItemDto {
@@ -78,11 +108,14 @@ export interface TaskFilters {
 
 export interface CreateTaskInput {
   title: string;
+  /** The task's notes. Carries the same formatting markup a routine's does. */
   description?: string | null;
   priority: TaskPriority;
   dueDate?: string | null;
   sectorId: string;
   assigneeIds: string[];
+  /** Null for no attachments block; `[]` for an empty one — as with routines. */
+  attachments?: AttachmentDto[] | null;
 }
 
 export type UpdateTaskInput = Partial<CreateTaskInput>;

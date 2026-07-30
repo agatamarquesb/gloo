@@ -13,13 +13,16 @@ import { strings } from '@/strings/pt-BR';
  * HeroUI's semantic slots. Black text on all four, which the lighter grounds
  * carry comfortably in either theme.
  */
+const OVERDUE_CLASS = 'bg-status-overdue text-black';
+
 const STATUS_CLASS: Record<TaskStatus, string> = {
   TODO: 'bg-status-todo text-black',
   IN_PROGRESS: 'bg-status-progress text-black',
   DONE: 'bg-status-done text-black',
+  // The status somebody set and the lateness a passed due date implies are one
+  // thing to the reader, so they wear one colour.
+  OVERDUE: OVERDUE_CLASS,
 };
-
-const OVERDUE_CLASS = 'bg-status-overdue text-black';
 
 /**
  * The pill itself: fully round, tight, and only as wide as its label.

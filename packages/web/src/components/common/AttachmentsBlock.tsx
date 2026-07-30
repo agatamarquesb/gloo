@@ -176,11 +176,12 @@ function AttachmentEditor({
 }
 
 /**
- * A routine's attachments: pasted links and uploaded files in one list. Files
- * upload immediately (they need a URL before they can be listed), but the list
- * itself is form state and only persists with the routine's Save.
+ * The attachments a routine or a task carries: pasted links and uploaded files
+ * in one list. Files upload immediately (they need a URL before they can be
+ * listed), but the list itself is form state and only persists with the owning
+ * entity's Save.
  */
-export function RoutineAttachments({
+export function AttachmentsBlock({
   attachments,
   onChange,
   onDelete,
@@ -255,7 +256,7 @@ export function RoutineAttachments({
             size="sm"
             variant="ghost"
             className="shrink-0 text-muted"
-            aria-label={strings.routine.deleteChecklist}
+            aria-label={strings.common.delete}
             onPress={() => {
               playSound('delete');
               onDelete();
