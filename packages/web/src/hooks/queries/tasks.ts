@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   CreateTaskInput,
@@ -31,6 +31,12 @@ export function useTasks(filters: TaskFilters) {
   return useQuery({
     queryKey: taskKeys.list(filters),
     queryFn: () => apiClient.get<TaskListItemDto[]>(`/tasks${toQueryString(filters)}`),
+    // Every filter and every keystroke is a new query key, and without this each
+    // one empties the list to "Carregando..." for as long as the request takes —
+    // which is the flicker you see pressing along a row of filter pills. Keeping
+    // the last answer on screen means the rows are simply replaced when the new
+    // one lands.
+    placeholderData: keepPreviousData,
   });
 }
 

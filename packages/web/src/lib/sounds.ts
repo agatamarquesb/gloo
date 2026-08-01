@@ -18,6 +18,7 @@
 const EFFECT_FILES = {
   notification: 'notification.mp3',
   delete: 'delete.mp3',
+  emptyTrash: 'empty-trash.mp3',
   sweep: 'sweep.mp3',
   countdownEnd: 'countdown-end.mp3',
   taskCompleted: 'task-completed.mp3',
@@ -184,6 +185,14 @@ const FALLBACKS: Record<SoundEffect, () => void> = {
     const ctx = audioContext();
     if (!ctx) return;
     tone(320, ctx.currentTime, 0.1, 0.16);
+  },
+
+  /** The same note twice, falling — a binful going rather than one thing. */
+  emptyTrash: () => {
+    const ctx = audioContext();
+    if (!ctx) return;
+    tone(320, ctx.currentTime, 0.1, 0.16);
+    tone(240, ctx.currentTime + 0.12, 0.16, 0.16);
   },
 
   sweep: woosh,

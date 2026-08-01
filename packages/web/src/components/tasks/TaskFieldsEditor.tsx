@@ -4,6 +4,7 @@ import { TextField } from 'react-aria-components';
 import type { SectorDto, TaskPriority, UserDto } from '@gloo/shared';
 
 import { DateField } from '@/components/common/DateField';
+import { listboxPopover } from '@/theme/fieldStyles';
 import { strings } from '@/strings/pt-BR';
 
 const PRIORITY_OPTIONS: TaskPriority[] = ['HIGH', 'MEDIUM', 'LOW'];
@@ -68,7 +69,7 @@ export function TaskFieldsEditor({
             <Select.Value />
             <Select.Indicator />
           </Select.Trigger>
-          <Select.Popover>
+          <Select.Popover {...listboxPopover}>
             <ListBox>
               {PRIORITY_OPTIONS.map((priority) => (
                 <ListBox.Item key={priority} id={priority} textValue={strings.task.priority[priority]}>
@@ -98,7 +99,7 @@ export function TaskFieldsEditor({
           <Select.Value />
           <Select.Indicator />
         </Select.Trigger>
-        <Select.Popover>
+        <Select.Popover {...listboxPopover}>
           <ListBox>
             {sectors.map((sector) => (
               <ListBox.Item key={sector.id} id={sector.id} textValue={sector.name}>
@@ -121,7 +122,7 @@ export function TaskFieldsEditor({
           <Select.Value />
           <Select.Indicator />
         </Select.Trigger>
-        <Select.Popover>
+        <Select.Popover {...listboxPopover}>
           <ListBox selectionMode="multiple">
             {users.map((user) => (
               <ListBox.Item key={user.id} id={user.id} textValue={user.name}>

@@ -51,7 +51,7 @@ export const strings = {
       assignees: 'Responsáveis',
       /** Singular in the modal's property list, as on a routine. */
       assignee: 'Responsável',
-      progress: 'Barra de progresso',
+      progress: 'Progresso',
       subtasks: 'Subtarefas',
     },
     addTask: 'Adicionar tarefa',
@@ -63,9 +63,9 @@ export const strings = {
     /** Replaces "Editar" in the modal header while the dialog is unlocked. */
     editing: 'Editando',
     lastUpdated: 'Última alteração',
-    notesTitle: 'Notas da tarefa',
+    notesTitle: 'Visão geral',
     notesPlaceholder: 'Notas sobre esta tarefa',
-    subtasksTitle: 'Subtarefas:',
+    subtasksTitle: 'Subtarefas',
     addSubtask: 'Adicionar subtarefa',
     subtaskPlaceholder: 'Subtarefa',
     removeSubtask: 'Remover subtarefa',
@@ -141,9 +141,10 @@ export const strings = {
     empty: 'Nenhuma etiqueta criada.',
   },
   attachment: {
-    title: 'Anexos:',
+    title: 'Anexos',
     linkPlaceholder: 'Cole um link aqui',
     addLink: 'Adicionar link',
+    add: 'Adicionar anexo',
     chooseFile: 'Escolher arquivo',
     uploading: 'Enviando...',
     editHeading: 'Editar anexo',

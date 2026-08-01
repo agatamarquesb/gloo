@@ -3,15 +3,30 @@
  * stay consistent without repeating magic numbers in every component.
  */
 /**
- * The outlined blocks inside the routine modal — notes, checklist, attachments.
+ * The blocks inside both entity modals — notes, checklist, subtasks,
+ * attachments — while the dialog is unlocked.
  *
- * `pl-5` rather than a uniform `p-3`: each block's header ends in an icon-only
- * button, which carries its own padding, so the trash sits further from the
- * right edge than the leading icon does from the left. Padding the left edge by
- * that difference is what makes the two margins read as equal.
+ * No frame any more: a green rule round each of four blocks made the dialog read
+ * as four cards on a page rather than as one thing being edited, and the fields
+ * inside them already say what is editable. What is left is the same 12px on
+ * every side, so the blocks sit on one grid however deep their content runs.
  */
-export const blockBox =
-  'flex flex-col gap-3 rounded-2xl border border-outline-green py-3 pr-3 pl-5';
+export const blockBox = 'flex flex-col gap-3 rounded-2xl p-3';
+
+/**
+ * The same block, closed up, for the task modal's left-hand note.
+ *
+ * It starts on its cell's own top edge — no padding there — and the gap under
+ * the heading is cut to 10px, which is what puts the note's first line level
+ * with the deadline in the column beside it. Its own constant rather than extra
+ * classes on `blockBox`: two `gap-*` utilities on one element leave which of
+ * them wins to stylesheet order, and the losing one was the 12px gap this exists
+ * to remove.
+ */
+export const blockBoxTight = 'flex flex-col gap-2.5 rounded-2xl px-3 pt-0 pb-3';
+
+/** And the locked version of it, which has no frame to pad. */
+export const blockBoxBareTight = 'flex flex-col gap-2.5';
 
 /**
  * The same blocks once the routine modal is locked. Reading a routine is not
@@ -136,6 +151,73 @@ export const quietTextButton =
 
 /** Outline for controls defined by their edge, brighter in dark mode. */
 export const outlineControl = 'border-outline-control';
+
+/**
+ * The dialogs' own chrome, shared by the task modal and the routine modal so the
+ * two cannot drift.
+ *
+ * All the padding is on the dialog itself now. HeroUI gives `.modal__dialog` a
+ * `p-6`, and each of the three sections used to add another 16px on top of it —
+ * so the content sat 40px in from the edge, which is what made these dialogs
+ * look like they had a margin drawn round them. One inset now — 18px at the
+ * sides, a little tighter top and bottom — and the header, body and footer add
+ * nothing.
+ */
+export const dialogPadding = 'px-6 pt-[18px] pb-[15px]';
+
+/**
+ * The title as a field, while the dialog is unlocked.
+ *
+ * No rule under it any more: the green line was the app's "you can type here"
+ * marker back when the dialogs were read-only by default, and now that a whole
+ * dialog says it is in edit mode a line under one field of eight only said it
+ * about that one. No padding under it either, so the title sits as close to the
+ * first row as the reading version does.
+ */
+export const TITLE_FIELD = 'rounded-none border-0 px-0 pb-0 [--field-radius:0]';
+
+/**
+ * What separates the title from the body under it — half what the body's own
+ * `gap-4` gave it, which read as a band of empty dialog rather than as spacing.
+ */
+export const dialogTitleGap = 'gap-2';
+
+/**
+ * The dialog's own shape: a little narrower and a little taller than it sizes
+ * itself to, and squared off from HeroUI's 32px corner to the 16px the cards on
+ * the Dashboard use. `min-h` rather than `h`, so a short dialog still fills the
+ * shape while a long one grows past it and scrolls inside its body.
+ */
+export const dialogShape = 'rounded-2xl sm:min-h-[70vh]';
+export const dialogSection = 'pt-0 pr-0 pb-0 pl-0';
+
+/**
+ * The footer's distance from the body above it. Its own space rather than the
+ * body's, so a scrolled body ends where the fade does and the buttons sit clear
+ * of it.
+ */
+export const dialogFooter = `${dialogSection} mt-[10px]`;
+
+/**
+ * The fade at the top and bottom of a scrolling dialog body.
+ *
+ * A mask rather than a gradient overlay: the content itself thins out, so it
+ * works over whatever the dialog's ground happens to be. Short and soft — at
+ * 1.25rem it read as a band across the dialog rather than as an edge, and it was
+ * fading whole rows of a property list that were not going anywhere.
+ */
+export const dialogBodyFade =
+  '[mask-image:linear-gradient(to_bottom,transparent_0,black_0.5rem,black_calc(100%-0.5rem),transparent_100%)]';
+
+/**
+ * The dialog's close button: the glyph and nothing else.
+ *
+ * It used to be a SecondaryButton — an outlined pill with a hover fill — which
+ * made the one control in the header you press to *leave* the loudest thing in
+ * it. Bare, it also carries no padding of its own, so it ends exactly on the
+ * dialog's 15px inset, level with the content on the other side.
+ */
+export const dialogClose = `${quietTextButton} ml-auto`;
 
 export const layout = {
   sidebarWidth: 'w-60',

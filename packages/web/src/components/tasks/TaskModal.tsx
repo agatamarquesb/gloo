@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import {
   Building2,
   CalendarDays,
@@ -39,23 +39,41 @@ import { useMe } from '@/hooks/queries/auth';
 import { useSectors } from '@/hooks/queries/sectors';
 import { useDeleteTask, useTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/queries/tasks';
 import { useUsers } from '@/hooks/queries/users';
-import { formatDay, formatTimestamp } from '@/lib/formatDate';
+import { formatDay } from '@/lib/formatDate';
 import { canMutateEntity } from '@/lib/permissions';
 import { playSound } from '@/lib/sounds';
-import { FLAT_INPUT, GREEN_UNDERLINE } from '@/theme/fieldStyles';
+import {
+  FIELD_PANEL,
+  FLAT_INPUT,
+  PILL_LISTBOX_ITEM,
+  TEXT_LISTBOX_ITEM,
+  listboxPopover,
+} from '@/theme/fieldStyles';
 import {
   EMPTY_VALUE,
   LABEL_ICON,
   PROPERTY_LIST,
   PROPERTY_ROW_HEIGHT,
   PROPERTY_ROW_SPLIT,
-  SELECT_POPOVER,
   VALUE_CELL,
   propertyStyles,
 } from '@/theme/propertyRow';
-import { modalDivider, modalDividerGap, quietTextButton } from '@/theme/styleConstants';
+import {
+  TITLE_FIELD,
+  dialogBodyFade,
+  dialogClose,
+  dialogFooter,
+  dialogPadding,
+  dialogSection,
+  dialogShape,
+  dialogTitleGap,
+  modalDivider,
+  modalDividerGap,
+  quietTextButton,
+} from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
+import { PriorityChip } from './PriorityChip';
 import { TaskProgressBar } from './TaskProgressBar';
 import { TaskStatusChipSelect } from './TaskStatusChipSelect';
 import { TaskSubtasks } from './TaskSubtasks';
@@ -65,18 +83,6 @@ const PRIORITY_OPTIONS: TaskPriority[] = [
   TaskPriority.MEDIUM,
   TaskPriority.HIGH,
 ];
-
-/**
- * The dialog's horizontal padding, applied to header, body and footer alike, so
- * every rule spans the same width and the header's buttons start where the
- * task's title does. `pl`/`pr` rather than `px` for the reason given in the
- * routine modal: Tailwind emits the long-hand utilities last, so these are the
- * ones that win over the component's own padding.
- */
-const DIALOG_PADDING = 'pl-4 pr-4';
-
-/** How long after the last edit an autosave fires — the routine modal's delay. */
-const AUTOSAVE_DELAY_MS = 800;
 
 /**
  * The height of the dialog's upper half, from `md` up: seven property rows at
@@ -90,6 +96,13 @@ const AUTOSAVE_DELAY_MS = 800;
  * whatever is left. Below `md` the columns are stacked and each takes its own.
  */
 const TOP_COLUMN_HEIGHT = 'md:h-[18.5rem]';
+
+/**
+ * The property rows on their own, without that closing rem: seven rows at
+ * PROPERTY_ROW_HEIGHT. What the notes are cut to, so the two blocks in this row
+ * end on one line — see the right-hand cell below.
+ */
+const PROPERTY_ROWS_HEIGHT = 'md:h-[17.5rem]';
 
 /**
  * A property's value: the routine modal's own 14px, so the two dialogs read at
@@ -112,6 +125,13 @@ const PROPERTY_VALUE_LOWER = `${PROPERTY_VALUE} lowercase`;
 // the chevron's inset, and a `w-full` here would take that back and pull this
 // chevron 8px left of every Select's.
 const POPOVER_TRIGGER = 'relative flex items-center rounded-md outline-none';
+
+/**
+ * The calendar cut to the panel it now lives in: a shorter spacing scale for the
+ * gaps between cells, and the type a step down — see .gloo-compact-calendar in
+ * globals.css, which is where the class-name selectors live and why.
+ */
+const CALENDAR_TYPE = 'gloo-compact-calendar [--spacing:0.2rem]';
 
 /**
  * Everything the dialog edits as a form. Status is deliberately not here: it
@@ -281,9 +301,18 @@ function DeadlineValue({
         <ValueIndicator />
       </AriaButton>
 
-      <Popover.Content className="w-auto">
+      {/* Cut to the field it hangs from: the popover takes the trigger's own
+          width and the calendar fills it, instead of a 252px card sitting wider
+          than the row it belongs to. HeroUI's calendar is `container-type:
+          inline-size` — its cells are a share of its width — so narrowing the
+          panel shrinks the whole grid rather than clipping it. */}
+      <Popover.Content
+        {...listboxPopover}
+        className={`w-(--trigger-width) ${FIELD_PANEL}`}
+      >
         <Popover.Dialog className="p-2">
           <Calendar
+            className={`w-full max-w-none ${CALENDAR_TYPE}`}
             aria-label={strings.task.fields.deadline}
             value={selected}
             onChange={(date) => {
@@ -340,10 +369,9 @@ function ProjectValue({ isEditing, triggerClass }: { isEditing: boolean; trigger
       </AriaButton>
       {/* Sized to what it says rather than to a fixed 16rem — empty, it was a
           wide flat capsule instead of the small card the status dropdown drops
-          under its own chip. Same corner as that one, the message a step down in
-          size, and enough padding that the box has a card's height even with a
-          single line in it. */}
-      <Popover.Content className={`w-auto ${SELECT_POPOVER}`}>
+          under its own chip. The message a step down in size, and enough padding
+          that the box has a card's height even with a single line in it. */}
+      <Popover.Content {...listboxPopover} className={`w-(--trigger-width) ${FIELD_PANEL}`}>
         <Popover.Dialog className="flex min-h-28 items-center justify-center px-4 py-4">
           <p className="text-xs whitespace-nowrap text-muted">{strings.task.projectsEmpty}</p>
         </Popover.Dialog>
@@ -352,7 +380,20 @@ function ProjectValue({ isEditing, triggerClass }: { isEditing: boolean; trigger
   );
 }
 
-function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () => void }) {
+function TaskModalContent({
+  task,
+  onClose,
+  flushRef,
+}: {
+  task: TaskDetailDto;
+  onClose: () => void;
+  /**
+   * Where the dialog's pending save is left for the backdrop to call. Dismissing
+   * from outside — a click on the overlay, Escape — is handled a component up,
+   * where the form is out of reach; this is how the two meet.
+   */
+  flushRef: RefObject<() => void>;
+}) {
   const { data: me } = useMe();
   const { data: sectors = [] } = useSectors();
   const { data: users = [] } = useUsers();
@@ -433,27 +474,34 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
     updateTask.mutate(payload);
   }, [canEdit, canSubmit, payload, updateTask]);
 
-  // Autosave: every edit persists shortly after you stop making it, so closing
-  // the dialog — by any route — never loses work.
   useEffect(() => {
-    const timer = setTimeout(saveIfDirty, AUTOSAVE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [saveIfDirty]);
+    flushRef.current = saveIfDirty;
+  }, [flushRef, saveIfDirty]);
 
   /**
-   * When the task was last written. The `task` prop is the cached copy the list
-   * handed over, so the PATCH response takes precedence while the dialog is
-   * open — it is the same task as the server now has it.
+   * Closing without pressing anything — the header's ×, a click outside, Escape
+   * — keeps the edit. Nothing was staged for later and then abandoned: what is
+   * on screen is what you meant, so it is written on the way out.
+   *
+   * Cancelar is the one route that does not, below.
    */
-  const saved = updateTask.data;
-  const footnote = useMemo(() => {
-    const iso = saved && saved.id === task.id ? saved.updatedAt : task.updatedAt;
-    return iso ? `${strings.task.lastUpdated}: ${formatTimestamp(iso)}` : null;
-  }, [saved, task.id, task.updatedAt]);
-
-  /** Flushes anything the debounce hasn't written yet, then closes. */
   function handleClose() {
     saveIfDirty();
+    onClose();
+  }
+
+  /**
+   * Cancelar: the task goes back to what the server has and the dialog closes
+   * with nothing written.
+   *
+   * The baseline moves with it, so the close that follows finds nothing dirty —
+   * without that, `handleClose` on the way out would save the very edit this
+   * just discarded.
+   */
+  function handleCancel() {
+    const original = toFormValue(task);
+    setForm(original);
+    savedRef.current = JSON.stringify(toPayload(original));
     onClose();
   }
 
@@ -478,11 +526,11 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
   }
 
   return (
-    <Modal.Dialog className="sm:max-w-4xl">
+    <Modal.Dialog className={`sm:max-w-[52rem] ${dialogShape} ${dialogPadding}`}>
       {/* No Modal.CloseTrigger: that one positions itself against the dialog's
           corner rather than on the header's own row. The close button is a
           member of that row instead, so the two line up by construction. */}
-      <Modal.Header className={`flex flex-col ${DIALOG_PADDING}`}>
+      <Modal.Header className={`flex flex-col ${dialogSection}`}>
         {/* The dialog still needs a name for screen readers; the task's own
             title carries it visually, so this one is hidden. */}
         <Modal.Heading className="sr-only">{task.title}</Modal.Heading>
@@ -529,15 +577,14 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
             </>
           ) : null}
 
-          <SecondaryButton
-            isIconOnly
-            size="sm"
-            className="ml-auto"
+          <button
+            type="button"
+            className={dialogClose}
             aria-label={strings.common.close}
-            onPress={handleClose}
+            onClick={handleClose}
           >
             <X className="size-4" />
-          </SecondaryButton>
+          </button>
         </div>
 
         <div className={`${modalDivider} ${modalDividerGap}`} />
@@ -548,7 +595,7 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
           propagates up as a horizontal scrollbar. The mask fades the scroll
           edges so long content doesn't end in a hard cut at the margins. */}
       <Modal.Body
-        className={`flex flex-col gap-4 overflow-x-hidden pb-2 ${DIALOG_PADDING} [mask-image:linear-gradient(to_bottom,transparent_0,black_1.25rem,black_calc(100%-1.25rem),transparent_100%)]`}
+        className={`flex flex-col overflow-x-hidden ${dialogTitleGap} ${dialogSection} ${dialogBodyFade}`}
       >
         {/* The title spans both columns: it is what the task *is*, and the two
             columns below are only how the rest of it is arranged. */}
@@ -562,7 +609,7 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
             <Input
               fullWidth
               placeholder={strings.task.fields.title}
-              className={`${FLAT_INPUT} ${GREEN_UNDERLINE} text-xl font-bold`}
+              className={`${FLAT_INPUT} ${TITLE_FIELD} text-xl font-bold`}
             />
           </TextField>
         ) : (
@@ -596,28 +643,32 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
                     {strings.task.fields.priority}
                   </Label>
                   <div className={VALUE_CELL}>
-                    {/* The value is written here rather than left to
-                        `Select.Value`, which comes at the component's own type
-                        scale: these read at the status chip's size and in its
-                        lower case, so the column is one voice. */}
+                    {/* The chosen pill, not its name in text: the options are
+                        pills, so the field has to be the same object or picking
+                        one looks like it did nothing. Same reasoning as the
+                        status row, which has read this way all along. */}
                     <Select.Trigger className={trigger}>
-                      <span className={PROPERTY_VALUE_LOWER}>
-                        {strings.task.priority[form.priority]}
-                      </span>
+                      <PriorityChip priority={form.priority} />
                       {isEditing ? <Select.Indicator /> : null}
                     </Select.Trigger>
                   </div>
                 </div>
-                <Select.Popover className={SELECT_POPOVER}>
+                {/* The options are pills, like the status dropdown's: priority
+                    is the other property on this list that is a fixed set of
+                    named steps, and reading it as a colour is faster than
+                    reading it as a word. No tick beside the current one — see
+                    STATUS_ITEM in TaskStatusChipSelect for why a mark behind a
+                    pill reads as a second shape around it. */}
+                <Select.Popover {...listboxPopover}>
                   <ListBox>
                     {PRIORITY_OPTIONS.map((priority) => (
                       <ListBox.Item
                         key={priority}
                         id={priority}
                         textValue={strings.task.priority[priority]}
+                        className={PILL_LISTBOX_ITEM}
                       >
-                        {strings.task.priority[priority]}
-                        <ListBox.ItemIndicator />
+                        <PriorityChip priority={priority} />
                       </ListBox.Item>
                     ))}
                   </ListBox>
@@ -657,10 +708,18 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
                     </Select.Trigger>
                   </div>
                 </div>
-                <Select.Popover className={SELECT_POPOVER}>
+                <Select.Popover {...listboxPopover}>
                   <ListBox>
                     {sectors.map((sector) => (
-                      <ListBox.Item key={sector.id} id={sector.id} textValue={sector.name}>
+                      <ListBox.Item
+                        key={sector.id}
+                        id={sector.id}
+                        textValue={sector.name}
+                        // Lower case here as well as on the trigger: the value
+                        // and the option that sets it are the same word, and it
+                        // changed case between them.
+                        className={`${TEXT_LISTBOX_ITEM} lowercase`}
+                      >
                         {sector.name}
                         <ListBox.ItemIndicator />
                       </ListBox.Item>
@@ -718,7 +777,7 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
                     </Select.Trigger>
                   </div>
                 </div>
-                <Select.Popover className={SELECT_POPOVER}>
+                <Select.Popover {...listboxPopover}>
                   <ListBox selectionMode="multiple">
                     {users.map((user) => (
                       <ListBox.Item key={user.id} id={user.id} textValue={user.name}>
@@ -746,6 +805,8 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
                   {strings.task.fields.progress}
                 </span>
                 <div className={VALUE_CELL}>
+                  {/* The full value cell, so the bar and the count together end
+                      on the same line as the dropdown above them opens to. */}
                   <TaskProgressBar value={task.progress} className="w-full" />
                 </div>
               </div>
@@ -757,25 +818,31 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
             <div className={`${modalDivider} mt-auto`} />
           </div>
 
-          {/* The rule between the columns, spanning both rows. Inset top and
-              bottom by the same 1.5rem the grid's gap gives it left and right,
-              so it reads as a rule with margins rather than as an edge. */}
-          <div aria-hidden className="hidden w-px bg-border md:row-span-2 md:my-6 md:block" />
+          {/* The rule between the columns, spanning both rows and running their
+              full height — no inset of its own, so it starts and ends where the
+              content on either side of it does. */}
+          <div aria-hidden className="hidden w-px bg-border md:row-span-2 md:block" />
 
           {/* Row 1, right: the notes, filling the height the properties set and
               scrolling inside it — see TOP_COLUMN_HEIGHT and NotesBlock's
               `fill`. Its rule is the same rule, on the same edge. */}
           <div className={`flex min-w-0 flex-col ${TOP_COLUMN_HEIGHT}`}>
-            <NotesBlock
-              fill
-              compact
-              showDivider={false}
-              isEditing={isEditing}
-              value={form.notes}
-              onChange={(notes) => set('notes', notes)}
-              title={strings.task.notesTitle}
-              placeholder={strings.task.notesPlaceholder}
-            />
+            {/* The notes stop where the property rows stop, not where the cell
+                does: the rem of air the properties leave under "Barra de
+                progresso" is air on this side too, so the two blocks end on one
+                line and only the rules below them touch the cell's edge. */}
+            <div className={PROPERTY_ROWS_HEIGHT}>
+              <NotesBlock
+                fill
+                compact
+                showDivider={false}
+                isEditing={isEditing}
+                value={form.notes}
+                onChange={(notes) => set('notes', notes)}
+                title={strings.task.notesTitle}
+                placeholder={strings.task.notesPlaceholder}
+              />
+            </div>
             <div className={`${modalDivider} mt-auto`} />
           </div>
 
@@ -792,24 +859,17 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
           </div>
 
           <div className="min-w-0 pt-4">
-            {/* Always present while editing, so there is somewhere to drop a
-                file; locked, it appears only when the task actually has
-                attachments — an empty block is a heading over nothing. */}
-            {isEditing || form.attachments.length > 0 ? (
-              <AttachmentsBlock
-                isEditing={isEditing}
-                attachments={form.attachments}
-                onChange={(attachments) => set('attachments', attachments)}
-                onDelete={() => set('attachments', [])}
-              />
-            ) : null}
+            {/* Always present, in both modes: locked, an empty block used to
+                vanish entirely, and a task with no files then looked like a task
+                that could not have any. It says so instead. */}
+            <AttachmentsBlock
+              isEditing={isEditing}
+              attachments={form.attachments}
+              onChange={(attachments) => set('attachments', attachments)}
+            />
           </div>
         </div>
 
-        {/* Last thing in the task rather than pinned to the footer: it is a fact
-            about the task, so it scrolls with the rest of them and slides under
-            the footer — where the body's own mask fades it out. */}
-        {footnote ? <p className="text-xs text-muted italic">{footnote}</p> : null}
       </Modal.Body>
 
       {/* Copiar link / Deletar / Editar live in the header, and the last change
@@ -818,9 +878,9 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
           cancels the component's own 20px — so the body ends where the footer
           begins and the buttons sit on the dialog's own bottom margin. */}
       <Modal.Footer
-        className={`mt-0 flex flex-wrap items-center justify-end gap-2 pt-0 pb-0 ${DIALOG_PADDING}`}
+        className={`flex flex-wrap items-center justify-end gap-2 ${dialogFooter}`}
       >
-        <SecondaryButton onPress={handleClose}>{strings.common.cancel}</SecondaryButton>
+        <SecondaryButton onPress={handleCancel}>{strings.common.cancel}</SecondaryButton>
         {isEditing ? (
           <Button
             className="rounded-full"
@@ -837,18 +897,29 @@ function TaskModalContent({ task, onClose }: { task: TaskDetailDto; onClose: () 
 
 export function TaskModal({ taskId, onClose }: { taskId: string; onClose: () => void }) {
   const { data: task, isLoading } = useTask(taskId);
+  /** Filled in by the dialog's content — see `flushRef` there. */
+  const flushEdits = useRef<() => void>(() => {});
 
   return (
-    <Modal.Backdrop isOpen onOpenChange={(open) => !open && onClose()}>
+    <Modal.Backdrop
+      isOpen
+      onOpenChange={(open) => {
+        if (open) return;
+        // Dismissed from outside the dialog: the edit on screen is kept, the
+        // same as pressing the header's ×. Only Cancelar discards.
+        flushEdits.current();
+        onClose();
+      }}
+    >
       <Modal.Container scroll="inside">
         {isLoading || !task ? (
-          <Modal.Dialog className="sm:max-w-4xl">
+          <Modal.Dialog className={`sm:max-w-[52rem] ${dialogShape} ${dialogPadding}`}>
             <Modal.Body>
               <p className="py-8 text-center text-muted">{strings.common.loading}</p>
             </Modal.Body>
           </Modal.Dialog>
         ) : (
-          <TaskModalContent task={task} onClose={onClose} />
+          <TaskModalContent task={task} onClose={onClose} flushRef={flushEdits} />
         )}
       </Modal.Container>
     </Modal.Backdrop>

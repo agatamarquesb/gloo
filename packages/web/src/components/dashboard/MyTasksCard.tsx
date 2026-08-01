@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button, ScrollShadow } from '@heroui/react';
 
-import { TaskStatus, type TaskFilters, type TaskListItemDto, type TaskStatusFilter } from '@gloo/shared';
+import type { TaskFilters, TaskStatusFilter } from '@gloo/shared';
 
 import { SearchField } from '@/components/common/SearchField';
 import { TaskCard } from '@/components/tasks/TaskCard';
@@ -23,56 +23,34 @@ import { readTaskOrder, reorderTasks, sortByManualOrder, writeTaskOrder } from '
  */
 const LIST_HEIGHT = 'h-[26rem]';
 
-/** How long "Feitas" stays lit after a task is completed. */
-const FLASH_MS = 2000;
+/**
+ * The gap a dragged row opens where it will land — see `dragHeight` below, which
+ * measures the row so the space is exactly the size of the thing going into it.
+ */
+const DROP_GAP = 'pointer-events-none rounded-2xl border border-dashed border-outline-green/60';
 
 /**
- * True for two seconds after a task in this list is completed, and not again
- * until those two seconds are up.
+ * The element that actually scrolls the page this card is on.
  *
- * Watched here rather than reported by whatever changed the status, because a
- * task can be completed from three places — its row's chip, the modal, another
- * tab's refetch — and all three arrive as the same thing: a task that was not
- * DONE a moment ago and is now.
+ * Both halves of the test are needed. An ancestor whose content overflows is not
+ * necessarily scrollable — with `overflow: visible` the content simply spills,
+ * and `scrollHeight` still reports it — so the overflow property has to agree;
+ * and an ancestor that *can* scroll but has nothing hidden is not the one that
+ * moves. Falls back to the document, for a page laid out without an inner
+ * scroller.
  */
-function useCompletedFlash(tasks: TaskListItemDto[]): boolean {
-  const [isLit, setLit] = useState(false);
-  const previous = useRef(new Map<string, TaskStatus>());
-  const until = useRef(0);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const current = new Map(tasks.map((task) => [task.id, task.status]));
-    const completed = tasks.some((task) => {
-      const before = previous.current.get(task.id);
-      return before !== undefined && before !== TaskStatus.DONE && task.status === TaskStatus.DONE;
-    });
-    previous.current = current;
-
-    // Deliberately not restarted while it is already running: ticking off four
-    // tasks in a row is one gesture, and four overlapping flashes read as a
-    // flicker rather than as confirmation.
-    if (!completed || Date.now() < until.current) return;
-
-    until.current = Date.now() + FLASH_MS;
-    setLit(true);
-    // The timeout outlives this effect's cleanup on purpose — every refetch
-    // re-runs it, and clearing on the way out would cut the flash short.
-    timer.current = setTimeout(() => setLit(false), FLASH_MS);
-  }, [tasks]);
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  return isLit;
+function scrollingAncestor(from: HTMLElement | null): HTMLElement | null {
+  for (let node = from?.parentElement ?? null; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    const scrolls = overflowY === 'auto' || overflowY === 'scroll';
+    if (scrolls && node.scrollHeight > node.clientHeight) return node;
+  }
+  return document.scrollingElement as HTMLElement | null;
 }
 
 export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
   const { data: me } = useMe();
+  const card = useRef<HTMLElement>(null);
   const [status, setStatus] = useState<TaskStatusFilter | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
   /** The task being read, opened over the Dashboard rather than at its own route. */
@@ -93,11 +71,35 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
   /** The row being dragged, and the row it is currently over. */
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  /**
+   * How tall the row being dragged is, measured when the drag starts. The gap
+   * that opens for it is that height exactly, so what you are aiming at is the
+   * space the task will occupy rather than a mark saying where it would go.
+   */
+  const [dragHeight, setDragHeight] = useState(0);
 
   const ordered = useMemo(() => sortByManualOrder(tasks, order), [tasks, order]);
   const visibleIds = ordered.map((task) => task.id);
 
-  const isFlashing = useCompletedFlash(tasks);
+  /**
+   * Change the filter and run the page to the bottom.
+   *
+   * The card is the last thing on the Dashboard, so from the top of the page a
+   * filter pill is often the only part of it on screen: you press "A fazer" and
+   * the answer lands below the fold. Scrolling to the end rather than to the card
+   * lands on the same view every time, with the foot of the page under it — the
+   * card's own bottom edge no longer floating somewhere mid-screen.
+   *
+   * The scroller is the shell's `main`, not the window (see AppShell: the page
+   * is a full-height flex row and only that column scrolls), so it is found by
+   * walking up from the card rather than assumed.
+   */
+  function selectStatus(next: TaskStatusFilter | 'ALL') {
+    setStatus(next);
+
+    const scroller = scrollingAncestor(card.current);
+    scroller?.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+  }
 
   function handleDrop(targetId: string) {
     if (!dragId || dragId === targetId) return;
@@ -109,7 +111,7 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
   }
 
   return (
-    <DashboardCard title={strings.dashboard.myTasks}>
+    <DashboardCard ref={card} title={strings.dashboard.myTasks}>
       {/* One row for everything you do to the list: filter it on the left,
           search it and add to it on the right. None of it belongs in the card's
           header, where it read as part of the title.
@@ -118,14 +120,7 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
           wraps, and both are cut to the pills' own height — `size="sm"` for the
           button, `slim` for the field. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TaskStatusPills
-          value={status}
-          onChange={setStatus}
-          slim
-          withOverdue={false}
-          outlineSelected
-          flash={isFlashing ? 'DONE' : undefined}
-        />
+        <TaskStatusPills value={status} onChange={selectStatus} slim withOverdue={false} />
 
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
           <SearchField slim value={search} onChange={setSearch} className="min-w-0 flex-1 sm:w-40" />
@@ -142,10 +137,14 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
         </div>
       </div>
 
-      {isLoading ? (
-        <p className="py-6 text-center text-muted">{strings.common.loading}</p>
-      ) : ordered.length === 0 ? (
-        <p className="py-6 text-center text-muted">{strings.dashboard.noTasks}</p>
+      {/* Loading and empty take the list's own height rather than collapsing to a
+          line of text: the card is the same box under every filter, whether that
+          filter has five tasks in it or none, and the Dashboard below it does not
+          jump each time you press one. */}
+      {isLoading || ordered.length === 0 ? (
+        <div className={`${LIST_HEIGHT} flex items-center justify-center text-muted`}>
+          {isLoading ? strings.common.loading : strings.dashboard.noTasks}
+        </div>
       ) : (
         // Every task, five at a time: the card is a fixed height and the rest
         // are a scroll away, rather than the list being cut off at five with no
@@ -156,10 +155,14 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
         // px/py inside the scroller with a matching -mx outside it: the rows
         // lift on hover and the scroller would clip the scaled edge, while the
         // negative margin keeps them on the card's own margins.
+        //
+        // The fade is deliberately short — a band that deep washed the first and
+        // last rows out into the card's own white and read as a haze over the
+        // list rather than as an edge with more behind it.
         <ScrollShadow
           variant="fade"
           orientation="vertical"
-          size={28}
+          size={10}
           className={`${LIST_HEIGHT} -mx-1.5 overflow-y-auto px-1.5 py-1 [scrollbar-width:thin]`}
         >
           {/* The flex column is inside the scroller, not the scroller itself:
@@ -185,6 +188,7 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
                     event.dataTransfer.effectAllowed = 'move';
                     // Firefox starts no drag at all without payload on the event.
                     event.dataTransfer.setData('text/plain', task.id);
+                    setDragHeight(event.currentTarget.getBoundingClientRect().height);
                     setDragId(task.id);
                   }}
                   onDragEnd={() => {
@@ -204,24 +208,27 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
                     event.preventDefault();
                     handleDrop(task.id);
                   }}
-                  className={`relative rounded-2xl transition-opacity ${
-                    dragId === task.id ? 'opacity-40' : ''
-                  }`}
+                  className={`relative rounded-2xl ${dragId === task.id ? 'opacity-40' : ''}`}
                 >
-                  {/* Where it will land, drawn in the brand green on the edge it
-                      will land against. Inside the row's own box rather than in
-                      the gap between rows, so the scroller never grows by a
-                      pixel mid-drag and shifts the list under the cursor. */}
-                  {overId === task.id && dragId ? (
-                    <span
-                      aria-hidden
-                      className={`absolute inset-x-2 z-10 h-0.5 rounded-full bg-green ${
-                        insertAbove ? 'top-0' : 'bottom-0'
-                      }`}
-                    />
+                  {/* Where it will land: a space the size of the row you are
+                      holding, opened on the edge it will land against, rather
+                      than a line drawn between two rows. You aim at the slot the
+                      task will occupy instead of at a mark standing for it.
+
+                      Both gaps live *inside* this row's own box, which is what
+                      keeps the drag steady: the wrapper grows, so the pointer
+                      stays over the same drop target while the space opens under
+                      it — a gap between the rows would move the target out from
+                      under the cursor and the two would fight. */}
+                  {overId === task.id && dragId && insertAbove ? (
+                    <div aria-hidden className={`${DROP_GAP} mb-2`} style={{ height: dragHeight }} />
                   ) : null}
 
-                  <TaskCard task={task} shortDate onOpen={() => setOpenTaskId(task.id)} />
+                  <TaskCard task={task} compact onOpen={() => setOpenTaskId(task.id)} />
+
+                  {overId === task.id && dragId && !insertAbove ? (
+                    <div aria-hidden className={`${DROP_GAP} mt-2`} style={{ height: dragHeight }} />
+                  ) : null}
                 </div>
               );
             })}

@@ -190,7 +190,9 @@ export function RoutineTrash({ onClose }: { onClose: () => void }) {
           className="text-xs"
           isDisabled={isEmpty || emptyTrash.isPending}
           onPress={() => {
-            playSound('sweep');
+            // Its own sound, not the broom's: this empties the bin, while the
+            // broom elsewhere clears a field you were typing in.
+            playSound('emptyTrash');
             emptyTrash.mutate(undefined);
             setSelected(new Set());
           }}

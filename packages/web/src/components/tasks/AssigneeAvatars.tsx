@@ -15,15 +15,18 @@ export function AssigneeAvatars({ assignees }: { assignees: UserDto[] }) {
 
   if (assignees.length === 0) return null;
 
+  // The ring is the brand green rather than the surface behind it: it still cuts
+  // one overlapping face from the next, and on a task row it reads as the same
+  // green edge the row itself is drawn with instead of as a gap in the stack.
   return (
     <div className="flex items-center -space-x-2">
       {visible.map((user) => (
-        <div key={user.id} className="rounded-full ring-2 ring-surface">
+        <div key={user.id} className="rounded-full ring-2 ring-green">
           <UserAvatar name={user.name} avatarUrl={user.avatarUrl} size="sm" />
         </div>
       ))}
       {overflow > 0 ? (
-        <div className="flex size-8 items-center justify-center rounded-full bg-default text-xs font-medium text-default-foreground ring-2 ring-surface">
+        <div className="flex size-8 items-center justify-center rounded-full bg-default text-xs font-medium text-default-foreground ring-2 ring-green">
           +{overflow}
         </div>
       ) : null}

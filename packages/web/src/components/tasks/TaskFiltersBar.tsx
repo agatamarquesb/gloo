@@ -4,6 +4,7 @@ import { Button, Label, ListBox, Popover, Select } from '@heroui/react';
 import type { SectorDto, TaskSortBy, UserDto } from '@gloo/shared';
 
 import { SearchField } from '@/components/common/SearchField';
+import { listboxPopover } from '@/theme/fieldStyles';
 import { strings } from '@/strings/pt-BR';
 
 const SORT_OPTIONS: { id: TaskSortBy; label: string }[] = [
@@ -88,7 +89,7 @@ export function TaskFiltersBar({
                     <Select.Value />
                     <Select.Indicator />
                   </Select.Trigger>
-                  <Select.Popover>
+                  <Select.Popover {...listboxPopover}>
                     <ListBox>
                       {sectors.map((sector) => (
                         <ListBox.Item key={sector.id} id={sector.id} textValue={sector.name}>
@@ -110,7 +111,7 @@ export function TaskFiltersBar({
                     <Select.Value />
                     <Select.Indicator />
                   </Select.Trigger>
-                  <Select.Popover>
+                  <Select.Popover {...listboxPopover}>
                     <ListBox>
                       {users.map((user) => (
                         <ListBox.Item key={user.id} id={user.id} textValue={user.name}>

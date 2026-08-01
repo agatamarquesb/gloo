@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { Download, Eye, FileText, Globe, Paperclip, Pencil, Plus, Trash2, Upload } from 'lucide-react';
-import { Button, Input, Label, Modal } from '@heroui/react';
+import { Button, Input, Label, Modal, Popover } from '@heroui/react';
 import { TextField } from 'react-aria-components';
 
 import { AttachmentKind, type AttachmentDto } from '@gloo/shared';
@@ -26,6 +26,13 @@ const ICON_BY_KIND = {
 
 /** Shared height, so the link field and the file button line up exactly. */
 const CONTROL_HEIGHT = 'h-9';
+
+/**
+ * The panel the "+" opens: the app's field-panel geometry — 8px corners, a
+ * hairline — but with all four corners kept, since it hangs from a button rather
+ * than joining a field below it.
+ */
+const ADD_PANEL = 'w-64 rounded-[8px] border border-border/50';
 
 /**
  * The link field is styled as the twin of the "choose file" button beside it:
@@ -184,13 +191,11 @@ function AttachmentEditor({
 export function AttachmentsBlock({
   attachments,
   onChange,
-  onDelete,
   isEditing,
   canOpen = true,
 }: {
   attachments: AttachmentDto[];
   onChange: (attachments: AttachmentDto[]) => void;
-  onDelete: () => void;
   /** Outside edit mode the list is still readable, and still links out. */
   isEditing: boolean;
   /**
@@ -203,6 +208,8 @@ export function AttachmentsBlock({
   const uploadFile = useUploadFile();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkDraft, setLinkDraft] = useState('');
+  /** Whether the add panel is open — closed by adding, from either control. */
+  const [isAdding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const editing = attachments.find((attachment) => attachment.id === editingId) ?? null;
@@ -211,9 +218,9 @@ export function AttachmentsBlock({
     onChange([...attachments, attachment]);
   }
 
-  // A form, so Enter in the field adds the link exactly like pressing "+".
-  function addLink(event: FormEvent) {
-    event.preventDefault();
+  /** Enter in the field and Salvar are the same act — hence the optional event. */
+  function addLink(event?: FormEvent) {
+    event?.preventDefault();
     const url = linkDraft.trim();
     if (!url) return;
     add({
@@ -223,6 +230,7 @@ export function AttachmentsBlock({
       title: titleFromUrl(url),
     });
     setLinkDraft('');
+    setAdding(false);
   }
 
   function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
@@ -231,8 +239,10 @@ export function AttachmentsBlock({
     if (!file) return;
 
     uploadFile.mutate(file, {
-      onSuccess: ({ url, filename }) =>
-        add({ id: crypto.randomUUID(), kind: AttachmentKind.FILE, url, title: filename }),
+      onSuccess: ({ url, filename }) => {
+        add({ id: crypto.randomUUID(), kind: AttachmentKind.FILE, url, title: filename });
+        setAdding(false);
+      },
     });
   }
 
@@ -250,64 +260,66 @@ export function AttachmentsBlock({
         <span className={`flex-1 text-foreground ${blockTitle(isEditing)}`}>
           {strings.attachment.title}
         </span>
+        {/* One way in, opened from the heading: the two controls it holds —
+            paste a link, pick a file — used to sit in the block itself, where
+            they were the first thing you read about a task's files whether you
+            were adding one or not. The block now shows what it has, and this
+            asks for more. */}
         {isEditing ? (
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            className="shrink-0 text-muted"
-            aria-label={strings.common.delete}
-            onPress={() => {
-              playSound('delete');
-              onDelete();
-            }}
-          >
-            <Trash2 className="size-4" />
-          </Button>
+          <Popover isOpen={isAdding} onOpenChange={setAdding}>
+            <Button
+              isIconOnly
+              size="sm"
+              variant="ghost"
+              className="shrink-0 text-muted"
+              aria-label={strings.attachment.add}
+            >
+              <Plus className="size-4" />
+            </Button>
+
+            <Popover.Content className={ADD_PANEL} placement="bottom end">
+              <Popover.Dialog className="flex flex-col gap-2 p-3">
+                {/* A form, so Enter is the same as pressing Salvar — both add
+                    the link and close the panel. */}
+                <form onSubmit={addLink}>
+                  <TextField
+                    aria-label={strings.attachment.linkPlaceholder}
+                    value={linkDraft}
+                    onChange={setLinkDraft}
+                  >
+                    <Input
+                      fullWidth
+                      className={LINK_FIELD}
+                      placeholder={strings.attachment.linkPlaceholder}
+                    />
+                  </TextField>
+                </form>
+
+                <input ref={fileInputRef} type="file" className="hidden" onChange={handleFile} />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`${CONTROL_HEIGHT} w-full rounded-full ${outlineControl}`}
+                  isDisabled={uploadFile.isPending}
+                  onPress={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="size-4" />
+                  {uploadFile.isPending ? strings.attachment.uploading : strings.attachment.chooseFile}
+                </Button>
+
+                <Button
+                  size="sm"
+                  className={`${CONTROL_HEIGHT} w-full rounded-full`}
+                  isDisabled={!linkDraft.trim()}
+                  onPress={() => addLink()}
+                >
+                  {strings.common.save}
+                </Button>
+              </Popover.Dialog>
+            </Popover.Content>
+          </Popover>
         ) : null}
       </div>
-
-      {/* Paste a link, or pick a file — the two ways in, side by side and the
-          same height. The add button lives inside the field rather than beside
-          it, so the row reads as two controls, not three. Both are ways of
-          adding, so the whole row belongs to edit mode. */}
-      {isEditing ? (
-        <div className="flex flex-wrap items-center gap-2">
-        <form onSubmit={addLink} className="relative min-w-40 flex-1">
-          <TextField
-            aria-label={strings.attachment.linkPlaceholder}
-            value={linkDraft}
-            onChange={setLinkDraft}
-          >
-            <Input fullWidth className={LINK_FIELD} placeholder={strings.attachment.linkPlaceholder} />
-          </TextField>
-
-          <Button
-            type="submit"
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            className="absolute top-1/2 right-1 -translate-y-1/2 rounded-full text-muted"
-            aria-label={strings.attachment.addLink}
-            isDisabled={!linkDraft.trim()}
-          >
-            <Plus className="size-4" />
-          </Button>
-        </form>
-
-        <input ref={fileInputRef} type="file" className="hidden" onChange={handleFile} />
-        <Button
-          size="sm"
-          variant="outline"
-          className={`${CONTROL_HEIGHT} rounded-full ${outlineControl}`}
-          isDisabled={uploadFile.isPending}
-          onPress={() => fileInputRef.current?.click()}
-        >
-          <Upload className="size-4" />
-          {uploadFile.isPending ? strings.attachment.uploading : strings.attachment.chooseFile}
-        </Button>
-      </div>
-      ) : null}
 
       {attachments.length === 0 ? (
         <p className="text-xs text-muted">{strings.attachment.empty}</p>

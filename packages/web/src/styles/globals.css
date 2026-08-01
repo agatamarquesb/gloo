@@ -90,6 +90,43 @@
   --status-done: #e4ecb4;
   --status-overdue: #ffece4;
 
+  /* And the label on each, in the fill's own hue taken down until it carries —
+     around 5:1 on its own ground. Black read as four grey words in four coloured
+     capsules; this way the word itself is the colour it means. The dot follows
+     it, being the text colour at half strength. */
+  --status-todo-text: #16607f;
+  --status-progress-text: #7a6410;
+  --status-done-text: #56621b;
+  --status-overdue-text: #a3502f;
+
+  /* Task priority pills — the third and last exception to "five colours", for
+   * the same reason as --status-*: priority is a scale, and a scale needs its
+   * own steps. Yellow, orange, red reads as low-to-high on sight, which no
+   * arrangement of the brand five does.
+   *
+   * Lighter than the status tints, because a priority pill sits *inside* a
+   * dropdown next to a status pill and must not shout over it. Each carries an
+   * edge and a label of its own, both below.
+   *
+   * Mode-invariant, like every other pill in the app. */
+  --priority-low: #fff6d1;
+  --priority-medium: #ffe6cd;
+  --priority-high: #ffdcd6;
+
+  /* The edge is a shade of the fill rather than a colour beside it: barely
+     darker, just enough to close the pill's shape on a white panel. */
+  --priority-low-edge: #f0dc9c;
+  --priority-medium-edge: #f5cdab;
+  --priority-high-edge: #f5c0b7;
+
+  /* And the label is the same hue taken down until it carries — around 5:1 on
+     its own fill. Black would have read as three grey words in three coloured
+     capsules; this way the word itself says which step it is, and the dot,
+     which is the text colour at half strength, follows it. */
+  --priority-low-text: #8a6d18;
+  --priority-medium-text: #99551d;
+  --priority-high-text: #a03b2c;
+
   /* The brand green taken down to where it can carry text.
    *
    * --green is a mid-tone pastel: fine as a fill with black on top, but as a
@@ -189,6 +226,19 @@
   --color-status-progress: var(--status-progress);
   --color-status-done: var(--status-done);
   --color-status-overdue: var(--status-overdue);
+  --color-status-todo-text: var(--status-todo-text);
+  --color-status-progress-text: var(--status-progress-text);
+  --color-status-done-text: var(--status-done-text);
+  --color-status-overdue-text: var(--status-overdue-text);
+  --color-priority-low: var(--priority-low);
+  --color-priority-medium: var(--priority-medium);
+  --color-priority-high: var(--priority-high);
+  --color-priority-low-edge: var(--priority-low-edge);
+  --color-priority-medium-edge: var(--priority-medium-edge);
+  --color-priority-high-edge: var(--priority-high-edge);
+  --color-priority-low-text: var(--priority-low-text);
+  --color-priority-medium-text: var(--priority-medium-text);
+  --color-priority-high-text: var(--priority-high-text);
   --color-green-deep: var(--green-deep);
   --color-outline-green: var(--outline-green);
   --color-outline-control: var(--outline-control);
@@ -203,6 +253,130 @@
   --color-label-blue: var(--label-blue);
   --color-label-teal: var(--label-teal);
   --color-label-gray: var(--label-gray);
+}
+
+/*
+ * The page never moves sideways. Vertical scrolling is untouched — this only
+ * takes away the axis nothing is meant to travel on, so a popover that reaches
+ * past the right edge, or a value that refuses to wrap, can no longer drag the
+ * whole layout with it. The app's own scroller (`main` in AppShell) already
+ * hides its overflow; this is the same rule one level up, on the document.
+ */
+html,
+body {
+  overflow-x: hidden;
+}
+
+/*
+ * Every list box in the app — status, sector, priority, assignees, the sort
+ * menu — sits on glass rather than on a panel: you can make out what it covers
+ * through it, blurred, while the options on top stay flatly legible.
+ *
+ * On the popover rather than on the list box itself: HeroUI's `.list-box` has no
+ * background of its own, and the panel it drops into is what carries `--overlay`.
+ * Each kind of field brings its own popover class and they do not share one —
+ * `.popover` alone misses every Select in the app, which is `.select__popover`.
+ * Listed by name rather than matched on `[class*="popover"]`, so a date picker
+ * and the colour picker keep their solid ground: a calendar grid read through
+ * glass is a mess, and a colour swatch has to be shown against nothing at all.
+ *
+ * The three parts are one effect and none of them works alone. The ground goes
+ * to about three quarters so the shapes behind it come through; the blur is what
+ * keeps text readable over them — without it, a task row behind the panel reads
+ * as noise straight through the words; and the saturation lift puts back the
+ * colour that blurring a backdrop always washes out, which is what makes it look
+ * like glass rather than like fog.
+ */
+.popover:has(.list-box),
+.select__popover,
+.autocomplete__popover,
+.combo-box__popover,
+.dropdown__popover {
+  background-color: color-mix(in oklab, var(--overlay) 72%, transparent);
+  backdrop-filter: blur(16px) saturate(180%);
+
+  /* Squared off and drawn in a hairline. HeroUI rounds a popover by up to 32px
+     and gives it a three-part drop shadow, which on a list of five options read
+     as a pill-shaped card hovering over the page. A list is a continuation of
+     the field above it, so it takes a field's geometry: a small radius, an edge
+     you can only just see, and a shadow that only lifts it off the page. */
+  border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px -12px rgb(0 0 0 / 0.25);
+}
+
+/*
+ * Joined to its field: the edge facing the trigger loses its rounding, so with
+ * `offset: 0` (see `listboxPopover` in theme/fieldStyles.ts) the two meet along
+ * one line instead of floating apart. Keyed on where the popover actually
+ * landed, because a field near the bottom of the window opens upward and it is
+ * then the *bottom* edge that has to be square.
+ */
+:is(
+  .popover:has(.list-box),
+  .select__popover,
+  .autocomplete__popover,
+  .combo-box__popover,
+  .dropdown__popover
+):not(.gloo-owns-field)[data-placement='bottom'] {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+:is(
+  .popover:has(.list-box),
+  .select__popover,
+  .autocomplete__popover,
+  .combo-box__popover,
+  .dropdown__popover
+):not(.gloo-owns-field)[data-placement='top'] {
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/*
+ * The calendar cut down to a property row's width — the deadline's, which opens
+ * a panel as wide as the field it hangs from rather than a 252px card.
+ *
+ * Narrowing the panel already shrinks the grid, because HeroUI sizes calendar
+ * cells as a share of the calendar's own width. The type does not follow: it is
+ * a fixed `text-sm` on the cell, which left "31" nearly as wide as the box it
+ * had to sit in. These are the three sizes that do follow, a step down each.
+ *
+ * Plain CSS rather than Tailwind arbitrary variants on the component: a class
+ * like `[&_.calendar\_\_cell]:text-xs` has to survive being written in a
+ * TypeScript string, and what the scanner reads there (two backslashes) is not
+ * what reaches the DOM (one) — so the utility is generated for a selector that
+ * never matches anything. Class names with underscores are better handled here.
+ */
+.gloo-compact-calendar {
+  .calendar__cell {
+    font-size: 0.75rem;
+  }
+
+  .calendar__header-cell {
+    font-size: 0.625rem;
+  }
+
+  .calendar__heading {
+    font-size: 0.6875rem;
+  }
+}
+
+/*
+ * The panel that carries its own field keeps its top corners, but takes them
+ * from the field rather than from the panel: 6px, the radius an open field's
+ * ground has everywhere else (`rounded-t-md`), instead of the 8px of a panel's
+ * outer corner — which on this small a box read as a much rounder shape than
+ * anything around it.
+ *
+ * Here rather than as a utility on the component: the radius above is set from
+ * an unlayered rule, and unlayered beats Tailwind's `@layer utilities` whatever
+ * the class says.
+ */
+.gloo-owns-field {
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
 }
 
 /*

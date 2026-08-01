@@ -23,7 +23,7 @@ const STATUS_COLUMN = 'flex w-28 shrink-0 justify-start';
 export function TaskCard({
   task,
   onOpen,
-  shortDate = false,
+  compact = false,
 }: {
   task: TaskListItemDto;
   /**
@@ -33,18 +33,23 @@ export function TaskCard({
    */
   onOpen?: () => void;
   /**
-   * "31 de jul. 2026" rather than the date written out in full. For the
-   * Dashboard card, where the row is half the width it has on the Tasks page and
-   * the date was the first thing to start crowding the sector beside it.
+   * The Dashboard's version of the row: half the width it has on the Tasks page,
+   * and sat beside the Routines card.
+   *
+   * Two things follow from that. The date is written short — "31 de jul. 2026"
+   * rather than in full, which was the first thing to start crowding the sector
+   * beside it. And the title and the line under it are set to a routine's own
+   * sizes, so a task and a routine read as two of the same kind of thing rather
+   * than as two levels of the app.
    */
-  shortDate?: boolean;
+  compact?: boolean;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
   const updateStatus = useUpdateTaskStatus(task.id);
 
-  const dueDate = shortDate ? formatShortDate(task.dueDate) : formatLongDate(task.dueDate);
+  const dueDate = compact ? formatShortDate(task.dueDate) : formatLongDate(task.dueDate);
   const canEdit = canMutateEntity(me, {
     createdById: task.createdById,
     assigneeIds: task.assignees.map((assignee) => assignee.id),
@@ -76,9 +81,15 @@ export function TaskCard({
         className="absolute inset-0 cursor-pointer rounded-2xl active:scale-[0.995]"
       />
 
+      {/* Compact, the title takes a routine title's text-sm and the line under it
+          the text-xs a routine's date carries — see `compact` above. */}
       <div className="pointer-events-none relative min-w-0 flex-1">
-        <p className="truncate font-medium text-surface-foreground">{task.title}</p>
-        <p className="truncate text-sm text-muted">
+        <p
+          className={`truncate font-medium text-surface-foreground ${compact ? 'text-sm' : ''}`}
+        >
+          {task.title}
+        </p>
+        <p className={`truncate text-muted ${compact ? 'text-xs' : 'text-sm'}`}>
           {dueDate ? `${dueDate} · ` : ''}
           {task.sector.name}
         </p>
@@ -111,11 +122,12 @@ export function TaskCard({
           <ClipboardList className="size-5" aria-hidden />
           {task.subtaskCount > 0 ? (
             <>
-              {/* ring in the row's own backdrop so the dot stays legible against
-                  whatever the icon overlaps. */}
+              {/* The dot alone, with no ring: at this size the halo read as a
+                  second, paler ring around it rather than as separation from the
+                  icon underneath. */}
               <span
                 aria-hidden
-                className="absolute -right-1 -top-1 size-2.5 rounded-full bg-danger ring-2 ring-surface"
+                className="absolute -right-1 -top-1 size-2.5 rounded-full bg-danger"
               />
               <span className="sr-only">{strings.task.hasSubtasks}</span>
             </>

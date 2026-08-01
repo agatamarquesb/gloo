@@ -32,12 +32,11 @@ import {
 import { useLabels } from '@/hooks/queries/labels';
 import { useMe } from '@/hooks/queries/auth';
 import { useUsers } from '@/hooks/queries/users';
-import { FLAT_INPUT, GREEN_UNDERLINE } from '@/theme/fieldStyles';
+import { FLAT_INPUT, TEXT_LISTBOX_ITEM, listboxPopover } from '@/theme/fieldStyles';
 // The property list is shared with the task modal — see theme/propertyRow.ts.
 import {
   LABEL_ICON,
   PROPERTY_LIST,
-  SELECT_POPOVER,
   VALUE_CELL,
   propertyStyles,
 } from '@/theme/propertyRow';
@@ -45,7 +44,14 @@ import { formatTimestamp } from '@/lib/formatDate';
 import { playSound } from '@/lib/sounds';
 import { LABEL_BG_CLASS, LABEL_PILL } from '@/theme/labelColors';
 import {
+  TITLE_FIELD,
   actionPill,
+  dialogBodyFade,
+  dialogClose,
+  dialogFooter,
+  dialogPadding,
+  dialogSection,
+  dialogShape,
   modalDivider,
   modalDividerGap,
   quietTextButton,
@@ -71,18 +77,6 @@ const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => ({
 }));
 
 /**
- * The dialog's horizontal padding, applied to the header, body and footer alike
- * rather than left to HeroUI's own.
- *
- * One value in one place is what makes the whole dialog line up: every rule in
- * it spans the same width, the header's buttons start where the routine's title
- * does, and the footer's buttons end where the content does. `pl`/`pr` rather
- * than `px` because Tailwind emits the long-hand utilities after the shorthand,
- * so these are the ones that win over the component's own padding.
- */
-const DIALOG_PADDING = 'pl-4 pr-4';
-
-/**
  * The gap under the tags, which is bigger than the one above them: they close
  * off the routine's identity, and the schedule below is a new kind of thing.
  */
@@ -104,7 +98,6 @@ const HEADER_STACK_EDIT = 'gap-4';
 const HEADER_ROW_VIEW = 'py-1.5';
 
 /** How long after the last edit an autosave fires. */
-const AUTOSAVE_DELAY_MS = 800;
 
 const ATTACHMENTS_ANCHOR = 'routine-attachments';
 const checklistAnchor = (index: number) => `routine-checklist-${index}`;
@@ -172,10 +165,9 @@ export function RoutineModal({
   /** Anchor id of a block just added, so the dialog can scroll it into view. */
   const [scrollTo, setScrollTo] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    setEditing(!routine && !isTrashed);
-    setForm(
+  /** The routine as a form — what the dialog opens with, and what Cancelar returns to. */
+  const seedForm = useCallback(
+    (): FormState =>
       routine
         ? {
             description: routine.description,
@@ -189,11 +181,17 @@ export function RoutineModal({
             assigneeIds: routine.assignees.map((assignee) => assignee.id),
           }
         : emptyForm(me?.id ?? ''),
-    );
+    [routine, me?.id],
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setEditing(!routine && !isTrashed);
+    setForm(seedForm());
     // isTrashed decides whether the dialog opens unlocked, so a routine opened
     // from the trash and the same one opened from the list have to seed
     // differently — it belongs in the list.
-  }, [isOpen, routine, me?.id, isTrashed]);
+  }, [isOpen, routine, me?.id, isTrashed, seedForm]);
 
   // Adding a block below the fold is invisible without this — the new box is
   // outside the dialog's scroll viewport, so the button appears to do nothing.
@@ -259,18 +257,31 @@ export function RoutineModal({
    */
   const savedRef = useRef('');
   useEffect(() => {
-    if (isOpen) savedRef.current = JSON.stringify(payload);
+    if (isOpen) {
+      savedRef.current = JSON.stringify(payload);
+      discardedRef.current = false;
+    }
     // Deliberately only on open: this is the baseline the dirty check compares
     // against, so it must not follow the form as the user types.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, routine?.id]);
 
+  /**
+   * Set by Cancelar, so the close that follows it writes nothing.
+   *
+   * A flag rather than resetting the baseline: the baseline is a serialised
+   * `payload`, and `payload` only catches up with the reverted form on the next
+   * render — which is after the dialog has already been told to close. Cleared
+   * on open, since the dialog outlives each of its openings.
+   */
+  const discardedRef = useRef(false);
+
   const saveIfDirty = useCallback(() => {
-    // Only for an existing routine — a new one has no id to PATCH, and
-    // autosaving one would litter the list with untitled routines. Never for a
-    // trashed one: nothing about it is editable, so anything this found would be
-    // a bug rather than a change worth keeping.
-    if (!routine || !canSubmit || isTrashed) return;
+    // Only for an existing routine — a new one has no id to PATCH, and saving
+    // one on the way out would litter the list with untitled routines. Never for
+    // a trashed one: nothing about it is editable, so anything this found would
+    // be a bug rather than a change worth keeping.
+    if (discardedRef.current || !routine || !canSubmit || isTrashed) return;
     const serialised = JSON.stringify(payload);
     if (serialised === savedRef.current) return;
 
@@ -278,46 +289,39 @@ export function RoutineModal({
     updateRoutine.mutate({ id: routine.id, ...payload });
   }, [routine, canSubmit, payload, updateRoutine, isTrashed]);
 
-  // Autosave: every edit persists on its own shortly after you stop making it,
-  // so closing the dialog — by any route — never loses work.
-  useEffect(() => {
-    if (!isOpen || !routine || isTrashed) return;
-    const timer = setTimeout(saveIfDirty, AUTOSAVE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [isOpen, routine, isTrashed, saveIfDirty]);
+  /**
+   * The line at the foot of the dialog, and only in the trash: when the routine
+   * was deleted, which is what you want to know when deciding whether to bring
+   * it back. A live routine says nothing — "last changed" was a fact about the
+   * dialog rather than about the routine, and it sat under everything you had
+   * come to read.
+   */
+  const footnote = useMemo(
+    () =>
+      isTrashed && routine?.deletedAt
+        ? `${strings.routine.trash.deletedAt}: ${formatTimestamp(routine.deletedAt)}`
+        : null,
+    [isTrashed, routine?.deletedAt],
+  );
 
   /**
-   * The line at the foot of the dialog: when the routine was last written, or
-   * when it was deleted if that is what it is.
-   *
-   * For the live case the `routine` prop is a snapshot taken when the dialog
-   * opened — the list hands over the object it had — so on its own it would
-   * freeze at the moment of opening while autosave carried on writing behind it.
-   * The PATCH response is the same routine as the server now has it, so the
-   * mutation's last result takes precedence — but only for the routine it
-   * actually belongs to, since the dialog stays mounted between openings and the
-   * result outlives them.
+   * Closing without pressing anything — the header's ×, a click outside, Escape
+   * — keeps the edit: what is on screen is what you meant, so it is written on
+   * the way out. Cancelar is the one route that does not.
    */
-  const saved = updateRoutine.data;
-  const footnote = useMemo(() => {
-    // A trashed routine reports when it went, not when it last changed: nothing
-    // has changed it since, and the date it was deleted is what you want to know
-    // when deciding whether to bring it back.
-    if (isTrashed) {
-      return routine?.deletedAt
-        ? `${strings.routine.trash.deletedAt}: ${formatTimestamp(routine.deletedAt)}`
-        : null;
-    }
-
-    const iso = saved && saved.id === routine?.id ? saved.updatedAt : routine?.updatedAt;
-    return iso
-      ? `${strings.routine.lastUpdated}: ${formatTimestamp(iso)}`
-      : null;
-  }, [isTrashed, saved, routine?.id, routine?.updatedAt, routine?.deletedAt]);
-
-  /** Flushes anything the debounce hasn't written yet, then closes. */
   function handleClose() {
     saveIfDirty();
+    onClose();
+  }
+
+  /**
+   * Cancelar: back to the routine as it stands on the server, and out with
+   * nothing written — see `discardedRef`, which is what stops the way out from
+   * saving the edit this just threw away.
+   */
+  function handleCancel() {
+    discardedRef.current = true;
+    setForm(seedForm());
     onClose();
   }
 
@@ -373,7 +377,7 @@ export function RoutineModal({
   return (
     <Modal.Backdrop isOpen={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <Modal.Container scroll="inside">
-        <Modal.Dialog className="sm:max-w-xl">
+        <Modal.Dialog className={`sm:max-w-[34rem] ${dialogShape} ${dialogPadding}`}>
           {/* No Modal.CloseTrigger: that one positions itself against the
               dialog's corner, which is never quite where the header's own row
               sits. The close button is a member of that row instead — see the
@@ -382,7 +386,7 @@ export function RoutineModal({
           {/* No gap: the rule below the actions carries its own, so that it and
               the one between the content blocks keep the same distance from
               what they separate. */}
-          <Modal.Header className={`flex flex-col ${DIALOG_PADDING}`}>
+          <Modal.Header className={`flex flex-col ${dialogSection}`}>
             {/* The dialog still needs a name for screen readers; the routine's
                 own title carries it visually, so this one is hidden. */}
             <Modal.Heading className="sr-only">
@@ -476,15 +480,14 @@ export function RoutineModal({
                   as Cancelar in the footer — so it wears the same outlined pill
                   rather than the filled green Salvar carries. `ml-auto` puts it
                   on the row's far end, which is the content's right edge. */}
-              <SecondaryButton
-                isIconOnly
-                size="sm"
-                className="ml-auto"
+              <button
+                type="button"
+                className={dialogClose}
                 aria-label={strings.common.close}
-                onPress={handleClose}
+                onClick={handleClose}
               >
                 <X className="size-4" />
-              </SecondaryButton>
+              </button>
             </div>
 
             {/* Closes the action row off from the routine below it — the same
@@ -501,7 +504,7 @@ export function RoutineModal({
               inside the body's own right padding, so nothing visible is clipped
               — and a vertical form should never scroll sideways anyway. */}
           <Modal.Body
-            className={`flex flex-col gap-4 overflow-x-hidden pb-6 ${DIALOG_PADDING} [mask-image:linear-gradient(to_bottom,transparent_0,black_1.25rem,black_calc(100%-1.25rem),transparent_100%)]`}
+            className={`flex flex-col gap-4 overflow-x-hidden ${dialogSection} ${dialogBodyFade}`}
           >
             {/* Title, tags and properties are one group so their spacing can be
                 set together — see HEADER_STACK_EDIT. */}
@@ -527,7 +530,7 @@ export function RoutineModal({
                     <Input
                       fullWidth
                       placeholder={strings.routine.titleLabel}
-                      className={`${FLAT_INPUT} ${GREEN_UNDERLINE} text-xl font-bold`}
+                      className={`${FLAT_INPUT} ${TITLE_FIELD} text-xl font-bold`}
                     />
                   </TextField>
                 ) : (
@@ -567,13 +570,14 @@ export function RoutineModal({
                     </Select.Trigger>
                   </div>
                 </div>
-                <Select.Popover className={SELECT_POPOVER}>
+                <Select.Popover {...listboxPopover}>
                   <ListBox>
                     {Object.values(RoutineRecurrence).map((value) => (
                       <ListBox.Item
                         key={value}
                         id={value}
                         textValue={strings.routine.recurrence[value]}
+                        className={`${TEXT_LISTBOX_ITEM} lowercase`}
                       >
                         {strings.routine.recurrence[value]}
                         <ListBox.ItemIndicator />
@@ -602,10 +606,15 @@ export function RoutineModal({
                       </Select.Trigger>
                     </div>
                   </div>
-                  <Select.Popover className={SELECT_POPOVER}>
+                  <Select.Popover {...listboxPopover}>
                     <ListBox>
                       {WEEKDAYS.map((label, index) => (
-                        <ListBox.Item key={label} id={String(index)} textValue={label}>
+                        <ListBox.Item
+                          key={label}
+                          id={String(index)}
+                          textValue={label}
+                          className={`${TEXT_LISTBOX_ITEM} lowercase`}
+                        >
                           {label}
                           <ListBox.ItemIndicator />
                         </ListBox.Item>
@@ -632,10 +641,15 @@ export function RoutineModal({
                       </Select.Trigger>
                     </div>
                   </div>
-                  <Select.Popover className={SELECT_POPOVER}>
+                  <Select.Popover {...listboxPopover}>
                     <ListBox>
                       {MONTH_DAYS.map((day) => (
-                        <ListBox.Item key={day.value} id={day.value} textValue={day.label}>
+                        <ListBox.Item
+                          key={day.value}
+                          id={day.value}
+                          textValue={day.label}
+                          className={`${TEXT_LISTBOX_ITEM} lowercase`}
+                        >
                           {day.label}
                           <ListBox.ItemIndicator />
                         </ListBox.Item>
@@ -663,7 +677,7 @@ export function RoutineModal({
                     </Select.Trigger>
                   </div>
                 </div>
-                <Select.Popover className={SELECT_POPOVER}>
+                <Select.Popover {...listboxPopover}>
                   <ListBox selectionMode="multiple">
                     {users.map((user) => (
                       <ListBox.Item key={user.id} id={user.id} textValue={user.name}>
@@ -767,7 +781,6 @@ export function RoutineModal({
                     canOpen={!isTrashed}
                     attachments={form.attachments}
                     onChange={(attachments) => set('attachments', attachments)}
-                    onDelete={() => set('attachments', null)}
                   />
                 </div>
               ) : null}
@@ -787,7 +800,7 @@ export function RoutineModal({
               the component's default on top of that left the buttons adrift in a
               band of empty space. */}
           <Modal.Footer
-            className={`flex items-center justify-end gap-2 pt-2 pb-3 ${DIALOG_PADDING}`}
+            className={`flex items-center justify-end gap-2 ${dialogFooter}`}
           >
             {/* From the trash, the way out of the dialog is the header's × —
                 so the footer carries the decision instead, and Recuperar takes
@@ -802,7 +815,7 @@ export function RoutineModal({
               </Button>
             ) : (
               <>
-                <SecondaryButton slot="close">{strings.common.cancel}</SecondaryButton>
+                <SecondaryButton onPress={handleCancel}>{strings.common.cancel}</SecondaryButton>
                 {isEditing ? (
                   <Button
                     className="rounded-full"

@@ -5,6 +5,8 @@ import { playSound } from '@/lib/sounds';
 import {
   blockBox,
   blockBoxBare,
+  blockBoxBareTight,
+  blockBoxTight,
   blockDivider,
   blockLeadColumn,
   blockTitle,
@@ -70,9 +72,22 @@ export function NotesBlock({
 
   return (
     <section
-      className={`${isEditing ? blockBox : blockBoxBare} ${fill ? 'h-full min-h-0' : ''}`}
+      /* Compact, the block starts on its cell's own top edge and its heading
+         takes a property row's height, so the title sits on the same line as
+         "Prioridade" and the note itself begins level with "Deadline" — the two
+         columns read as one set of rows. */
+      className={`${
+        compact
+          ? isEditing
+            ? blockBoxTight
+            : blockBoxBareTight
+          : isEditing
+            ? blockBox
+            : blockBoxBare
+      } ${fill ? 'h-full min-h-0' : ''}`}
     >
       <RichNotes
+        compact={compact}
         isEditing={isEditing}
         value={value}
         onChange={onChange}
@@ -96,9 +111,16 @@ export function NotesBlock({
              Anexos', which means the shared column and the gap that goes with
              it. */
           <div className={`flex flex-1 items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
-            <span className={compact ? 'flex shrink-0 items-center' : blockLeadColumn}>
-              <Pencil className="size-4 text-foreground" aria-hidden />
-            </span>
+            {/* No icon in the compact block: on a task the heading has nothing
+                to line up against — the column that icon sits in exists so a
+                routine's three block headings share a left edge — and dropping
+                it is what lets the note start level with the properties beside
+                it. */}
+            {compact ? null : (
+              <span className={blockLeadColumn}>
+                <Pencil className="size-4 text-foreground" aria-hidden />
+              </span>
+            )}
             {/* Never wrapped: the toolbar shares this row, and a two-line
                 heading beside it pushed the whole block a line taller than the
                 column it has to end level with. */}
@@ -114,14 +136,21 @@ export function NotesBlock({
              blank is easy to miss. */
           <Button
             size="sm"
-            variant="outline"
+            variant="ghost"
             isIconOnly={compact}
             aria-label={strings.routine.clearNotes}
-            className={`h-9 shrink-0 rounded-full ${outlineControl}`}
+            className={
+              compact
+                ? // The broom with nothing round it, at the format buttons' own
+                  // size: an outlined pill beside four bare glyphs was the
+                  // heaviest thing in a row that only labels the note below it.
+                  'size-6 shrink-0 rounded-md p-0 text-muted'
+                : `h-9 shrink-0 rounded-full ${outlineControl}`
+            }
             isDisabled={isNotesEmpty(value)}
             onPress={clear}
           >
-            <BrushCleaning className="size-4" />
+            <BrushCleaning className={compact ? 'size-3.5' : 'size-4'} />
             {compact ? null : strings.routine.clearNotes}
           </Button>
         }

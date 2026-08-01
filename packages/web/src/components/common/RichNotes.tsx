@@ -37,6 +37,7 @@ export function RichNotes({
   /** Rendered at the end of the toolbar, after the formatting buttons. */
   actions,
   contentClassName = '',
+  compact = false,
 }: {
   value: string;
   onChange: (html: string) => void;
@@ -46,6 +47,12 @@ export function RichNotes({
   /** Read-only outside edit mode: no toolbar, no caret. */
   isEditing: boolean;
   actions?: ReactNode;
+  /**
+   * The block in half a dialog's width — see NotesBlock, which passes its own
+   * `compact` straight through. Here it only means the toolbar: smaller glyphs
+   * in tighter buttons, so the row measures no more than the heading it shares.
+   */
+  compact?: boolean;
   /**
    * The area the note is written in. Given `flex-1 min-h-0 overflow-y-auto`, the
    * note scrolls inside the block instead of growing it — which is how the task
@@ -92,7 +99,7 @@ export function RichNotes({
       {/* Heading, then the formatting buttons, then whatever the caller adds —
           the toolbar shares the block's header row rather than taking one of
           its own. */}
-      <div className="flex flex-wrap items-center gap-1">
+      <div className={`flex items-center gap-1 ${compact ? 'h-10 shrink-0' : 'flex-wrap'}`}>
         {title}
 
         {isEditing
@@ -102,16 +109,18 @@ export function RichNotes({
               // readable at all.
               <span key={command} title={label}>
                 {/* Ghost and icon-only: a toolbar of filled buttons would
-                    outweigh the note it formats. */}
+                    outweigh the note it formats. Compact, they come down again
+                    to the size of the heading beside them — the row is a label
+                    for the note, not a control panel over it. */}
                 <Button
                   isIconOnly
                   size="sm"
                   variant="ghost"
-                  className="text-muted"
+                  className={compact ? 'size-6 rounded-md p-0 text-muted' : 'text-muted'}
                   aria-label={label}
                   onPress={() => run(command)}
                 >
-                  <Icon className="size-4" />
+                  <Icon className={compact ? 'size-3.5' : 'size-4'} />
                 </Button>
               </span>
             ))

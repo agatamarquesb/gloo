@@ -10,7 +10,7 @@
  * the task modal inherits it by construction instead of by copy.
  */
 
-import { FLAT_SELECT_TRIGGER, NO_FIELD_BORDER } from './fieldStyles';
+import { FLAT_SELECT_TRIGGER, NO_FIELD_BORDER, OPEN_FIELD_GROUND } from './fieldStyles';
 
 export const PROPERTY_LIST = 'flex flex-col';
 
@@ -65,7 +65,7 @@ export const ROW_PADDING_VIEW = 'py-0.5';
  * it short of the column. Rather than fight that from outside the component, the
  * control is widened by exactly that inset so the chevron lands on the edge.
  */
-export const BARE_TRIGGER = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} w-[calc(100%+0.5rem)] items-center gap-1 pr-6 pl-0 text-left`;
+export const BARE_TRIGGER = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FIELD_GROUND} w-[calc(100%+0.5rem)] items-center gap-1 pr-6 pl-0 text-left`;
 
 /**
  * The trigger's height, which sets the row's. Locked it comes down to just clear
@@ -100,9 +100,6 @@ export const VIEW_UNDIMMED = 'opacity-100! data-[disabled=true]:opacity-100!';
  * chevron's inset and the column itself must not.
  */
 export const VALUE_CELL = 'w-full';
-
-/** The dropdown itself, squared off a little from HeroUI's default. */
-export const SELECT_POPOVER = 'rounded-xl';
 
 /** Labels carry the icon, not the control — the value stays plain text. */
 export const FIELD_LABEL = 'flex shrink-0 items-center gap-2 text-sm text-muted';

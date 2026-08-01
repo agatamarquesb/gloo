@@ -26,6 +26,9 @@ const ROUTINE_LEAD_DAYS = 2;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DISMISSED_KEY = 'gloo-dismissed-notifications';
 
+/** How long the bell stays quiet after it has chimed — see the effect below. */
+const CHIME_QUIET_MS = 10 * 60 * 1000;
+
 export type NotificationKind = 'TASK_OVERDUE' | 'ROUTINE_DUE_SOON';
 
 /** What the notification's "view" action opens. Carries the entity, not a route. */
@@ -138,14 +141,21 @@ export function useNotifications(): {
   );
 
   /**
-   * Sounds an arrival, once per notification.
+   * Sounds an arrival — once, however many arrived, and at most once in ten
+   * minutes.
    *
    * Notifications are derived rather than pushed, so "new" has to be worked out
    * here: any id in the current set that was not in the last one. The very first
    * pass only records what is already there — opening the app to four overdue
    * tasks should not play four chimes for things that were waiting anyway.
+   *
+   * Three tasks falling due together are one arrival, not three, because the
+   * chime fires for the batch rather than per id. And the quiet window after it
+   * is what stops a tab left open all afternoon from chiming its way through the
+   * day: the notifications themselves still appear, only the sound waits.
    */
   const seen = useRef<Set<string> | null>(null);
+  const chimedAt = useRef(0);
   useEffect(() => {
     const ids = new Set(notifications.map((notification) => notification.id));
 
@@ -156,9 +166,12 @@ export function useNotifications(): {
 
     const previous = seen.current;
     seen.current = ids;
-    if (notifications.some((notification) => !previous.has(notification.id))) {
-      playSound('notification');
-    }
+
+    const isNew = notifications.some((notification) => !previous.has(notification.id));
+    if (!isNew || Date.now() - chimedAt.current < CHIME_QUIET_MS) return;
+
+    chimedAt.current = Date.now();
+    playSound('notification');
   }, [notifications]);
 
   return { notifications, dismiss };

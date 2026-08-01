@@ -42,6 +42,100 @@ export const NO_FIELD_BORDER =
 export const BUTTON_LIKE_FIELD = 'border [--field-border:var(--outline-control)]';
 
 /**
+ * How every list popover in the app is opened — the status dropdown on a task
+ * row, the property selects in both modals, the filter bar's.
+ *
+ * `offset: 0` is the whole point: HeroUI floats a popover 8px below its trigger,
+ * and that gap is what made the list read as a separate panel that happened to
+ * be nearby. Closed up, and with the joining corners squared off in globals.css,
+ * the field and its options are one object — the field on top, the list under
+ * it, a hairline between them.
+ *
+ * `bottom start` so the two share a left edge; anchored anywhere else there is
+ * nothing to join.
+ *
+ * Everything else about the panel — the radius, the hairline, the glass — is in
+ * globals.css, on the popover classes themselves, so a list that forgets to
+ * spread this still looks right and only loses the join.
+ */
+export const listboxPopover = { offset: 0, placement: 'bottom start' } as const;
+
+/**
+ * A list option that *is* a pill — the status dropdown, the priority one.
+ *
+ * Nothing but the tap area around it: the pill carries the colour and the shape,
+ * and anything drawn behind or around it (HeroUI's grey `bg-default` on hover,
+ * a mark on the current one) reads as a second shape wrapped round the first.
+ * So hover and selected are both cleared, and what tells the options apart is
+ * the pills themselves — the same pills you are looking at on the row.
+ */
+export const PILL_LISTBOX_ITEM =
+  'cursor-pointer rounded-full border-0 px-3 py-1.5 hover:bg-transparent data-[hovered=true]:bg-transparent data-[selected=true]:bg-transparent';
+
+/**
+ * A list option that is a line of text — recurrence, the day of the week, a
+ * sector.
+ *
+ * Three things it takes from HeroUI's own: no vertical padding and no minimum
+ * height, so the hover is the height of the line rather than a 36px band around
+ * it; a small radius instead of a 16px capsule, matching the panel it sits in;
+ * and a fill half as strong, since a solid grey behind one option of four made
+ * the list look like it had already been chosen from.
+ */
+export const TEXT_LISTBOX_ITEM = [
+  'min-h-0 rounded-md px-2 py-0',
+  'hover:bg-default/50 data-[hovered=true]:bg-default/50',
+].join(' ');
+
+/**
+ * Marks a panel that carries its own field inside it rather than joining the one
+ * on the page — the status dropdown, which lays its own copy of the chip over
+ * the trigger (see TaskStatusChipSelect).
+ *
+ * It exists to opt out of the squared-off top edge in globals.css: that edge is
+ * there to meet a field above, and a panel that already contains its field has
+ * nothing to meet — it is one box and keeps all four corners.
+ */
+export const PANEL_OWNS_FIELD = 'gloo-owns-field';
+
+/**
+ * The same panel for a popover that is not a list — the property rows' calendar
+ * and the project message.
+ *
+ * Their geometry is in globals.css only for the popovers that hold a `.list-box`,
+ * which these do not; the classes here say the same thing from the outside. The
+ * `data-placement` variants are the join: whichever edge faces the field loses
+ * its rounding, and with `offset: 0` the two meet along one line.
+ */
+export const FIELD_PANEL = [
+  'rounded-[8px] border border-border/50 shadow-[0_8px_20px_-12px_rgb(0_0_0/0.25)]',
+  'data-[placement=bottom]:rounded-t-none data-[placement=top]:rounded-b-none',
+].join(' ');
+
+/**
+ * A field that grows a ground while its list is open.
+ *
+ * For the chrome-less triggers — the modals' property rows, which are values you
+ * can change rather than form controls. Open, the value needs to read as the
+ * field the list belongs to, and it is the fill that says so; closed, it goes
+ * back to being a line of text. Its bottom corners square off to meet the panel.
+ *
+ * Fields that already carry their own fill (the filter bar's, the create form's)
+ * need none of this — they look like fields the whole time.
+ */
+/**
+ * The `-ml-2 pl-2` pair is what keeps the value where it was: these triggers
+ * start on their column's own left edge (`pl-0`, see BARE_TRIGGER), so a ground
+ * drawn straight onto them would touch the first letter. The negative margin
+ * grows the fill 8px to the left and the padding gives that 8px back to the
+ * text, so the ground gets its inset and nothing moves as the list opens.
+ */
+export const OPEN_FIELD_GROUND = [
+  'aria-expanded:rounded-t-md aria-expanded:rounded-b-none aria-expanded:bg-default/60',
+  'aria-expanded:-ml-2 aria-expanded:pl-2',
+].join(' ');
+
+/**
  * Turns a field into a single green rule under the text — the app's marker for
  * "this line is editable", used by the routine title and the checklist title.
  */

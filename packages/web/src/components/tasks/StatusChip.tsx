@@ -10,15 +10,16 @@ import { strings } from '@/strings/pt-BR';
  * same swatch cannot stand for a status and a sector on one page.
  *
  * Tailwind classes rather than HeroUI `color` values because this isn't one of
- * HeroUI's semantic slots. Black text on all four, which the lighter grounds
- * carry comfortably in either theme.
+ * HeroUI's semantic slots. The label is the fill's own hue taken down until it
+ * carries — see --status-*-text — so the word is the colour it means, and the
+ * dot with it.
  */
-const OVERDUE_CLASS = 'bg-status-overdue text-black';
+const OVERDUE_CLASS = 'bg-status-overdue text-status-overdue-text';
 
 const STATUS_CLASS: Record<TaskStatus, string> = {
-  TODO: 'bg-status-todo text-black',
-  IN_PROGRESS: 'bg-status-progress text-black',
-  DONE: 'bg-status-done text-black',
+  TODO: 'bg-status-todo text-status-todo-text',
+  IN_PROGRESS: 'bg-status-progress text-status-progress-text',
+  DONE: 'bg-status-done text-status-done-text',
   // The status somebody set and the lateness a passed due date implies are one
   // thing to the reader, so they wear one colour.
   OVERDUE: OVERDUE_CLASS,
@@ -36,17 +37,21 @@ const STATUS_CLASS: Record<TaskStatus, string> = {
  * the filter pills and the dropdown, where sentence case is right.
  */
 /**
- * `leading-none` is what makes the dot and the label read as centred together.
- *
- * Both are centred in the same box by `items-center`, so they cannot disagree —
- * but with the default line height that box is taller than the letters, carrying
- * ascender and descender room a word like "fazer" never uses, and its centre is
- * not the letters' centre. Collapsing the line height to the glyphs puts the two
- * within a hair of each other. `py-1` gives back the height that removes, so the
- * pill is the same size it was.
+ * `leading-none` collapses the label's line box to its own type size, and `py-1`
+ * gives back the height that removes so the pill measures the same.
  */
-const STATUS_PILL =
+export const STATUS_PILL =
   'inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-1 text-xs leading-none whitespace-nowrap lowercase';
+
+/**
+ * How tall that comes to: `py-1` twice over the 12px of `text-xs`, which
+ * `leading-none` holds to its own type size.
+ *
+ * A number rather than a class because TaskStatusChipSelect has to position a
+ * panel against it in pixels — see the offsets there, which lay the dropdown's
+ * own copy of the chip exactly over this one.
+ */
+export const STATUS_PILL_HEIGHT = 20;
 
 /**
  * The dot before the label, in the pill's own text colour at half strength.
@@ -55,9 +60,24 @@ const STATUS_PILL =
  * through both themes for free, and reads as a darker shade of the pill it sits
  * on either way.
  */
-const DOT = 'size-1.5 shrink-0 rounded-full bg-current opacity-50';
+export const DOT = 'size-1.5 shrink-0 rounded-full bg-current opacity-50';
 
 /**
+ * The optical nudge that puts the label on the dot's own centre line.
+ *
+ * `items-center` centres the two boxes, which is not the same as centring what
+ * you see: a font's ascent is taller than its descent, so the letters sit low in
+ * their line box by roughly the difference — about a pixel here, which is
+ * exactly the drop that made the dot look like it was floating above the word.
+ * Expressed in `em` so it holds if the pill is ever set at another size.
+ */
+export const LABEL_OPTICAL_LIFT = '-translate-y-[0.08em]';
+
+/**
+ * The **botão de status** — the app's one name for this design, wherever it
+ * appears: a task row, the task modal, the dropdown that changes a status. A
+ * small capsule in the status colour, a dot, and the status in lower case.
+ *
  * A plain span rather than HeroUI's Chip: the Chip brought its own type scale
  * and its own padding, and inside a Select trigger it was stretched to the
  * trigger's `min-h-9` besides.
@@ -73,7 +93,7 @@ export function StatusChip({ status, isOverdue }: { status: TaskStatus; isOverdu
   return (
     <span className={`${STATUS_PILL} ${showOverdue ? OVERDUE_CLASS : STATUS_CLASS[status]}`}>
       <span aria-hidden className={DOT} />
-      {label}
+      <span className={LABEL_OPTICAL_LIFT}>{label}</span>
     </span>
   );
 }
