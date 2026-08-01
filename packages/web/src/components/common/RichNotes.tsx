@@ -32,6 +32,7 @@ export function RichNotes({
   value,
   onChange,
   placeholder,
+  ariaLabel,
   title,
   isEditing,
   /** Rendered at the end of the toolbar, after the formatting buttons. */
@@ -42,6 +43,12 @@ export function RichNotes({
   value: string;
   onChange: (html: string) => void;
   placeholder: string;
+  /**
+   * What the field is called, for a screen reader. The placeholder does that job
+   * when it reads as one ("Notas sobre esta rotina"); a task's says the note is
+   * empty rather than what it is for, so that one is named separately.
+   */
+  ariaLabel?: string;
   /** The block's heading, kept on the same row as the toolbar. */
   title: ReactNode;
   /** Read-only outside edit mode: no toolbar, no caret. */
@@ -133,8 +140,16 @@ export function RichNotes({
           starts — the note is the block's content, so it runs the full width
           rather than hanging off the word above it. */}
       <div className={`relative ${contentClassName}`}>
+        {/* Compact, the placeholder is an empty state rather than a prompt, and
+            takes the size Anexos' own "nothing here" line has — the two sit side
+            by side in the task modal and used to say the same thing at two
+            different sizes. */}
         {isNotesEmpty(value) ? (
-          <span className="pointer-events-none absolute top-0 left-0 text-sm text-muted">
+          <span
+            className={`pointer-events-none absolute top-0 left-0 text-muted ${
+              compact ? 'text-xs' : 'text-sm'
+            }`}
+          >
             {placeholder}
           </span>
         ) : null}
@@ -147,7 +162,7 @@ export function RichNotes({
         <div role="textbox"
           ref={editorRef}
           aria-multiline="true"
-          aria-label={placeholder}
+          aria-label={ariaLabel ?? placeholder}
           contentEditable={isEditing}
           suppressContentEditableWarning
           onInput={(event) => onChange(event.currentTarget.innerHTML)}

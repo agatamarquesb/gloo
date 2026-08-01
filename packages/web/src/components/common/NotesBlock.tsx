@@ -92,6 +92,7 @@ export function NotesBlock({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
+        ariaLabel={title}
         // Thin, and only while there is something to scroll: a permanent bar
         // down the side of an empty note reads as a broken box.
         //

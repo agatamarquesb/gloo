@@ -16,17 +16,16 @@ export const blockBox = 'flex flex-col gap-3 rounded-2xl p-3';
 /**
  * The same block, closed up, for the task modal's left-hand note.
  *
- * It starts on its cell's own top edge — no padding there — and the gap under
- * the heading is cut to 10px, which is what puts the note's first line level
- * with the deadline in the column beside it. Its own constant rather than extra
- * classes on `blockBox`: two `gap-*` utilities on one element leave which of
- * them wins to stylesheet order, and the losing one was the 12px gap this exists
- * to remove.
+ * It starts on its cell's own top edge — no padding there — which is what puts
+ * the note's first line level with the deadline in the column beside it. The gap
+ * under the heading is the same 12px every other block gives its own: Notas and
+ * Anexos sit side by side in the task modal, and a heading that sat 2px closer
+ * to what it heads on one side than on the other was visible across the gutter.
  */
-export const blockBoxTight = 'flex flex-col gap-2.5 rounded-2xl px-3 pt-0 pb-3';
+export const blockBoxTight = 'flex flex-col gap-3 rounded-2xl px-3 pt-0 pb-3';
 
 /** And the locked version of it, which has no frame to pad. */
-export const blockBoxBareTight = 'flex flex-col gap-2.5';
+export const blockBoxBareTight = 'flex flex-col gap-3';
 
 /**
  * The same blocks once the routine modal is locked. Reading a routine is not
@@ -84,6 +83,32 @@ export const blockLeadColumn = 'flex w-5 shrink-0 items-center justify-center';
 export function blockTitle(isEditing: boolean): string {
   return isEditing ? 'text-sm font-medium' : 'text-sm font-bold';
 }
+
+/**
+ * The three pieces of a block that lists things — its heading row, the list, and
+ * a row in it. Shared by Anexos and a task's Subtarefas because in the task
+ * modal those two sit side by side, one per column, and have to read as one set
+ * of rows across the dialog: same heading height, same pitch, same row height,
+ * whichever of them happens to hold more.
+ *
+ * The heights are minimums rather than fixed, so a wrapped subtask still grows
+ * its own row. The number is an icon-only `size="sm"` button — the tallest thing
+ * either row holds, and the one control both blocks have — so a row without one
+ * (a locked subtask, which is only text and a checkbox) keeps the same pitch as
+ * a row with one, and the two lists stay level however each is filled.
+ */
+export const blockHeaderRow = 'flex min-h-9 items-center gap-2 md:min-h-8';
+export const blockRowList = 'flex flex-col gap-1';
+export const blockRow = 'flex min-h-9 items-center gap-3 md:min-h-8';
+
+/**
+ * A trailing control in one of those rows — a subtask's checkbox and its ×, an
+ * attachment's pencil and bin. The column is that same button's width, so
+ * controls of different natural sizes still stack into straight columns down the
+ * right of the block, and the distance between two of them is the row's gap
+ * whichever pair of controls the row happens to hold.
+ */
+export const blockActionColumn = 'flex w-9 shrink-0 items-center justify-center md:w-8';
 
 /**
  * The app's one "sitting on the card" surface: a routine row's fill, the disc in

@@ -12,7 +12,10 @@ import { BUTTON_LIKE_FIELD, FLAT_INPUT } from '@/theme/fieldStyles';
 import {
   blockBox,
   blockBoxBare,
+  blockHeaderRow,
   blockLeadColumn,
+  blockRow,
+  blockRowList,
   blockTitle,
   outlineControl,
 } from '@/theme/styleConstants';
@@ -251,7 +254,7 @@ export function AttachmentsBlock({
     // heading to what it heads, and Notas, the checklists and this one all have
     // to sit at the same one.
     <section className={isEditing ? blockBox : blockBoxBare}>
-      <div className="flex items-center gap-2">
+      <div className={blockHeaderRow}>
         {/* The shared column, so this heading starts exactly where Notas' and a
             checklist's titles do. */}
         <span className={blockLeadColumn}>
@@ -324,7 +327,7 @@ export function AttachmentsBlock({
       {attachments.length === 0 ? (
         <p className="text-xs text-muted">{strings.attachment.empty}</p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul className={blockRowList}>
           {attachments.map((attachment) => {
             const Icon = ICON_BY_KIND[attachment.kind];
             return (
@@ -334,7 +337,7 @@ export function AttachmentsBlock({
               // column by a couple of pixels either side, which eats into the
               // gap. The extra puts the visible distance from tile to title back
               // on a par with a checklist's checkbox to its item.
-              <li key={attachment.id} className="flex items-center gap-3">
+              <li key={attachment.id} className={blockRow}>
                 {/* Centred on the shared lead column rather than sized to it:
                     the tile is wider than the column and overhangs it evenly, so
                     it still sits under the Paperclip in the heading while every

@@ -64,7 +64,12 @@ export const strings = {
     editing: 'Editando',
     lastUpdated: 'Última alteração',
     notesTitle: 'Visão geral',
-    notesPlaceholder: 'Notas sobre esta tarefa',
+    /**
+     * Phrased as an empty state rather than as an instruction, and set at the
+     * same size as "Nenhum anexo por aqui": the two blocks sit side by side in
+     * the modal and an empty one should read the same way on both sides.
+     */
+    notesPlaceholder: 'Nenhuma anotação por aqui :(',
     subtasksTitle: 'Subtarefas',
     addSubtask: 'Adicionar subtarefa',
     subtaskPlaceholder: 'Subtarefa',

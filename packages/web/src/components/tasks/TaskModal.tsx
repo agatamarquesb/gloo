@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import {
   Building2,
   CalendarDays,
@@ -15,12 +23,12 @@ import {
   X,
 } from 'lucide-react';
 import { parseDate, type CalendarDate } from '@internationalized/date';
-import { Button, Calendar, Input, Label, ListBox, Modal, Popover, Select } from '@heroui/react';
+import { Button, Calendar, Label, ListBox, Modal, Popover, Select } from '@heroui/react';
 // react-aria's own Button, not HeroUI's, for the two properties that open
 // something other than a dropdown: HeroUI's carries its own padding, radius and
 // hover fill, and all three are exactly what a bare property value must not
 // have. This one is a press target and nothing else.
-import { Button as AriaButton, TextField } from 'react-aria-components';
+import { Button as AriaButton, TextArea, TextField } from 'react-aria-components';
 
 import {
   TaskPriority,
@@ -42,13 +50,7 @@ import { useUsers } from '@/hooks/queries/users';
 import { formatDay } from '@/lib/formatDate';
 import { canMutateEntity } from '@/lib/permissions';
 import { playSound } from '@/lib/sounds';
-import {
-  FIELD_PANEL,
-  FLAT_INPUT,
-  PILL_LISTBOX_ITEM,
-  TEXT_LISTBOX_ITEM,
-  listboxPopover,
-} from '@/theme/fieldStyles';
+import { FIELD_PANEL, PILL_LISTBOX_ITEM, TEXT_LISTBOX_ITEM, listboxPopover } from '@/theme/fieldStyles';
 import {
   EMPTY_VALUE,
   LABEL_ICON,
@@ -59,14 +61,12 @@ import {
   propertyStyles,
 } from '@/theme/propertyRow';
 import {
-  TITLE_FIELD,
   dialogBodyFade,
   dialogClose,
   dialogFooter,
   dialogPadding,
   dialogSection,
   dialogShape,
-  dialogTitleGap,
   modalDivider,
   modalDividerGap,
   quietTextButton,
@@ -77,6 +77,12 @@ import { PriorityChip } from './PriorityChip';
 import { TaskProgressBar } from './TaskProgressBar';
 import { TaskStatusChipSelect } from './TaskStatusChipSelect';
 import { TaskSubtasks } from './TaskSubtasks';
+import {
+  readPropertyOrder,
+  reorderProperties,
+  writePropertyOrder,
+  type TaskPropertyKey,
+} from './taskPropertyOrder';
 
 const PRIORITY_OPTIONS: TaskPriority[] = [
   TaskPriority.LOW,
@@ -94,8 +100,14 @@ const PRIORITY_OPTIONS: TaskPriority[] = [
  * dialog, and a note that grew with what was typed would drag its side of that
  * line down the page. So the properties set the height, and Notas scrolls inside
  * whatever is left. Below `md` the columns are stacked and each takes its own.
+ *
+ * A minimum rather than a fixed height, and on both cells: dragging a property
+ * opens a gap the size of a row, which is the one thing that makes this half
+ * taller than its seven rows. Fixed, the list ran out past the rule and over the
+ * subtasks under it; as a minimum the row grows, both cells stretch with it, and
+ * the two rules — each on its own cell's bottom edge — stay one line.
  */
-const TOP_COLUMN_HEIGHT = 'md:h-[18.5rem]';
+const TOP_COLUMN_HEIGHT = 'md:min-h-[18.5rem]';
 
 /**
  * The property rows on their own, without that closing rem: seven rows at
@@ -111,6 +123,50 @@ const PROPERTY_ROWS_HEIGHT = 'md:h-[17.5rem]';
  */
 const PROPERTY_VALUE = 'text-sm text-foreground';
 const PROPERTY_VALUE_LOWER = `${PROPERTY_VALUE} lowercase`;
+
+/**
+ * The task's name, in both of its states — the heading you read and the field
+ * you type in. One class so the two are the same block of text and switching
+ * between them moves nothing: same size, same measure, and wrapping rather than
+ * running on, since the title now takes the left column's width and a long one
+ * has to come down onto a second line instead of crossing the gutter.
+ *
+ * The weight is deliberately absent: bold at rest, plain while being typed —
+ * see the title below.
+ */
+const TITLE_TEXT = 'block w-full min-w-0 text-xl break-words text-foreground';
+
+/**
+ * The distance from the title to the two columns under it — half what the body's
+ * own `gap-4` gave it, which read as a band of empty dialog rather than as
+ * spacing. On the title's cell rather than as the grid's row gap, because the
+ * row below it closes against its own rules and must keep none.
+ */
+const TITLE_GAP = 'pb-2';
+
+/**
+ * Where the rule between the columns starts.
+ *
+ * It runs from above the title now rather than from the properties, so the two
+ * halves of the dialog are divided all the way up. The clearance it keeps from
+ * the header's rule is the same 24px it keeps from the rules either side of it
+ * lower down — the gutter's own width — so the line reads as inset by one
+ * distance wherever it approaches another.
+ *
+ * 12px here, because the body already starts 12px under that rule; measured
+ * rather than assumed, since that 12 is the header's own spacing and not
+ * something this file sets.
+ */
+const COLUMN_RULE_TOP = 'md:mt-3';
+
+/**
+ * The gap a dragged property opens where it will land.
+ *
+ * Nothing but space: no rule, no dashed outline, no fill on the row it is
+ * hovering. A property list is read as a column of labels, and a box drawn
+ * around a hole in it read as an eighth property.
+ */
+const DROP_GAP = 'pointer-events-none';
 
 /**
  * A property whose value opens a popover rather than a dropdown — the deadline
@@ -415,6 +471,43 @@ function TaskModalContent({
   const [isEditing, setEditing] = useState(false);
 
   /**
+   * Whether the caret is in the title.
+   *
+   * The title is bold — it is what the task is called — and a bold field being
+   * typed into looks like a heading that has started moving. So it drops to a
+   * plain weight while it holds the caret and goes back to bold the moment it
+   * loses it, whether that was Salvar, a click elsewhere in the dialog, or a
+   * click on anything else at all.
+   */
+  const [isTitleFocused, setTitleFocused] = useState(false);
+
+  /** Locking the dialog takes the caret out of the title with it. */
+  useEffect(() => {
+    if (!isEditing) setTitleFocused(false);
+  }, [isEditing]);
+
+  /**
+   * The order the properties are read in, and the drag that rearranges them —
+   * the same gesture as a task row on the Dashboard, and the same rules: the
+   * whole row is the handle, the row being dragged fades, and a space the size
+   * of it opens on the edge it will land against. See taskPropertyOrder.
+   */
+  const [propertyOrder, setPropertyOrder] = useState<TaskPropertyKey[]>(readPropertyOrder);
+  const [dragKey, setDragKey] = useState<TaskPropertyKey | null>(null);
+  const [overKey, setOverKey] = useState<TaskPropertyKey | null>(null);
+  const [dragHeight, setDragHeight] = useState(0);
+
+  function handlePropertyDrop(targetKey: TaskPropertyKey) {
+    if (dragKey && dragKey !== targetKey) {
+      const next = reorderProperties(propertyOrder, dragKey, targetKey);
+      setPropertyOrder(next);
+      writePropertyOrder(next);
+    }
+    setDragKey(null);
+    setOverKey(null);
+  }
+
+  /**
    * Seeded once per task rather than on every server copy: autosave means the
    * server answers each keystroke's PATCH with a fresh task object, and
    * re-seeding from those would overwrite whatever was typed while one was in
@@ -525,6 +618,206 @@ function TaskModalContent({
     setEditing(false);
   }
 
+  /**
+   * The seven property rows, by name rather than in order: the order is the
+   * user's (see `propertyOrder`), so the list below picks them out one at a time
+   * instead of holding them in the sequence they happen to be written in.
+   */
+  const propertyRows: Record<TaskPropertyKey, ReactNode> = {
+    priority: (
+      <Select
+        isDisabled={!isEditing}
+        className={undimmed}
+        value={form.priority}
+        onChange={(key) => set('priority', String(key) as TaskPriority)}
+      >
+        <div className={row}>
+          <Label className={fieldLabel}>
+            <Flag className={LABEL_ICON} aria-hidden />
+            {strings.task.fields.priority}
+          </Label>
+          <div className={VALUE_CELL}>
+            {/* The chosen pill, not its name in text: the options are pills, so
+                the field has to be the same object or picking one looks like it
+                did nothing. Same reasoning as the status row, which has read
+                this way all along. */}
+            <Select.Trigger className={trigger}>
+              <PriorityChip priority={form.priority} />
+              {isEditing ? <Select.Indicator /> : null}
+            </Select.Trigger>
+          </div>
+        </div>
+        {/* The options are pills, like the status dropdown's: priority is the
+            other property on this list that is a fixed set of named steps, and
+            reading it as a colour is faster than reading it as a word. No tick
+            beside the current one — see STATUS_ITEM in TaskStatusChipSelect for
+            why a mark behind a pill reads as a second shape around it. */}
+        <Select.Popover {...listboxPopover}>
+          <ListBox>
+            {PRIORITY_OPTIONS.map((priority) => (
+              <ListBox.Item
+                key={priority}
+                id={priority}
+                textValue={strings.task.priority[priority]}
+                className={PILL_LISTBOX_ITEM}
+              >
+                <PriorityChip priority={priority} />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
+    ),
+
+    deadline: (
+      <div className={row}>
+        <span className={fieldLabel}>
+          <CalendarDays className={LABEL_ICON} aria-hidden />
+          {strings.task.fields.deadline}
+        </span>
+        <div className={VALUE_CELL}>
+          <DeadlineValue
+            isEditing={isEditing}
+            value={form.dueDate}
+            onChange={(dueDate) => set('dueDate', dueDate)}
+            triggerClass={trigger}
+          />
+        </div>
+      </div>
+    ),
+
+    sector: (
+      <Select
+        isDisabled={!isEditing}
+        className={undimmed}
+        value={form.sectorId}
+        onChange={(key) => set('sectorId', String(key))}
+      >
+        <div className={row}>
+          <Label className={fieldLabel}>
+            <Building2 className={LABEL_ICON} aria-hidden />
+            {strings.task.fields.sector}
+          </Label>
+          <div className={VALUE_CELL}>
+            <Select.Trigger className={trigger}>
+              <span className={`truncate ${PROPERTY_VALUE_LOWER}`}>{sectorName}</span>
+              {isEditing ? <Select.Indicator /> : null}
+            </Select.Trigger>
+          </div>
+        </div>
+        <Select.Popover {...listboxPopover}>
+          <ListBox>
+            {sectors.map((sector) => (
+              <ListBox.Item
+                key={sector.id}
+                id={sector.id}
+                textValue={sector.name}
+                // Lower case here as well as on the trigger: the value and the
+                // option that sets it are the same word, and it changed case
+                // between them.
+                className={`${TEXT_LISTBOX_ITEM} lowercase`}
+              >
+                {sector.name}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
+    ),
+
+    project: (
+      <div className={row}>
+        <span className={fieldLabel}>
+          <FolderKanban className={LABEL_ICON} aria-hidden />
+          {strings.task.fields.project}
+        </span>
+        <div className={VALUE_CELL}>
+          <ProjectValue isEditing={isEditing} triggerClass={trigger} />
+        </div>
+      </div>
+    ),
+
+    // Live in both modes, like a routine's checkboxes: moving a task along is
+    // using it, not editing it — and it is the one property you can also change
+    // from a task row without opening anything. Changing it to "Em andamento"
+    // starts the clock behind the productivity chart; nothing here says so, by
+    // design.
+    status: (
+      <div className={row}>
+        <span className={fieldLabel}>
+          <CircleDot className={LABEL_ICON} aria-hidden />
+          {strings.task.fields.status}
+        </span>
+        <div className={VALUE_CELL}>
+          <TaskStatusChipSelect
+            status={task.status}
+            isOverdue={task.isOverdue}
+            isDisabled={!canEdit}
+            onChange={(status: TaskStatus) => updateStatus.mutate(status)}
+          />
+        </div>
+      </div>
+    ),
+
+    assignee: (
+      <Select
+        selectionMode="multiple"
+        isDisabled={!isEditing}
+        className={undimmed}
+        value={form.assigneeIds}
+        onChange={(keys) => set('assigneeIds', (keys as (string | number)[]).map(String))}
+      >
+        <div className={row}>
+          <Label className={fieldLabel}>
+            <UserRound className={LABEL_ICON} aria-hidden />
+            {strings.task.fields.assignee}
+          </Label>
+          <div className={VALUE_CELL}>
+            <Select.Trigger className={trigger}>
+              <AssigneeValue users={assignees} canAdd={isEditing && assignees.length > 0} />
+              {isEditing && assignees.length === 0 ? <Select.Indicator /> : null}
+            </Select.Trigger>
+          </div>
+        </div>
+        <Select.Popover {...listboxPopover}>
+          <ListBox selectionMode="multiple">
+            {users.map((user) => (
+              <ListBox.Item key={user.id} id={user.id} textValue={user.name}>
+                <span className="flex items-center gap-2">
+                  <UserAvatar
+                    name={user.name}
+                    avatarUrl={user.avatarUrl}
+                    size="sm"
+                    className="size-5"
+                  />
+                  {user.name}
+                </span>
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
+    ),
+
+    // Read-only in both modes: progress is what the subtasks below come to, so
+    // it is set by ticking them off rather than here.
+    progress: (
+      <div className={row}>
+        <span className={fieldLabel}>
+          <Gauge className={LABEL_ICON} aria-hidden />
+          {strings.task.fields.progress}
+        </span>
+        <div className={VALUE_CELL}>
+          {/* The full value cell, so the bar and the count together end on the
+              same line as the dropdown above them opens to. */}
+          <TaskProgressBar value={task.progress} className="w-full" />
+        </div>
+      </div>
+    ),
+  };
+
   return (
     <Modal.Dialog className={`sm:max-w-[52rem] ${dialogShape} ${dialogPadding}`}>
       {/* No Modal.CloseTrigger: that one positions itself against the dialog's
@@ -595,221 +888,161 @@ function TaskModalContent({
           propagates up as a horizontal scrollbar. The mask fades the scroll
           edges so long content doesn't end in a hard cut at the margins. */}
       <Modal.Body
-        className={`flex flex-col overflow-x-hidden ${dialogTitleGap} ${dialogSection} ${dialogBodyFade}`}
+        className={`flex flex-col overflow-x-hidden ${dialogSection} ${dialogBodyFade}`}
       >
-        {/* The title spans both columns: it is what the task *is*, and the two
-            columns below are only how the rest of it is arranged. */}
-        {isEditing ? (
-          <TextField
-            aria-label={strings.task.fields.title}
-            value={form.title}
-            onChange={(title) => set('title', title)}
-            className="min-w-0"
-          >
-            <Input
-              fullWidth
-              placeholder={strings.task.fields.title}
-              className={`${FLAT_INPUT} ${TITLE_FIELD} text-xl font-bold`}
-            />
-          </TextField>
-        ) : (
-          <h2 className="min-w-0 text-xl font-bold text-foreground">{form.title}</h2>
-        )}
+        {/* Two columns from `md` up, stacked below it — and three rows: the
+            task's name, over what it *is*, over what it *carries*, on the left;
+            its notes over its files on the right.
 
-        {/* Two columns from `md` up, stacked below it — and two rows: what the
-            task *is* over what it *carries*, on the left, against its notes over
-            its files on the right.
+            One grid rather than two columns of their own, because the blocks
+            have to line up across as well as down: the rule under the properties
+            and the rule under Notas are the same line, and they only stay one
+            line if both cells belong to the same row. The middle column is the
+            vertical rule itself, spanning all three rows.
 
-            One grid rather than two columns of their own, because the four
-            blocks have to line up across as well as down: the rule under the
-            properties and the rule under Notas are the same line, and they only
-            stay one line if both cells belong to the same row. The middle column
-            is the vertical rule itself, spanning both rows, inset top and bottom
-            by the same 1.5rem the gap gives it either side. */}
+            Every cell is placed by hand rather than flowing: the title occupies
+            the left column of the first row and nothing occupies the right, and
+            auto-placement would fill that hole with the properties. */}
         <div className="grid grid-cols-1 gap-x-6 md:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)]">
-          {/* Row 1, left: the properties, closed off by a rule on the cell's own
+          {/* Row 1: the task's name, in the left column alone — so it ends where
+              the properties under it end, at the gutter, and a long one wraps
+              onto a second line instead of running the width of the dialog. */}
+          <div className={`min-w-0 ${TITLE_GAP} md:col-start-1 md:row-start-1`}>
+            {isEditing && isTitleFocused ? (
+              <TextField
+                aria-label={strings.task.fields.title}
+                value={form.title}
+                onChange={(title) => set('title', title)}
+                className="w-full min-w-0"
+              >
+                {/* A textarea rather than an input: the title wraps, and an
+                    input would scroll a long one sideways inside a single line.
+                    `field-sizing-content` gives it the height of what it holds,
+                    so the field is exactly the heading it replaces. */}
+                {/* The field only exists because the title was just pressed, so
+                    the caret has to arrive with it — without the focus the
+                    press would look like it did nothing at all. Waived rather
+                    than moved into an effect: this is focus following a
+                    deliberate action, which is what the rule is protecting. */}
+                <TextArea
+                  rows={1}
+                  // eslint-disable-next-line jsx-a11y/no-autofocus
+                  autoFocus
+                  placeholder={strings.task.fields.title}
+                  onBlur={() => setTitleFocused(false)}
+                  onKeyDown={(event) => {
+                    // A title is one line of text, so Enter finishes it rather
+                    // than breaking it in two.
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }}
+                  className={`${TITLE_TEXT} field-sizing-content resize-none bg-transparent font-normal outline-none placeholder:text-muted`}
+                />
+              </TextField>
+            ) : (
+              <h2 className={`${TITLE_TEXT} font-bold`}>
+                {isEditing ? (
+                  // Editing but not being typed in: still the heading, with a
+                  // caret parked after it to say that pressing it types.
+                  <button
+                    type="button"
+                    className="w-full cursor-text text-left break-words"
+                    onClick={() => setTitleFocused(true)}
+                  >
+                    {form.title}
+                    {/* h-5 rather than a share of the line: at 1.1em the bar was
+                        a pixel taller than the space above the baseline and grew
+                        the line box by one, so the whole dialog stepped down a
+                        pixel as the caret appeared. The translate only lowers it
+                        into the descender — transforms cost no layout. */}
+                    <span
+                      aria-hidden
+                      className="ml-0.5 inline-block h-5 w-px translate-y-[3px] bg-foreground"
+                    />
+                  </button>
+                ) : (
+                  form.title
+                )}
+              </h2>
+            )}
+          </div>
+
+          {/* The rule between the columns, spanning all three rows: from above
+              the title, past the rules that close the first row off, down to the
+              foot of the second. */}
+          <div
+            aria-hidden
+            className={`hidden w-px bg-border ${COLUMN_RULE_TOP} md:col-start-2 md:row-span-3 md:row-start-1 md:block`}
+          />
+
+          {/* Row 2, left: the properties, closed off by a rule on the cell's own
               bottom edge — which is the same edge Notas' rule sits on. */}
-          <div className={`flex min-w-0 flex-col ${TOP_COLUMN_HEIGHT}`}>
+          <div
+            className={`flex min-w-0 flex-col md:col-start-1 md:row-start-2 ${TOP_COLUMN_HEIGHT}`}
+          >
             <div className={PROPERTY_LIST}>
-              <Select
-                isDisabled={!isEditing}
-                className={undimmed}
-                value={form.priority}
-                onChange={(key) => set('priority', String(key) as TaskPriority)}
-              >
-                <div className={row}>
-                  <Label className={fieldLabel}>
-                    <Flag className={LABEL_ICON} aria-hidden />
-                    {strings.task.fields.priority}
-                  </Label>
-                  <div className={VALUE_CELL}>
-                    {/* The chosen pill, not its name in text: the options are
-                        pills, so the field has to be the same object or picking
-                        one looks like it did nothing. Same reasoning as the
-                        status row, which has read this way all along. */}
-                    <Select.Trigger className={trigger}>
-                      <PriorityChip priority={form.priority} />
-                      {isEditing ? <Select.Indicator /> : null}
-                    </Select.Trigger>
+              {propertyOrder.map((key) => {
+                // Which edge of the row being hovered the dragged one will land
+                // on. Above when it is travelling up the list, below when down —
+                // the same rule reorderProperties applies to the stored order.
+                const insertAbove =
+                  propertyOrder.indexOf(dragKey!) > propertyOrder.indexOf(key);
+                const isOver = Boolean(dragKey) && overKey === key;
+
+                return (
+                  // The whole row is the handle: press it and drag. The controls
+                  // inside still take their own clicks — a press that goes
+                  // nowhere opens the dropdown, exactly as before.
+                  <div
+                    key={key}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'move';
+                      // Firefox starts no drag at all without payload.
+                      event.dataTransfer.setData('text/plain', key);
+                      setDragHeight(event.currentTarget.getBoundingClientRect().height);
+                      setDragKey(key);
+                    }}
+                    onDragEnd={() => {
+                      setDragKey(null);
+                      setOverKey(null);
+                    }}
+                    onDragOver={(event) => {
+                      if (!dragKey || dragKey === key) return;
+                      // preventDefault is what marks the row as a drop target;
+                      // without it the browser refuses the drop outright.
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                      setOverKey(key);
+                    }}
+                    onDragLeave={() =>
+                      setOverKey((current) => (current === key ? null : current))
+                    }
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      handlePropertyDrop(key);
+                    }}
+                    className={dragKey === key ? 'opacity-40' : ''}
+                  >
+                    {/* Where it will land: a space the size of the row being
+                        held, opened on the edge it will land against. Both gaps
+                        live inside this row's own box, which is what keeps the
+                        drag steady — the wrapper grows, so the pointer stays
+                        over the same drop target while the space opens under
+                        it. */}
+                    {isOver && insertAbove ? (
+                      <div aria-hidden className={DROP_GAP} style={{ height: dragHeight }} />
+                    ) : null}
+
+                    {propertyRows[key]}
+
+                    {isOver && !insertAbove ? (
+                      <div aria-hidden className={DROP_GAP} style={{ height: dragHeight }} />
+                    ) : null}
                   </div>
-                </div>
-                {/* The options are pills, like the status dropdown's: priority
-                    is the other property on this list that is a fixed set of
-                    named steps, and reading it as a colour is faster than
-                    reading it as a word. No tick beside the current one — see
-                    STATUS_ITEM in TaskStatusChipSelect for why a mark behind a
-                    pill reads as a second shape around it. */}
-                <Select.Popover {...listboxPopover}>
-                  <ListBox>
-                    {PRIORITY_OPTIONS.map((priority) => (
-                      <ListBox.Item
-                        key={priority}
-                        id={priority}
-                        textValue={strings.task.priority[priority]}
-                        className={PILL_LISTBOX_ITEM}
-                      >
-                        <PriorityChip priority={priority} />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-
-              <div className={row}>
-                <span className={fieldLabel}>
-                  <CalendarDays className={LABEL_ICON} aria-hidden />
-                  {strings.task.fields.deadline}
-                </span>
-                <div className={VALUE_CELL}>
-                  <DeadlineValue
-                    isEditing={isEditing}
-                    value={form.dueDate}
-                    onChange={(dueDate) => set('dueDate', dueDate)}
-                    triggerClass={trigger}
-                  />
-                </div>
-              </div>
-
-              <Select
-                isDisabled={!isEditing}
-                className={undimmed}
-                value={form.sectorId}
-                onChange={(key) => set('sectorId', String(key))}
-              >
-                <div className={row}>
-                  <Label className={fieldLabel}>
-                    <Building2 className={LABEL_ICON} aria-hidden />
-                    {strings.task.fields.sector}
-                  </Label>
-                  <div className={VALUE_CELL}>
-                    <Select.Trigger className={trigger}>
-                      <span className={`truncate ${PROPERTY_VALUE_LOWER}`}>{sectorName}</span>
-                      {isEditing ? <Select.Indicator /> : null}
-                    </Select.Trigger>
-                  </div>
-                </div>
-                <Select.Popover {...listboxPopover}>
-                  <ListBox>
-                    {sectors.map((sector) => (
-                      <ListBox.Item
-                        key={sector.id}
-                        id={sector.id}
-                        textValue={sector.name}
-                        // Lower case here as well as on the trigger: the value
-                        // and the option that sets it are the same word, and it
-                        // changed case between them.
-                        className={`${TEXT_LISTBOX_ITEM} lowercase`}
-                      >
-                        {sector.name}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-
-              <div className={row}>
-                <span className={fieldLabel}>
-                  <FolderKanban className={LABEL_ICON} aria-hidden />
-                  {strings.task.fields.project}
-                </span>
-                <div className={VALUE_CELL}>
-                  <ProjectValue isEditing={isEditing} triggerClass={trigger} />
-                </div>
-              </div>
-
-              {/* Live in both modes, like a routine's checkboxes: moving a task
-                  along is using it, not editing it — and it is the one property
-                  you can also change from a task row without opening anything.
-                  Changing it to "Em andamento" starts the clock behind the
-                  productivity chart; nothing here says so, by design. */}
-              <div className={row}>
-                <span className={fieldLabel}>
-                  <CircleDot className={LABEL_ICON} aria-hidden />
-                  {strings.task.fields.status}
-                </span>
-                <div className={VALUE_CELL}>
-                  <TaskStatusChipSelect
-                    status={task.status}
-                    isOverdue={task.isOverdue}
-                    isDisabled={!canEdit}
-                    onChange={(status: TaskStatus) => updateStatus.mutate(status)}
-                  />
-                </div>
-              </div>
-
-              <Select
-                selectionMode="multiple"
-                isDisabled={!isEditing}
-                className={undimmed}
-                value={form.assigneeIds}
-                onChange={(keys) => set('assigneeIds', (keys as (string | number)[]).map(String))}
-              >
-                <div className={row}>
-                  <Label className={fieldLabel}>
-                    <UserRound className={LABEL_ICON} aria-hidden />
-                    {strings.task.fields.assignee}
-                  </Label>
-                  <div className={VALUE_CELL}>
-                    <Select.Trigger className={trigger}>
-                      <AssigneeValue users={assignees} canAdd={isEditing && assignees.length > 0} />
-                      {isEditing && assignees.length === 0 ? <Select.Indicator /> : null}
-                    </Select.Trigger>
-                  </div>
-                </div>
-                <Select.Popover {...listboxPopover}>
-                  <ListBox selectionMode="multiple">
-                    {users.map((user) => (
-                      <ListBox.Item key={user.id} id={user.id} textValue={user.name}>
-                        <span className="flex items-center gap-2">
-                          <UserAvatar
-                            name={user.name}
-                            avatarUrl={user.avatarUrl}
-                            size="sm"
-                            className="size-5"
-                          />
-                          {user.name}
-                        </span>
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-
-              {/* Read-only in both modes: progress is what the subtasks below
-                  come to, so it is set by ticking them off rather than here. */}
-              <div className={row}>
-                <span className={fieldLabel}>
-                  <Gauge className={LABEL_ICON} aria-hidden />
-                  {strings.task.fields.progress}
-                </span>
-                <div className={VALUE_CELL}>
-                  {/* The full value cell, so the bar and the count together end
-                      on the same line as the dropdown above them opens to. */}
-                  <TaskProgressBar value={task.progress} className="w-full" />
-                </div>
-              </div>
+                );
+              })}
             </div>
 
             {/* `mt-auto` rather than a margin of its own: the rule belongs to
@@ -818,15 +1051,12 @@ function TaskModalContent({
             <div className={`${modalDivider} mt-auto`} />
           </div>
 
-          {/* The rule between the columns, spanning both rows and running their
-              full height — no inset of its own, so it starts and ends where the
-              content on either side of it does. */}
-          <div aria-hidden className="hidden w-px bg-border md:row-span-2 md:block" />
-
-          {/* Row 1, right: the notes, filling the height the properties set and
+          {/* Row 2, right: the notes, filling the height the properties set and
               scrolling inside it — see TOP_COLUMN_HEIGHT and NotesBlock's
               `fill`. Its rule is the same rule, on the same edge. */}
-          <div className={`flex min-w-0 flex-col ${TOP_COLUMN_HEIGHT}`}>
+          <div
+            className={`flex min-w-0 flex-col md:col-start-3 md:row-start-2 ${TOP_COLUMN_HEIGHT}`}
+          >
             {/* The notes stop where the property rows stop, not where the cell
                 does: the rem of air the properties leave under "Barra de
                 progresso" is air on this side too, so the two blocks end on one
@@ -846,10 +1076,11 @@ function TaskModalContent({
             <div className={`${modalDivider} mt-auto`} />
           </div>
 
-          {/* Row 2: what the task carries. `pt-4` on both, so the two blocks
+          {/* Row 3: what the task carries. `pt-4` on both, so the two blocks
               start at the same height under the rule that separates them from
-              the half above. */}
-          <div className="min-w-0 pt-4">
+              the half above — and from there down they keep step row by row,
+              which is what blockRow and blockHeaderRow are for. */}
+          <div className="min-w-0 pt-4 md:col-start-1 md:row-start-3">
             <TaskSubtasks
               taskId={task.id}
               subtasks={task.subtasks}
@@ -858,7 +1089,7 @@ function TaskModalContent({
             />
           </div>
 
-          <div className="min-w-0 pt-4">
+          <div className="min-w-0 pt-4 md:col-start-3 md:row-start-3">
             {/* Always present, in both modes: locked, an empty block used to
                 vanish entirely, and a task with no files then looked like a task
                 that could not have any. It says so instead. */}
