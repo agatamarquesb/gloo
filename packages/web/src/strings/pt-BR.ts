@@ -8,6 +8,10 @@ export const strings = {
   nav: {
     dashboard: 'Dashboard',
     tasks: 'Tasks',
+    // English like its two neighbours: these three are the page names, and a
+    // sidebar reading "Dashboard / Tasks / Calendário" reads as an oversight.
+    // Everything *inside* the page is PT-BR, as everywhere else.
+    calendar: 'Calendar',
     signOut: 'Sair',
   },
   auth: {
@@ -220,6 +224,134 @@ export const strings = {
   theme: {
     light: 'Modo claro',
     dark: 'Modo escuro',
+  },
+  calendar: {
+    today: 'Hoje',
+    searchPlaceholder: 'Buscar evento',
+    // Named for what they move rather than just "anterior"/"próximo": the mini
+    // calendar's own month arrows carry those, and two controls sharing an
+    // accessible name is exactly what a screen reader cannot disambiguate.
+    previous: 'Período anterior',
+    next: 'Próximo período',
+    newEvent: 'Novo evento',
+    /** Tail of "+2 mais" in a crowded month cell. */
+    more: 'mais',
+    /** Gutter label for the strip of all-day events above the grid. */
+    allDay: 'Dia todo',
+    view: {
+      DAY: 'Dia',
+      WEEK: 'Semana',
+      MONTH: 'Mês',
+    },
+    details: {
+      title: 'Detalhes',
+      empty: 'Selecione um evento para ver os detalhes.',
+      category: 'Agenda',
+      date: 'Data',
+      time: 'Horário',
+      location: 'Local',
+      team: 'Time',
+      repeats: 'Repete',
+    },
+    agendas: {
+      title: 'Agendas',
+      glooAccount: 'Gloo',
+      shared: 'Compartilhados comigo',
+      sharedHint: 'Eventos em que você foi incluído. Somente leitura.',
+      newAgenda: 'Nova agenda',
+      addAccount: 'Adicionar conta de calendário',
+      rename: 'Renomear',
+      manageAccount: 'Gerenciar conta de calendário',
+      disconnect: 'Desconectar conta',
+      reconnect: 'Reconectar',
+      reauthNeeded: 'O acesso a esta conta expirou.',
+      color: 'Cor',
+      makeDefault: 'Tornar agenda padrão',
+      isDefault: 'Padrão',
+      showOnlyThis: 'Mostrar apenas esta',
+      show: 'Mostrar agenda',
+      hide: 'Ocultar agenda',
+      remove: 'Remover agenda da lista',
+      readOnly: 'Somente leitura',
+    },
+    removeAgenda: {
+      // The tail of "12 eventos serão movidos para X". Two forms because PT-BR
+      // agrees the verb with the count, and the agenda name is a separate
+      // element so it can be emphasised — which is what stops this being one
+      // interpolated string.
+      movingOne: 'evento será movido para',
+      movingMany: 'eventos serão movidos para',
+      googleNote:
+        'A agenda sai da lista do Gloo. Nada é alterado no Google Agenda — você pode adicioná-la de volta nas configurações da sua conta.',
+      hideHint: 'Para ocultar temporariamente, use o ícone de olho ao lado da agenda.',
+      confirm: 'Remover agenda',
+    },
+    recurrence: {
+      none: 'Não se repete',
+      DAILY: 'Diariamente',
+      WEEKLY: 'Semanalmente',
+      BIWEEKLY: 'Quinzenalmente',
+      MONTHLY: 'Mensalmente',
+      until: 'Repetir até',
+      noEnd: 'Sem data final',
+      onDays: 'Nos dias',
+      // Single letters under the weekday toggles, Sunday first like the grid.
+      weekdayInitials: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'],
+      weekdayNames: [
+        'domingo',
+        'segunda-feira',
+        'terça-feira',
+        'quarta-feira',
+        'quinta-feira',
+        'sexta-feira',
+        'sábado',
+      ],
+    },
+    scope: {
+      this: 'Apenas este evento',
+      all: 'Todos os eventos da série',
+    },
+    confirmChange: {
+      edit: {
+        title: 'Salvar alteração',
+        question: 'Esta alteração vale para qual ocorrência?',
+        notifyLabel: 'Avisar participantes por e-mail',
+        confirm: 'Salvar',
+      },
+      delete: {
+        title: 'Excluir evento',
+        question: 'Excluir qual ocorrência?',
+        notifyLabel: 'Avisar participantes do cancelamento',
+        confirm: 'Excluir',
+      },
+      // Tail of "3 pessoas serão avisadas" — the count sits in front of it.
+      oneAttendee: '1 pessoa será avisada.',
+      manyAttendees: 'pessoas serão avisadas.',
+    },
+    event: {
+      titleLabel: 'Título',
+      titlePlaceholder: 'Nome do evento',
+      agenda: 'Agenda',
+      date: 'Data',
+      startsAt: 'Início',
+      endsAt: 'Fim',
+      allDay: 'Dia inteiro',
+      location: 'Local',
+      locationPlaceholder: 'Link da reunião ou endereço',
+      team: 'Time',
+      description: 'Descrição',
+      untitled: 'Sem título',
+      endBeforeStart: 'O fim precisa ser depois do início.',
+    },
+    google: {
+      linking: 'Conectando ao Google...',
+      linked: 'Conta do Google conectada.',
+      linkFailed: 'Não foi possível conectar a conta do Google.',
+      scopeDenied: 'Algumas permissões não foram concedidas. Conecte novamente e aceite todas.',
+      syncNow: 'Sincronizar agora',
+      syncing: 'Sincronizando...',
+      lastSynced: 'Sincronizado',
+    },
   },
   common: {
     save: 'Salvar',

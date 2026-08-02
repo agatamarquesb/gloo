@@ -8,7 +8,7 @@ entirely through Docker Compose.
 |---|---|
 | **Frontend** | React 19 · Vite 8 · TypeScript · Tailwind 4 · HeroUI 3 · TanStack Query 5 · React Router 8 · Recharts |
 | **Backend** | Node 22 · Fastify 5 · Prisma 7 · PostgreSQL 16 |
-| **Tooling** | pnpm workspaces · Oxlint (lint + format) · Playwright (screenshots) |
+| **Tooling** | pnpm workspaces · Oxlint (lint + format) · Vitest (unit tests) · Playwright (screenshots) |
 | **Language** | UI copy is PT-BR; code, identifiers and comments are EN-US |
 
 **Contents**
@@ -40,8 +40,9 @@ suggestions — a change that breaks one of them is a change that needs redoing.
    See [§5.2](#52-color-palette).
 2. **Never inline user-facing copy.** All strings live in
    `packages/web/src/strings/pt-BR.ts` and are referenced as
-   `strings.<area>.<key>`. New copy is written in PT-BR, except the two
-   sanctioned English terms: "Tasks" and "Dashboard".
+   `strings.<area>.<key>`. New copy is written in PT-BR, except the three
+   sanctioned English terms — "Dashboard", "Tasks" and "Calendar" — which are
+   the page names in the sidebar. Everything *inside* those pages is PT-BR.
 3. **Never rebuild a component HeroUI already provides.** Compose HeroUI parts
    first. If HeroUI genuinely lacks the component, ask before writing one from
    scratch. The only existing exceptions are documented wrappers in
@@ -89,14 +90,19 @@ Before declaring a change complete:
 pnpm typecheck     # must pass across all three packages
 pnpm lint          # oxlint, zero errors
 pnpm format        # oxlint --fix
+pnpm test          # vitest, all packages
 ```
 
-There is no automated test suite. Verification of UI work is visual, and the
-repo ships a helper for it:
+Tests cover the pure logic that is not worth re-deriving by hand — calendar
+recurrence expansion, event layout, the Google RRULE mappers, token encryption.
+They live beside the code they cover as `*.test.ts`, and the runner is a single
+root `vitest.config.ts` with one project per package. There is deliberately no
+component-level testing: UI work is still verified visually, and the repo ships
+a helper for it:
 
 ```bash
-pnpm screenshot                  # dashboard, light + dark
-pnpm screenshot dashboard tasks  # both pages, both themes
+pnpm screenshot                           # dashboard, light + dark
+pnpm screenshot dashboard tasks calendar  # all three pages, both themes
 ```
 
 It logs in with `GLOO_EMAIL` / `GLOO_PASSWORD` from `.env`, drives the running
@@ -156,6 +162,9 @@ symptom to suspect; `docker compose restart web` clears it.
 | `WEB_ORIGIN` | api | CORS allow-list, defaults to `http://localhost:5173` |
 | `VITE_API_URL` | web | API base, defaults to `http://localhost:3001` |
 | `GLOO_EMAIL` / `GLOO_PASSWORD` | screenshots | Login used by `pnpm screenshot` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | api | Google Calendar OAuth client. Optional — without them the calendar works and only the "Adicionar conta" button answers 503 |
+| `GOOGLE_REDIRECT_URI` | api | Must match the Console exactly; defaults to `http://localhost:3001/api/calendar/google/callback` |
+| `GOOGLE_TOKEN_KEY` | api | Base64 of 32 random bytes (`openssl rand -base64 32`). Encrypts stored Google tokens at rest — rotating it invalidates every linked account |
 
 ---
 
@@ -166,7 +175,8 @@ symptom to suspect; `docker compose restart web` clears it.
 | Typecheck everything | `pnpm typecheck` |
 | Lint | `pnpm lint` |
 | Format (autofix) | `pnpm format` |
-| Screenshot the app | `pnpm screenshot [dashboard\|tasks ...]` |
+| Run tests | `pnpm test` (`pnpm test:watch` while working) |
+| Screenshot the app | `pnpm screenshot [dashboard\|tasks\|calendar ...]` |
 | Create a migration | `docker compose exec api pnpm exec prisma migrate dev --name <name>` |
 | Re-seed | `docker compose exec api pnpm exec prisma db seed` |
 | Browse the DB | `docker compose exec api pnpm exec prisma studio` |

@@ -17,7 +17,7 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const OUT_DIR = `${ROOT}.screenshots`;
 const BASE_URL = process.env.GLOO_URL ?? 'http://localhost:5173';
 
-const PAGES = { dashboard: '/', tasks: '/tasks' };
+const PAGES = { dashboard: '/', tasks: '/tasks', calendar: '/calendar' };
 
 /** Read .env without pulling in a dotenv dependency. */
 function envFromFile() {

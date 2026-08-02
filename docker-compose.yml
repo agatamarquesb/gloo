@@ -28,6 +28,12 @@ services:
       NODE_ENV: development
       PORT: 3001
       UPLOADS_DIR: /app/uploads
+      # Google Calendar. Blank-defaulted so the stack still boots without them —
+      # the connect route answers 503 and the rest of the calendar is unaffected.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3001/api/calendar/google/callback}
+      GOOGLE_TOKEN_KEY: ${GOOGLE_TOKEN_KEY:-}
       # tsx watch (chokidar) misses edits made on the host, because Docker
       # Desktop's bind mounts don't deliver inotify events reliably on macOS —
       # so new routes would 404 until the container was restarted by hand.

@@ -32,6 +32,23 @@ enum RoutineRecurrence {
   MONTHLY
 }
 
+/// Where a calendar account's agendas come from. See CalendarProvider in the
+/// shared package.
+enum CalendarProvider {
+  GLOO
+  GOOGLE
+}
+
+/// How a recurring event repeats. Four fixed rules rather than a general RRULE
+/// — see EventRecurrence in the shared package for why, and for what happens
+/// to a Google event whose rule is something else.
+enum EventRecurrence {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -51,6 +68,12 @@ model User {
   assignedTasks    TaskAssignee[]
   createdRoutines  Routine[]         @relation("RoutineCreator")
   assignedRoutines RoutineAssignee[]
+
+  calendarAccounts CalendarAccount[]
+  agendas          Agenda[]
+  createdEvents    CalendarEvent[]         @relation("CalendarEventCreator")
+  assignedEvents   CalendarEventAssignee[]
+  oauthStates      GoogleOAuthState[]
 
   @@map("users")
 }
@@ -199,4 +222,241 @@ model RoutineLabel {
 
   @@id([routineId, labelId])
   @@map("routine_labels")
+}
+
+/// A source of agendas: the built-in Gloo one, or a linked Google account.
+///
+/// Always personal, unlike sectors and labels. The Google tokens on one are a
+/// single user's, and the Gloo account is where that user's own agendas live —
+/// which is why every query below starts from `userId` rather than from the
+/// event.
+model CalendarAccount {
+  id       String           @id @default(uuid())
+  userId   String
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider CalendarProvider
+
+  /// What the group is called in the Agendas card. Seeded from the Google
+  /// address on link, then the user's to rename.
+  displayName String
+  /// Whether the group is folded shut. Stored rather than kept in component
+  /// state so the card looks the same after a reload.
+  isCollapsed Boolean @default(false)
+
+  /// Google's stable user id — the one thing about an account that never
+  /// changes, so relinking the same account updates it instead of adding a
+  /// duplicate row. Null on the Gloo account.
+  googleSub   String?
+  googleEmail String?
+
+  /// OAuth tokens, AES-256-GCM ciphertext — never the raw values. See
+  /// lib/tokenCrypto.ts; the key lives in GOOGLE_TOKEN_KEY.
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  /// What Google actually granted, which can be less than we asked for. Checked
+  /// before any call that needs a scope the user may have unticked.
+  grantedScope   String?
+
+  /// Set when Google stops accepting our refresh token — revoked access, or the
+  /// 7-day expiry that applies while the consent screen is unverified. The card
+  /// offers "Reconectar" rather than showing stale agendas as if they were live.
+  needsReauth Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agendas Agenda[]
+
+  /// One row per Google account per user. Partial in effect: the Gloo account
+  /// has a null googleSub, and Postgres treats nulls as distinct, so this does
+  /// not stop a user having exactly one Gloo account — the service layer does.
+  @@unique([userId, provider, googleSub])
+  @@index([userId])
+  @@map("calendar_accounts")
+}
+
+/// One calendar in the list: a Gloo-local agenda, or a mirror of a Google one.
+model Agenda {
+  id        String          @id @default(uuid())
+  accountId String
+  account   CalendarAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// The owner, denormalised off the account so listing a user's agendas — the
+  /// most common query here — doesn't have to join through it.
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name String
+  /// A key into the `--label-*` palette, never a hex — as with a Label. Google's
+  /// own colours don't belong to our design system, so an imported calendar is
+  /// assigned one from ours and the user can change it after.
+  color String
+
+  /// Hidden by the eye icon: the agenda stays in the list, its events leave the
+  /// grid. Per user by construction, since the agenda itself is.
+  isHidden  Boolean @default(false)
+  /// Where a new event lands when the user doesn't pick an agenda. The service
+  /// layer keeps exactly one true per user.
+  isDefault Boolean @default(false)
+  /// A Google calendar we may read but not write — a subscribed holiday feed,
+  /// or one shared at reader access. Its events can't be dragged or edited.
+  isReadOnly Boolean @default(false)
+  sortOrder  Int     @default(0)
+
+  /// The row that collects events somebody else assigned to this user.
+  ///
+  /// Agendas are personal, so an event created on a colleague's agenda has no
+  /// agenda of *mine* to hang under — but it still has to appear, be hidden by
+  /// an eye icon, and take a colour. A real row rather than something the API
+  /// invents per request, so those two settings persist like any other
+  /// agenda's. Nothing is ever stored *on* it: events keep living on their
+  /// creator's agenda and are only displayed here.
+  ///
+  /// One per user, provisioned alongside the default. Cannot be renamed,
+  /// deleted, or made the default.
+  isSharedInbox Boolean @default(false)
+
+  /// The calendar's id on Google's side. Null for a Gloo-local agenda.
+  googleCalendarId String?
+  /// Google's incremental sync cursor for this calendar. Null until the first
+  /// full sync completes; the token preserves that first request's time bounds.
+  googleSyncToken  String?
+
+  /// When the user removed the calendar from the list.
+  ///
+  /// A flag rather than a delete, because the next import would otherwise walk
+  /// straight back in and re-add it. Removing never touches anything in Google
+  /// — the user re-adds it from their Google settings, which is what the
+  /// confirmation says.
+  removedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events CalendarEvent[]
+
+  @@unique([accountId, googleCalendarId])
+  @@index([userId])
+  @@map("agendas")
+}
+
+/// An event, or an edited occurrence of a recurring one.
+///
+/// Both are the same table on purpose: this is exactly Google's shape, where an
+/// instance exception *is* an event resource carrying `recurringEventId` and
+/// `originalStartTime`. A narrow override table would have to duplicate every
+/// column an exception can differ in — including its assignees — and would
+/// still need translating on the way to Google.
+model CalendarEvent {
+  id          String @id @default(uuid())
+  agendaId    String
+  agenda      Agenda @relation(fields: [agendaId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User   @relation("CalendarEventCreator", fields: [createdById], references: [id])
+
+  title String
+  /// Rich text, sanitised on the way in like a task's notes.
+  description String?
+  /// A place or, more usually here, a meeting link.
+  location    String?
+
+  /// Absolute instants. `timeZone` is what says how to label them — an event
+  /// keeps the wall clock of the zone it was created in, so a series doesn't
+  /// slide when its owner travels or when the clocks change.
+  startsAt DateTime
+  endsAt   DateTime
+  isAllDay Boolean  @default(false)
+  timeZone String
+
+  /// Set on the MASTER row of a series only. An exception inherits the rule
+  /// from its master and carries neither of these.
+  recurrence      EventRecurrence?
+  /// The last instant an occurrence may start on, inclusive. Stored as the end
+  /// of the chosen day in the event's own zone — see endOfDayInZone.
+  ///
+  /// Null means the series never ends. Google's UI produces open-ended events
+  /// by default and four of the six calendars linked in testing had them, so
+  /// this is the common case rather than an edge one; expansion bounds an
+  /// endless series by the window being drawn.
+  recurrenceUntil DateTime?
+
+  /// Which weekdays a weekly series lands on, as 0=Sunday … 6=Saturday.
+  ///
+  /// Empty means "the same weekday the series started on", which is what our
+  /// own event modal produced before this existed. Google emits BYDAY on every
+  /// weekly event it creates — including single-day ones — so without this the
+  /// entire real-world corpus of recurring events failed to import as
+  /// recurring. Only meaningful for WEEKLY and BIWEEKLY.
+  byWeekdays Int[] @default([])
+
+  /// The master this row overrides, and which of its slots. Both null on a
+  /// one-off event and on a master.
+  recurringEventId String?
+  recurringEvent   CalendarEvent?  @relation("EventExceptions", fields: [recurringEventId], references: [id], onDelete: Cascade)
+  exceptions       CalendarEvent[] @relation("EventExceptions")
+  originalStart    DateTime?
+  /// True when the user deleted this one occurrence. The row stays so expansion
+  /// keeps skipping the slot, and so the deletion can be pushed to Google.
+  isCancelled      Boolean         @default(false)
+
+  /// The mirror on Google's side. `googleEtag` is what the conflict check sends
+  /// as If-Match; `googleICalUid` is what identifies the same event across
+  /// calendars when it was invited rather than created.
+  googleEventId String?
+  googleICalUid String?
+  googleEtag    String?
+  lastSyncedAt  DateTime?
+
+  /// Attendees Google knows about that have no Gloo user to match — external
+  /// guests, as `["ana@fora.com"]`. Kept so a round-trip doesn't drop them off
+  /// the invitation.
+  externalAttendees Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignees CalendarEventAssignee[]
+
+  /// One override per slot. Also what makes importing the same Google exception
+  /// twice a no-op rather than a duplicate.
+  @@unique([recurringEventId, originalStart])
+  @@index([agendaId, startsAt])
+  @@index([startsAt])
+  @@map("calendar_events")
+}
+
+/// Events carry multiple assignees, exactly like tasks and routines.
+///
+/// Also the read rule: an event is visible to whoever created it and to anyone
+/// assigned to it, which is what lets an agenda stay personal while the event
+/// on it is shared with the people it concerns.
+model CalendarEventAssignee {
+  eventId String
+  userId  String
+  event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+  @@index([userId])
+  @@map("calendar_event_assignees")
+}
+
+/// One in-flight OAuth authorisation.
+///
+/// Server-side rather than in a cookie because the row is what binds the code
+/// coming back from Google to the user who started the flow — the callback is a
+/// public route and must not take an identity from its own query string. It is
+/// deleted the moment it is looked up, which is what makes a replayed callback
+/// URL fail.
+model GoogleOAuthState {
+  state        String   @id
+  /// The PKCE verifier whose challenge went to Google. Never leaves the server.
+  codeVerifier String
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@index([expiresAt])
+  @@map("google_oauth_states")
 }

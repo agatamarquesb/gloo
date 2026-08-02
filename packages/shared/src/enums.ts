@@ -85,3 +85,60 @@ export const AttachmentKind = {
   FILE: 'FILE',
 } as const;
 export type AttachmentKind = (typeof AttachmentKind)[keyof typeof AttachmentKind];
+
+/**
+ * Where a calendar account's agendas come from.
+ *
+ * GLOO is the built-in one every user gets on first visit: its agendas live
+ * only in our database. GOOGLE is a linked Google account, and its agendas are
+ * mirrors of that account's calendars — which is why an agenda knows which
+ * provider it belongs to before anything tries to write to it.
+ */
+export const CalendarProvider = {
+  GLOO: 'GLOO',
+  GOOGLE: 'GOOGLE',
+} as const;
+export type CalendarProvider = (typeof CalendarProvider)[keyof typeof CalendarProvider];
+
+/**
+ * How often a recurring event repeats.
+ *
+ * Deliberately four fixed rules rather than a general RRULE: these are the ones
+ * the event modal offers, and each maps onto exactly one Google `RRULE` string
+ * (BIWEEKLY is `FREQ=WEEKLY;INTERVAL=2`). A recurring event arriving *from*
+ * Google with anything else — a by-day list, a count instead of an until —
+ * is stored as a single non-recurring event rather than silently mis-expanded.
+ */
+export const EventRecurrence = {
+  DAILY: 'DAILY',
+  WEEKLY: 'WEEKLY',
+  BIWEEKLY: 'BIWEEKLY',
+  MONTHLY: 'MONTHLY',
+} as const;
+export type EventRecurrence = (typeof EventRecurrence)[keyof typeof EventRecurrence];
+
+export function isEventRecurrence(value: unknown): value is EventRecurrence {
+  return typeof value === 'string' && Object.hasOwn(EventRecurrence, value);
+}
+
+/**
+ * Which instances an edit or a delete applies to, asked whenever the user
+ * changes an event that repeats.
+ *
+ * THIS writes an exception row for the one instance; ALL rewrites the master
+ * and leaves existing exceptions alone — the same two choices Google's API
+ * offers, so the answer passes straight through to it.
+ */
+export const RecurrenceScope = {
+  THIS: 'THIS',
+  ALL: 'ALL',
+} as const;
+export type RecurrenceScope = (typeof RecurrenceScope)[keyof typeof RecurrenceScope];
+
+/** The calendar's three views. Week is the default. */
+export const CalendarViewMode = {
+  DAY: 'DAY',
+  WEEK: 'WEEK',
+  MONTH: 'MONTH',
+} as const;
+export type CalendarViewMode = (typeof CalendarViewMode)[keyof typeof CalendarViewMode];

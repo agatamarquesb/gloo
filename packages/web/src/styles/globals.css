@@ -170,6 +170,28 @@
   --label-blue: var(--blue);
   --label-teal: #b6ece0;
   --label-gray: #dcdcdc;
+
+  /* And the edge of each, for the calendar's event cards.
+   *
+   * Same reasoning as --priority-*-edge, which is the pattern this follows: a
+   * shade of the fill rather than a colour beside it, barely darker, just
+   * enough to close the card's shape. A label pill never needed one — it is
+   * small and sits on a plain surface — but an event card is a large block of
+   * pastel butted up against other large blocks of pastel, and without an edge
+   * two adjacent events in the same agenda read as one.
+   *
+   * Mode-invariant like the fills they belong to. Black text still sits on the
+   * fill, so nothing here has to carry type. */
+  --label-green-edge: #a9b843;
+  --label-lime-edge: #bcd07a;
+  --label-yellow-edge: #edd23f;
+  --label-orange-edge: #f0b477;
+  --label-red-edge: #f5bda6;
+  --label-pink-edge: #f2abc9;
+  --label-purple-edge: #bfaaf5;
+  --label-blue-edge: #6cc5ec;
+  --label-teal-edge: #85d3c2;
+  --label-gray-edge: #bcbcbc;
 }
 
 .dark {
@@ -253,6 +275,17 @@
   --color-label-blue: var(--label-blue);
   --color-label-teal: var(--label-teal);
   --color-label-gray: var(--label-gray);
+
+  --color-label-green-edge: var(--label-green-edge);
+  --color-label-lime-edge: var(--label-lime-edge);
+  --color-label-yellow-edge: var(--label-yellow-edge);
+  --color-label-orange-edge: var(--label-orange-edge);
+  --color-label-red-edge: var(--label-red-edge);
+  --color-label-pink-edge: var(--label-pink-edge);
+  --color-label-purple-edge: var(--label-purple-edge);
+  --color-label-blue-edge: var(--label-blue-edge);
+  --color-label-teal-edge: var(--label-teal-edge);
+  --color-label-gray-edge: var(--label-gray-edge);
 }
 
 /*

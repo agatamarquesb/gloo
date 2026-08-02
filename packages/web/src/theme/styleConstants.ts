@@ -178,6 +178,17 @@ export const quietTextButton =
 export const outlineControl = 'border-outline-control';
 
 /**
+ * A line in one of the calendar's popover menus — the agenda `···`, the account
+ * `···`, and the "Nova agenda" affordance under them.
+ *
+ * A quietTextButton that fills its panel's width and takes a ground on hover,
+ * which is what makes a stack of them read as a menu rather than as a column of
+ * links. Shared because the three menus sit within a few hundred pixels of each
+ * other and any drift between them is visible at a glance.
+ */
+export const menuRow = `${quietTextButton} w-full justify-start rounded-md px-2 py-1.5 text-sm hover:bg-default/50 hover:text-foreground`;
+
+/**
  * The dialogs' own chrome, shared by the task modal and the routine modal so the
  * two cannot drift.
  *

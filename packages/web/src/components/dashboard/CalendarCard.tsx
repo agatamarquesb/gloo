@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
-import { Calendar } from '@heroui/react';
 import { useNavigate } from 'react-router';
 
+import { MonthCalendar } from '@/components/common/MonthCalendar';
 import { useSectors } from '@/hooks/queries/sectors';
 import { useTasksCalendar } from '@/hooks/queries/tasks';
 import { useTileColors } from '@/hooks/ui/useTileColors';
@@ -48,59 +48,33 @@ export function CalendarCard() {
 
   return (
     <DashboardCard title={strings.dashboard.calendar}>
-      <Calendar
-        // HeroUI pins .calendar to a fixed w-63/max-w-63, which left the grid
-        // short of the card's right edge. Utilities outrank the component layer,
-        // so this lets the 7-column grid stretch and the card's own padding
-        // become the margin on all four sides.
-        className="w-full max-w-full"
-        aria-label={strings.dashboard.calendar}
+      <MonthCalendar
+        ariaLabel={strings.dashboard.calendar}
         focusedValue={focused}
         onFocusChange={setFocused}
-        onChange={(date) => navigate(`/tasks?dueDateFrom=${date.toString()}&dueDateTo=${date.toString()}`)}
-      >
-        <Calendar.Header>
-          <Calendar.NavButton slot="previous" />
-          {/* flex-1 + text-center rather than letting the heading size to its
-              text: the month names have different widths, so without this the
-              title shifts sideways as you page through the year. */}
-          <Calendar.Heading className="flex-1 text-center" />
-          <Calendar.NavButton slot="next" />
-        </Calendar.Header>
-        <Calendar.Grid>
-          <Calendar.GridHeader>
-            {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
-          </Calendar.GridHeader>
-          <Calendar.GridBody>
-            {(date) => (
-              <Calendar.Cell date={date} className="relative">
-                {({ formattedDate }) => {
-                  const sectorIds = bySector.get(date.toString()) ?? [];
-                  return (
-                    <>
-                      {formattedDate}
-                      {sectorIds.length > 0 ? (
-                        <span className="pointer-events-none absolute inset-x-0 -bottom-0.5 flex justify-center gap-0.5">
-                          {sectorIds.slice(0, MAX_DOTS).map((sectorId) => (
-                            <span
-                              key={sectorId}
-                              className="size-1 rounded-full"
-                              style={{
-                                backgroundColor:
-                                  tileColors[(slotBySector.get(sectorId) ?? 0) % tileColors.length],
-                              }}
-                            />
-                          ))}
-                        </span>
-                      ) : null}
-                    </>
-                  );
-                }}
-              </Calendar.Cell>
-            )}
-          </Calendar.GridBody>
-        </Calendar.Grid>
-      </Calendar>
+        onChange={(date) =>
+          navigate(`/tasks?dueDateFrom=${date.toString()}&dueDateTo=${date.toString()}`)
+        }
+        renderCellExtra={(date) => {
+          const sectorIds = bySector.get(date.toString()) ?? [];
+          if (sectorIds.length === 0) return null;
+
+          return (
+            <span className="pointer-events-none absolute inset-x-0 -bottom-0.5 flex justify-center gap-0.5">
+              {sectorIds.slice(0, MAX_DOTS).map((sectorId) => (
+                <span
+                  key={sectorId}
+                  className="size-1 rounded-full"
+                  style={{
+                    backgroundColor:
+                      tileColors[(slotBySector.get(sectorId) ?? 0) % tileColors.length],
+                  }}
+                />
+              ))}
+            </span>
+          );
+        }}
+      />
     </DashboardCard>
   );
 }

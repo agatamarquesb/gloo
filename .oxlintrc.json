@@ -17,6 +17,12 @@
       "rules": {
         "no-await-in-loop": "off"
       }
+    },
+    {
+      "files": ["packages/api/src/modules/calendar/google/**"],
+      "rules": {
+        "no-await-in-loop": "off"
+      }
     }
   ],
   "ignorePatterns": ["**/dist/**", "**/generated/**", "**/node_modules/**"],

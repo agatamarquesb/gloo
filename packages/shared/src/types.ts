@@ -1,5 +1,7 @@
 import type {
   AttachmentKind,
+  CalendarProvider,
+  EventRecurrence,
   LabelColor,
   Role,
   RoutineRecurrence,
@@ -223,4 +225,191 @@ export type UpdateRoutineInput = Partial<CreateRoutineInput>;
 export interface LoginInput {
   email: string;
   password: string;
+}
+
+/* ------------------------------------------------------------------ *
+ * Calendar
+ * ------------------------------------------------------------------ */
+
+/**
+ * A source of agendas: the built-in Gloo one, or a linked Google account.
+ *
+ * Accounts belong to a single user — the Google tokens behind one are personal,
+ * and the Gloo account is where that user's own agendas live. Nothing about an
+ * account is shared, which is why the Agendas card groups by it.
+ */
+export interface CalendarAccountDto {
+  id: string;
+  provider: CalendarProvider;
+  /** What the group is called in the Agendas card. Renameable. */
+  displayName: string;
+  /** The account's own address, shown under the name. Null for the Gloo one. */
+  googleEmail: string | null;
+  /** Whether the group is folded shut. Persisted so it survives a reload. */
+  isCollapsed: boolean;
+  /**
+   * True once Google has stopped accepting our refresh token — revoked access,
+   * a changed password, or the 7-day expiry that applies while the OAuth
+   * consent screen is unverified. The card offers "Reconectar" instead of
+   * pretending the agendas below it are still live.
+   */
+  needsReauth: boolean;
+  agendas: AgendaDto[];
+}
+
+export interface AgendaDto {
+  id: string;
+  accountId: string;
+  name: string;
+  /** A key into the `--label-*` palette, never a hex — as with a Label. */
+  color: LabelColor;
+  /** Hidden by the eye icon: the agenda stays in the list, its events leave the grid. */
+  isHidden: boolean;
+  /** Where a new event lands when the user doesn't pick an agenda. Exactly one per user. */
+  isDefault: boolean;
+  /**
+   * True for a Google calendar we may read but not write — a subscribed holiday
+   * calendar, or one shared with the user at reader access. Its events render
+   * but cannot be dragged, resized or edited.
+   */
+  isReadOnly: boolean;
+  /**
+   * True for the pseudo-agenda holding events somebody else assigned to this
+   * user. It is not a row in anyone's account: it collects events across
+   * agendas the user cannot see, so it can be hidden and recoloured like a real
+   * agenda but never renamed, deleted or made default.
+   */
+  isShared: boolean;
+  sortOrder: number;
+}
+
+/**
+ * One occurrence on the grid.
+ *
+ * What `GET /calendar/events` returns is always *instances*, never masters: a
+ * weekly event that runs for a year arrives as the handful of instances inside
+ * the requested window, each carrying the id of the row it came from. The
+ * distinction matters on write — see RecurrenceScope.
+ */
+export interface CalendarEventDto {
+  /**
+   * The row this instance came from: the master for a generated occurrence, or
+   * the exception's own id where one exists. Editing with scope THIS on a
+   * generated occurrence creates that exception.
+   */
+  id: string;
+  agendaId: string;
+  title: string;
+  /** Rich text, carrying the same markup a task's notes do. */
+  description: string | null;
+  /** A free-text place or, more usually here, a meeting link. */
+  location: string | null;
+  /** ISO timestamps. Always absolute — `timeZone` says how to label them. */
+  startsAt: string;
+  endsAt: string;
+  isAllDay: boolean;
+  /** IANA zone the event was created in, so a trip doesn't move everyone's meetings. */
+  timeZone: string;
+  assignees: UserDto[];
+  /**
+   * Attendees on the Google side with no Gloo user to match — external guests.
+   * Shown after the assignee avatars as plain initials.
+   */
+  externalAttendees: string[];
+  createdById: string;
+  /** The repeat rule, present on every instance of a recurring event. */
+  recurrence: EventRecurrence | null;
+  /**
+   * ISO date the repeat stops on, inclusive. Null both when the event doesn't
+   * repeat and when it repeats forever — `recurrence` is what tells them apart.
+   */
+  recurrenceUntil: string | null;
+  /** Weekdays a weekly series lands on, 0=Sunday … 6=Saturday. */
+  byWeekdays: number[];
+  /**
+   * Set when this instance was generated from a master rather than stored in
+   * its own right — the master's id. Null for a one-off event and for an
+   * exception, both of which are rows of their own.
+   */
+  recurringEventId: string | null;
+  /**
+   * Which slot of the series this instance fills, as an ISO timestamp. It is
+   * what identifies an instance to Google, and what an exception row is keyed
+   * on, so it survives the instance being dragged to another day.
+   */
+  originalStart: string | null;
+  /** True when the event lives on a read-only agenda. Convenience for the grid. */
+  isReadOnly: boolean;
+  /** True when the event mirrors a Google one, so the UI can mark its origin. */
+  isFromGoogle: boolean;
+}
+
+/**
+ * How many people an event would actually email, ignoring its own organiser.
+ *
+ * Google never invites you to your own meeting, so an event whose only assignee
+ * is its creator has nobody to notify — and offering "avisar participantes?"
+ * there would be a question with no consequence either way.
+ *
+ * Here rather than on either side alone because both need the same answer for
+ * different reasons: the client decides whether to ask, and the API decides
+ * whether to pass `sendUpdates=all` to Google. Two definitions of "somebody
+ * else is on this event" would eventually disagree, and the visible symptom
+ * would be a dialog promising an email that never arrives.
+ */
+export function countOtherAttendees(event: {
+  createdById: string;
+  assigneeIds: string[];
+  externalAttendees: string[];
+}): number {
+  return (
+    event.assigneeIds.filter((id) => id !== event.createdById).length +
+    event.externalAttendees.length
+  );
+}
+
+export interface CreateEventInput {
+  agendaId: string;
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  startsAt: string;
+  endsAt: string;
+  isAllDay?: boolean;
+  timeZone: string;
+  assigneeIds: string[];
+  recurrence?: EventRecurrence | null;
+  /** Omitted or null for a series with no end date. */
+  recurrenceUntil?: string | null;
+  byWeekdays?: number[];
+}
+
+export type UpdateEventInput = Partial<CreateEventInput>;
+
+export interface CreateAgendaInput {
+  /** Which account it belongs to. A Google one creates a real calendar there. */
+  accountId: string;
+  name: string;
+  /**
+   * Optional: left out, the API assigns the first palette colour the user isn't
+   * already using. A better default than making someone choose a colour before
+   * they have seen the agenda exist.
+   */
+  color?: LabelColor;
+}
+
+export interface UpdateAgendaInput {
+  name?: string;
+  color?: LabelColor;
+  isHidden?: boolean;
+  isDefault?: boolean;
+}
+
+/** What a sync run did, so the UI can say more than "done". */
+export interface CalendarSyncResultDto {
+  agendasImported: number;
+  eventsImported: number;
+  eventsRemoved: number;
+  /** Accounts that need the user to reconnect before they can sync again. */
+  accountsNeedingReauth: string[];
 }

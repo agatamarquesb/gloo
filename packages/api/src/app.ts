@@ -7,6 +7,10 @@ import Fastify from 'fastify';
 
 import { env } from './config/env';
 import { authRoutes } from './modules/auth/routes';
+import { calendarAccountRoutes } from './modules/calendar/routes.accounts';
+import { calendarAgendaRoutes } from './modules/calendar/routes.agendas';
+import { calendarEventRoutes } from './modules/calendar/routes.events';
+import { googleCalendarRoutes } from './modules/calendar/google/routes';
 import { labelRoutes } from './modules/labels/routes';
 import { routineRoutes } from './modules/routines/routes';
 import { sectorRoutes } from './modules/sectors/routes';
@@ -55,6 +59,10 @@ export function buildApp() {
   app.register(subtaskRoutes, { prefix: '/api/subtasks' });
   app.register(routineRoutes, { prefix: '/api/routines' });
   app.register(labelRoutes, { prefix: '/api/labels' });
+  app.register(calendarAccountRoutes, { prefix: '/api/calendar/accounts' });
+  app.register(calendarAgendaRoutes, { prefix: '/api/calendar/agendas' });
+  app.register(calendarEventRoutes, { prefix: '/api/calendar/events' });
+  app.register(googleCalendarRoutes, { prefix: '/api/calendar/google' });
   app.register(uploadRoutes, { prefix: '/api/uploads' });
 
   return app;

@@ -22,6 +22,24 @@ export const LABEL_BG_CLASS: Record<LabelColor, string> = {
 };
 
 /**
+ * The same ten, as the border of a calendar event card. Written out longhand
+ * for the same reason LABEL_BG_CLASS is, and kept beside it so a colour added
+ * to one is obviously missing from the other.
+ */
+export const LABEL_EDGE_CLASS: Record<LabelColor, string> = {
+  green: 'border-label-green-edge',
+  lime: 'border-label-lime-edge',
+  yellow: 'border-label-yellow-edge',
+  orange: 'border-label-orange-edge',
+  red: 'border-label-red-edge',
+  pink: 'border-label-pink-edge',
+  purple: 'border-label-purple-edge',
+  blue: 'border-label-blue-edge',
+  teal: 'border-label-teal-edge',
+  gray: 'border-label-gray-edge',
+};
+
+/**
  * The app's pill: a routine's tags, and a task's status.
  *
  * Only the geometry, because the two differ in one thing — a tag's palette is

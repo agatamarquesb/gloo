@@ -16,3 +16,17 @@ export const sectorKeys = {
 export const userKeys = {
   all: ['users'] as const,
 };
+
+export const calendarKeys = {
+  accounts: ['calendar', 'accounts'] as const,
+  /**
+   * The branch every dated event query hangs off, so a mutation can drop them
+   * all without knowing which windows happen to be cached.
+   */
+  events: ['calendar', 'events'] as const,
+  eventRange: (from: string, to: string) => ['calendar', 'events', from, to] as const,
+  /** The Google pull. Its own key so polling it never touches the grid's cache. */
+  sync: ['calendar', 'sync'] as const,
+  agendaEventCount: (agendaId: string) =>
+    ['calendar', 'agendas', agendaId, 'event-count'] as const,
+};
