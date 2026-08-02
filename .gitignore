@@ -6,7 +6,6 @@ build/
 *.log
 .DS_Store
 packages/api/generated/
-uploads/
 .turbo/
 
 # Output of `pnpm screenshot`
