@@ -38,7 +38,10 @@ export function AgendaMenu({
   // The inbox is not somewhere events are authored and not somewhere the user
   // made, so two of the four actions don't apply to it.
   const canBeDefault = !agenda.isShared && !agenda.isReadOnly && !agenda.isDefault;
-  const canRemove = !agenda.isShared;
+  // The default is as fixed as the inbox: something has to receive events that
+  // name no agenda, so it can only be retired by promoting another one first.
+  // Offering "Remover" here would open a confirmation the API then refuses.
+  const canRemove = !agenda.isShared && !agenda.isDefault;
 
   return (
     <Popover onOpenChange={(open) => !open && setView('menu')}>

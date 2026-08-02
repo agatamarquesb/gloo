@@ -174,6 +174,17 @@ export async function calendarAgendaRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Esta agenda não pode ser removida' });
     }
 
+    // The default is protected exactly like the inbox is. It used to be
+    // deletable, with the role quietly handed to whichever agenda happened to
+    // sort first — so removing one agenda silently changed where every future
+    // event would land, somewhere the user never chose. Making them name the
+    // replacement first turns that into a decision instead of a side effect.
+    if (agenda.isDefault) {
+      return reply
+        .code(400)
+        .send({ error: 'Defina outra agenda como padrão antes de remover esta' });
+    }
+
     if (agenda.account.provider === 'GOOGLE') {
       // Removing a Google calendar is a Gloo-side act only: nothing changes in
       // the user's Google account, and the mirrored rows go because they can be
@@ -181,33 +192,15 @@ export async function calendarAgendaRoutes(app: FastifyInstance) {
       // stops the next sync walking it straight back in.
       await prisma.$transaction([
         prisma.calendarEvent.deleteMany({ where: { agendaId: agenda.id } }),
-        prisma.agenda.update({
-          where: { id: agenda.id },
-          data: { removedAt: new Date(), isDefault: false },
-        }),
+        prisma.agenda.update({ where: { id: agenda.id }, data: { removedAt: new Date() } }),
       ]);
       return reply.code(204).send();
     }
 
-    const fallback = await defaultAgendaFor(request.authUser.id);
-
-    // Deleting the default is allowed as long as something else can take the
-    // role — the events move there and it becomes the new default. With nothing
-    // to move them to, the delete would orphan them, so it is refused.
-    const target =
-      fallback && fallback.id !== agenda.id
-        ? fallback
-        : await prisma.agenda.findFirst({
-            where: {
-              userId: request.authUser.id,
-              removedAt: null,
-              isSharedInbox: false,
-              isReadOnly: false,
-              id: { not: agenda.id },
-            },
-            orderBy: { sortOrder: 'asc' },
-          });
-
+    // Where this agenda's events go. Guaranteed to exist and to be a different
+    // row: the default is what they move to, and the default cannot be the
+    // agenda being deleted — that was refused above.
+    const target = await defaultAgendaFor(request.authUser.id);
     if (!target) {
       return reply.code(400).send({ error: 'É preciso ter outra agenda antes de remover esta' });
     }
@@ -218,9 +211,6 @@ export async function calendarAgendaRoutes(app: FastifyInstance) {
         data: { agendaId: target.id },
       }),
       prisma.agenda.delete({ where: { id: agenda.id } }),
-      ...(agenda.isDefault
-        ? [prisma.agenda.update({ where: { id: target.id }, data: { isDefault: true } })]
-        : []),
     ]);
 
     return reply.code(204).send();
