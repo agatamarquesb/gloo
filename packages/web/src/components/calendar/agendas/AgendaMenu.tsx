@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight, CircleDot, Eye, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Button, Popover } from '@heroui/react';
 
-import { LABEL_COLORS, type AgendaDto, type LabelColor } from '@gloo/shared';
+import type { AgendaDto } from '@gloo/shared';
 
 import { useShowOnlyAgenda, useUpdateAgenda } from '@/hooks/queries/calendar';
-import { LABEL_BG_CLASS } from '@/theme/labelColors';
+import { ColorPicker } from '@/components/common/ColorPicker';
+import { colorFill } from '@/theme/labelColors';
 import { FIELD_PANEL } from '@/theme/fieldStyles';
 import { menuRow } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
@@ -63,29 +64,19 @@ export function AgendaMenu({
                 <ChevronLeft className="size-4" />
                 {strings.calendar.agendas.color}
               </button>
-              <div className="grid grid-cols-5 gap-2 p-2">
-                {LABEL_COLORS.map((color: LabelColor) => (
-                  <button
-                    key={color}
-                    type="button"
-                    aria-label={color}
-                    aria-pressed={agenda.color === color}
-                    onClick={() => updateAgenda.mutate({ id: agenda.id, color })}
-                    className={`h-7 rounded-lg transition-transform hover:scale-105 ${
-                      LABEL_BG_CLASS[color]
-                    } ${
-                      agenda.color === color
-                        ? 'ring-2 ring-foreground ring-offset-2 ring-offset-surface'
-                        : ''
-                    }`}
-                  />
-                ))}
+              {/* The app's one colour picker — the ten it ships with, and
+                  whatever this browser has mixed. Same panel a label opens. */}
+              <div className="p-2">
+                <ColorPicker
+                  value={agenda.color}
+                  onChange={(color) => updateAgenda.mutate({ id: agenda.id, color })}
+                />
               </div>
             </div>
           ) : (
             <div className="flex flex-col gap-0.5">
               <button type="button" className={menuRow} onClick={() => setView('color')}>
-                <span className={`size-3.5 rounded-sm ${LABEL_BG_CLASS[agenda.color]}`} />
+                <span {...colorFill(agenda.color, 'size-3.5 rounded-sm')} />
                 <span className="flex-1 text-left">{strings.calendar.agendas.color}</span>
                 <ChevronRight className="size-4" />
               </button>

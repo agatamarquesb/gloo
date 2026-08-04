@@ -394,6 +394,25 @@ body {
   .calendar__heading {
     font-size: 0.6875rem;
   }
+
+  /*
+   * The month and year at the head of the panel — "julho de 2026" — which is a
+   * button rather than a heading and so kept its own `text-sm` while everything
+   * under it came down. It was then the largest type in the popover, naming a
+   * grid whose own numbers are 12px. The years it opens onto come down with it,
+   * being the same list read a level up.
+   */
+  .calendar-year-picker__trigger-heading,
+  .calendar-year-picker__year-cell {
+    font-size: 0.6875rem;
+  }
+
+  /* And never over two lines: the panel is only as wide as the property row it
+     hangs from, and "setembro de 2026" broken in half made the header taller
+     than the week of dates under it. */
+  .calendar-year-picker__trigger-heading {
+    white-space: nowrap;
+  }
 }
 
 /*

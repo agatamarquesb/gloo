@@ -4,7 +4,7 @@ import type { AgendaDto, CalendarEventDto } from '@gloo/shared';
 
 import { AssigneeAvatars } from '@/components/tasks/AssigneeAvatars';
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
-import { LABEL_BG_CLASS, LABEL_EDGE_CLASS } from '@/theme/labelColors';
+import { colorBlock } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
 /** Below this many minutes there is only room for the title. */
@@ -73,20 +73,24 @@ export function EventBlock({
   // An agenda we can't resolve means the event arrived before the account list
   // did. Grey is the neutral fallback rather than a missing background.
   const color = agenda?.color ?? 'gray';
+  const paint = colorBlock(color);
   const isTiny = minutes < TINY_MINUTES;
   const isCompact = minutes < COMPACT_MINUTES;
 
   return (
     <div
-      style={style}
       onPointerDown={onPointerDown}
-      className={`group/event absolute overflow-hidden rounded-xl border px-2 text-black ${
+      className={`${paint.className} group/event absolute overflow-hidden rounded-xl border px-2 text-black ${
         isTiny ? 'py-0' : 'py-1'
-      } ${LABEL_BG_CLASS[color]} ${LABEL_EDGE_CLASS[color]} ${
+      } ${
         // The selected event is marked with a ring rather than a different
         // fill: the fill is the agenda's identity and must not double as state.
         isSelected ? 'ring-2 ring-foreground ring-offset-1 ring-offset-surface' : ''
       }`}
+      // The block's position and its colour are both inline — the first because
+      // it is computed per event, the second because a colour the user mixed has
+      // no class to carry it. See colorBlock.
+      style={{ ...style, ...paint.style }}
     >
       {/* The click target is stretched behind the content rather than wrapped
           around it — the same reason a routine row does it (see

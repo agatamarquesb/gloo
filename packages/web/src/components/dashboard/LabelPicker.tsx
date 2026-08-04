@@ -1,57 +1,31 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeft, Pencil, Tag } from 'lucide-react';
 import { Button, Input, Label, Popover } from '@heroui/react';
 import { TextField } from 'react-aria-components';
 
-import {
-  DEFAULT_LABEL_COLOR,
-  LABEL_COLORS,
-  type LabelColor,
-  type LabelDto,
-} from '@gloo/shared';
+import { DEFAULT_LABEL_COLOR, type LabelDto, type LabelScope, type PaletteColor } from '@gloo/shared';
 
 import { AppCheckbox } from '@/components/common/AppCheckbox';
+import { ColorPicker } from '@/components/common/ColorPicker';
 import { SearchField } from '@/components/common/SearchField';
 import { useCreateLabel, useDeleteLabel, useLabels, useUpdateLabel } from '@/hooks/queries/labels';
-import { LABEL_BG_CLASS } from '@/theme/labelColors';
+import { colorFill } from '@/theme/labelColors';
 import { actionPill } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 /** The popover is either browsing labels or editing one — never both. */
 type View = { kind: 'list' } | { kind: 'edit'; label: LabelDto | null };
 
-function ColorGrid({
-  value,
-  onChange,
-}: {
-  value: LabelColor;
-  onChange: (color: LabelColor) => void;
-}) {
-  return (
-    <div className="grid grid-cols-5 gap-2">
-      {LABEL_COLORS.map((color) => (
-        <button
-          key={color}
-          type="button"
-          aria-label={color}
-          aria-pressed={value === color}
-          onClick={() => onChange(color)}
-          className={`h-8 rounded-lg transition-transform hover:scale-105 ${LABEL_BG_CLASS[color]} ${
-            value === color ? 'ring-2 ring-foreground ring-offset-2 ring-offset-surface' : ''
-          }`}
-        />
-      ))}
-    </div>
-  );
-}
-
 function LabelEditor({
   label,
+  scope,
   onDone,
   onBack,
 }: {
   /** Null when creating. */
   label: LabelDto | null;
+  /** Which pool a new one is created in — see LabelScope. */
+  scope: LabelScope;
   onDone: () => void;
   onBack: () => void;
 }) {
@@ -60,16 +34,15 @@ function LabelEditor({
   const deleteLabel = useDeleteLabel();
 
   const [name, setName] = useState(label?.name ?? '');
-  const [color, setColor] = useState<LabelColor>(label?.color ?? DEFAULT_LABEL_COLOR);
+  const [color, setColor] = useState<PaletteColor>(label?.color ?? DEFAULT_LABEL_COLOR);
 
   const isPending = createLabel.isPending || updateLabel.isPending || deleteLabel.isPending;
   const trimmed = name.trim();
 
   function handleSave() {
-    const input = { name: trimmed, color };
     const options = { onSuccess: onDone };
-    if (label) updateLabel.mutate({ id: label.id, ...input }, options);
-    else createLabel.mutate(input, options);
+    if (label) updateLabel.mutate({ id: label.id, name: trimmed, color }, options);
+    else createLabel.mutate({ name: trimmed, color, scope }, options);
   }
 
   return (
@@ -87,9 +60,7 @@ function LabelEditor({
 
       {/* Live preview of what the pill will look like. */}
       <div className="flex justify-center rounded-xl bg-default p-3">
-        <span
-          className={`rounded-lg px-3 py-1.5 text-sm text-black ${LABEL_BG_CLASS[color]}`}
-        >
+        <span {...colorFill(color, 'rounded-lg px-3 py-1.5 text-sm text-black')}>
           {trimmed || strings.label.namePlaceholder}
         </span>
       </div>
@@ -101,22 +72,25 @@ function LabelEditor({
 
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium text-foreground">{strings.label.colorLabel}</span>
-        <ColorGrid value={color} onChange={setColor} />
+        <ColorPicker value={color} onChange={setColor} />
       </div>
 
-      <div className="flex justify-between gap-2 border-t border-border pt-3">
-        <Button isDisabled={!trimmed || isPending} onPress={handleSave}>
-          {strings.common.save}
-        </Button>
+      {/* Salvar ends the row, where the button that commits a dialog always is;
+          destroying the label is the other thing you can do from here and sits
+          to its left, named in full so it cannot be mistaken for "discard". */}
+      <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
         {label ? (
           <Button
             variant="danger-soft"
             isDisabled={isPending}
             onPress={() => deleteLabel.mutate(label.id, { onSuccess: onDone })}
           >
-            {strings.common.delete}
+            {strings.label.remove}
           </Button>
         ) : null}
+        <Button isDisabled={!trimmed || isPending} onPress={handleSave}>
+          {strings.common.save}
+        </Button>
       </div>
     </div>
   );
@@ -135,12 +109,35 @@ function LabelEditor({
 export function LabelPicker({
   selectedIds,
   onChange,
+  scope,
+  trigger,
+  startOn,
 }: {
   selectedIds: string[];
   onChange: (ids: string[]) => void;
+  /**
+   * Whose tags these are. A routine's and a task's are separate vocabularies —
+   * this picker lists one of them and creates into it, and never sees the other.
+   */
+  scope: LabelScope;
+  /**
+   * What opens the picker. The routine modal's own pill by default; the task
+   * modal passes an icon-only button, since its tags live above the title rather
+   * than in a row of three labelled actions.
+   *
+   * Whatever is passed has to be a pressable element — HeroUI takes the
+   * popover's first child as its trigger.
+   */
+  trigger?: ReactNode;
+  /**
+   * Which panel it opens on. The list, normally — but a tag in the task modal
+   * opens straight into its own editor, because pressing the thing you want to
+   * change should not first show you a list of everything else.
+   */
+  startOn?: View;
 }) {
-  const { data: labels = [] } = useLabels();
-  const [view, setView] = useState<View>({ kind: 'list' });
+  const { data: labels = [] } = useLabels(scope);
+  const [view, setView] = useState<View>(startOn ?? { kind: 'list' });
   const [search, setSearch] = useState('');
 
   const visible = useMemo(() => {
@@ -154,21 +151,24 @@ export function LabelPicker({
 
   return (
     <Popover
-      // Reset to the list whenever the popover closes, so it never reopens
-      // mid-edit on a label the user has moved on from.
-      onOpenChange={(open) => !open && setView({ kind: 'list' })}
+      // Back to where it opens from whenever the popover closes, so it never
+      // reopens mid-edit on a label the user has moved on from.
+      onOpenChange={(open) => !open && setView(startOn ?? { kind: 'list' })}
     >
-      <Button variant="outline" size="sm" fullWidth className={actionPill}>
-        <Tag className="size-4" />
-        {strings.routine.labels}
-      </Button>
+      {trigger ?? (
+        <Button variant="outline" size="sm" fullWidth className={actionPill}>
+          <Tag className="size-4" />
+          {strings.routine.labels}
+        </Button>
+      )}
 
       <Popover.Content className="w-72">
         <Popover.Dialog>
           {view.kind === 'edit' ? (
             <LabelEditor
+              scope={scope}
               label={view.label}
-              onDone={() => setView({ kind: 'list' })}
+              onDone={() => setView(startOn ?? { kind: 'list' })}
               onBack={() => setView({ kind: 'list' })}
             />
           ) : (
@@ -197,9 +197,10 @@ export function LabelPicker({
                       </AppCheckbox>
 
                       <span
-                        className={`min-w-0 flex-1 truncate rounded-lg px-3 py-1.5 text-sm text-black ${
-                          LABEL_BG_CLASS[label.color]
-                        }`}
+                        {...colorFill(
+                          label.color,
+                          'min-w-0 flex-1 truncate rounded-lg px-3 py-1.5 text-sm text-black',
+                        )}
                       >
                         {label.name}
                       </span>

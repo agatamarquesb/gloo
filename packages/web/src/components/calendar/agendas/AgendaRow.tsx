@@ -4,7 +4,7 @@ import { Button } from '@heroui/react';
 import type { AgendaDto } from '@gloo/shared';
 
 import { useUpdateAgenda } from '@/hooks/queries/calendar';
-import { LABEL_BG_CLASS } from '@/theme/labelColors';
+import { colorFill } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
 import { AgendaMenu } from './AgendaMenu';
@@ -30,9 +30,10 @@ export function AgendaRow({
   return (
     <li className="group flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-default/40">
       <span
-        className={`size-3.5 shrink-0 rounded-sm ${LABEL_BG_CLASS[agenda.color]} ${
-          agenda.isHidden ? 'opacity-40' : ''
-        }`}
+        {...colorFill(
+          agenda.color,
+          `size-3.5 shrink-0 rounded-sm ${agenda.isHidden ? 'opacity-40' : ''}`,
+        )}
       />
 
       <span

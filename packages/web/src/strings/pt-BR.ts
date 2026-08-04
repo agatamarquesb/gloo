@@ -83,7 +83,7 @@ export const strings = {
      * nothing else — the row exists, and says plainly that there is nothing to
      * choose from rather than opening an empty list.
      */
-    projectsEmpty: 'Nenhum projeto criado ainda.',
+    projectsEmpty: 'Nenhum projeto por aqui',
     noAssignees: 'Ninguém',
   },
   routine: {
@@ -138,6 +138,14 @@ export const strings = {
   },
   label: {
     title: 'Etiquetas',
+    /**
+     * The task modal's way in: an icon with no words, so the hint lives on the
+     * cursor. Phrased as the thing it produces rather than as "Etiquetas",
+     * because the same button also creates one.
+     */
+    add: 'Nova etiqueta',
+    /** On the button itself while a task has none, where a glyph said nothing. */
+    one: 'Etiqueta',
     search: 'Buscar etiquetas...',
     create: 'Criar uma nova etiqueta',
     createHeading: 'Criar etiqueta',
@@ -146,6 +154,8 @@ export const strings = {
     namePlaceholder: 'Nome da etiqueta',
     colorLabel: 'Selecionar uma cor',
     edit: 'Editar etiqueta',
+    /** Named in full: at "Excluir" it read as "discard the changes". */
+    remove: 'Excluir etiqueta',
     back: 'Voltar',
     empty: 'Nenhuma etiqueta criada.',
   },
@@ -353,8 +363,19 @@ export const strings = {
       lastSynced: 'Sincronizado',
     },
   },
+  /** The colour picker, wherever it opens — a label's, an agenda's. */
+  color: {
+    /** The ten the app ships with. */
+    palette: 'Cores',
+    /** And the ones this browser has mixed, under a rule of their own. */
+    custom: 'Cores personalizadas',
+    add: 'Nova cor',
+    hex: 'Hexadecimal',
+    hue: 'Matiz',
+  },
   common: {
     save: 'Salvar',
+    add: 'Adicionar',
     cancel: 'Cancelar',
     delete: 'Excluir',
     edit: 'Editar',

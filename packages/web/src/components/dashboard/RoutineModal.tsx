@@ -14,6 +14,7 @@ import { Button, Input, Label, ListBox, Modal, Select } from '@heroui/react';
 import { TextField } from 'react-aria-components';
 
 import {
+  LabelScope,
   MAX_ROUTINE_CHECKLISTS,
   RoutineRecurrence,
   type AttachmentDto,
@@ -42,7 +43,7 @@ import {
 } from '@/theme/propertyRow';
 import { formatTimestamp } from '@/lib/formatDate';
 import { playSound } from '@/lib/sounds';
-import { LABEL_BG_CLASS, LABEL_PILL } from '@/theme/labelColors';
+import { colorFill, LABEL_PILL } from '@/theme/labelColors';
 import {
   TITLE_FIELD,
   actionPill,
@@ -544,7 +545,12 @@ export function RoutineModal({
                   clear, and everything in the dialog now starts on the same edge
                   as the rule under the header. */}
               <div className={`flex flex-col ${isEditing ? HEADER_STACK_EDIT : ''}`}>
-                <SelectedLabels ids={form.labelIds} className={isEditing ? '' : TAGS_ROW_VIEW} />
+                <SelectedLabels
+                  ids={form.labelIds}
+                  isEditing={isEditing}
+                  onChange={(labelIds) => set('labelIds', labelIds)}
+                  className={isEditing ? '' : TAGS_ROW_VIEW}
+                />
 
               {/* One property per row — label on the left, value on the right —
                   rather than three columns: the values are short, and stacking
@@ -722,6 +728,7 @@ export function RoutineModal({
               </Button>
 
               <LabelPicker
+                scope={LabelScope.ROUTINE}
                 selectedIds={form.labelIds}
                 onChange={(labelIds) => set('labelIds', labelIds)}
               />
@@ -834,9 +841,26 @@ export function RoutineModal({
   );
 }
 
-/** The labels currently ticked in the picker, shown as the pills they will be. */
-function SelectedLabels({ ids, className = '' }: { ids: string[]; className?: string }) {
-  const { data: labels = [] } = useLabels();
+/**
+ * The labels currently ticked in the picker, shown as the pills they will be —
+ * and, while the dialog is unlocked, each one a way into its own editor.
+ *
+ * Pressing the tag you want to change is the obvious gesture, and the alternative
+ * was the Etiquetas button, a list, and then finding it again. That button still
+ * opens the list, for attaching one you have not used here yet.
+ */
+function SelectedLabels({
+  ids,
+  isEditing,
+  onChange,
+  className = '',
+}: {
+  ids: string[];
+  isEditing: boolean;
+  onChange: (ids: string[]) => void;
+  className?: string;
+}) {
+  const { data: labels = [] } = useLabels(LabelScope.ROUTINE);
   const selected = labels.filter((label) => ids.includes(label.id));
 
   // Returning nothing rather than an empty row: the caller pads this to match a
@@ -845,14 +869,29 @@ function SelectedLabels({ ids, className = '' }: { ids: string[]; className?: st
 
   return (
     <div className={`flex flex-wrap gap-2 ${className}`}>
-      {selected.map((label) => (
-        <span
-          key={label.id}
-          className={`${LABEL_PILL} ${LABEL_BG_CLASS[label.color]}`}
-        >
-          {label.name}
-        </span>
-      ))}
+      {selected.map((label) =>
+        isEditing ? (
+          <LabelPicker
+            key={label.id}
+            scope={LabelScope.ROUTINE}
+            selectedIds={ids}
+            onChange={onChange}
+            startOn={{ kind: 'edit', label }}
+            trigger={
+              // HeroUI's Button, not a bare one: the popover hands its trigger
+              // press handling a plain DOM button never receives. Its own height
+              // and padding are cleared so what is left is the pill.
+              <Button variant="ghost" {...colorFill(label.color, `${LABEL_PILL} h-auto min-h-0`)}>
+                {label.name}
+              </Button>
+            }
+          />
+        ) : (
+          <span key={label.id} {...colorFill(label.color, LABEL_PILL)}>
+            {label.name}
+          </span>
+        ),
+      )}
     </div>
   );
 }

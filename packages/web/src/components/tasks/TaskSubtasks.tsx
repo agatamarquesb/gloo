@@ -1,22 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import { Button } from '@heroui/react';
 import { TextArea, TextField } from 'react-aria-components';
 
 import type { SubtaskDto } from '@gloo/shared';
 
 import { AppCheckbox } from '@/components/common/AppCheckbox';
+import { SectionScroll } from '@/components/common/SectionScroll';
 import { useAddSubtask, useDeleteSubtask, useUpdateSubtask } from '@/hooks/queries/tasks';
 import { playSound } from '@/lib/sounds';
 import {
-  blockActionColumn,
-  blockBox,
-  blockBoxBare,
   blockHeaderRow,
-  blockRow,
+  blockRowAction,
+  blockRowActionOnHover,
   blockRowList,
   blockTitle,
-  quietTextButton,
+  taskBlockBox,
+  taskBlockRow,
 } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
@@ -24,8 +23,12 @@ import { strings } from '@/strings/pt-BR';
  * An item's text, in both modes — the routine checklist's measure, so a task's
  * subtasks and a routine's items wrap at the same place. See ITEM_TEXT there for
  * why `ch` and `field-sizing-content`.
+ *
+ * `font-medium`, like a property's value and an attachment's title: these are
+ * the dialog's content, and at a plain weight they read as caption text under
+ * headings that are heavier than they are.
  */
-const ITEM_TEXT = 'block w-full max-w-[48ch] text-sm break-words whitespace-pre-wrap';
+const ITEM_TEXT = 'block w-full max-w-[48ch] text-sm font-medium break-words whitespace-pre-wrap';
 
 /**
  * A task's subtasks, wearing a routine checklist's clothes.
@@ -120,39 +123,56 @@ export function TaskSubtasks({
   }
 
   return (
-    <section className={isEditing ? blockBox : blockBoxBare}>
+    // Fills its quadrant rather than growing with the list: the dialog's rules
+    // are fixed, so a sixth subtask scrolls inside the section instead of
+    // pushing the footer off the screen.
+    <section className={`${taskBlockBox('gap-0')} h-full min-h-0`}>
       {/* Just the name — no leading icon. Nothing in this column needs a shared
           left edge to line up against, and a task has exactly one list of
           subtasks, so an icon would only be decoration. The row still takes
           Anexos' heading height, so the two blocks' first rows start level. */}
-      <div className={blockHeaderRow}>
-        <span className={`flex-1 text-foreground ${blockTitle(isEditing)}`}>
+      <div className={`${blockHeaderRow} shrink-0`}>
+        <span className={`text-foreground ${blockTitle(isEditing, true)}`}>
           {strings.task.subtasksTitle}
         </span>
 
-        {/* One way in, from the heading — the same place Anexos keeps it. A
-            labelled "Adicionar subtarefa" row used to sit under the list, where
-            it read as a sixth subtask that had lost its checkbox. */}
+        {/* The way in, on the heading's right end — the same corner the rule
+            above this block ends on, and where Anexos keeps its own. The
+            progress these rows add up to is a property again, in the list
+            above. */}
         {isEditing ? (
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            className="shrink-0 text-muted"
+          <button
+            type="button"
+            className={`${blockRowAction} ml-auto`}
             aria-label={strings.task.addSubtask}
-            onPress={() => setAdding(true)}
+            onClick={() => setAdding(true)}
           >
             <Plus className="size-4" />
-          </Button>
+          </button>
         ) : null}
       </div>
 
-      <div className={blockRowList}>
+      <SectionScroll className={blockRowList}>
         {subtasks.map((subtask) => (
-          // Checkbox and × last, on the row's right edge: the text starts on the
-          // block's own left edge like everything else in the column, and the
-          // two controls stack into the same columns Anexos' pencil and bin do.
-          <div key={subtask.id} className={blockRow}>
+          // Checkbox, then the text, then the × on the row's right edge — the
+          // reading order of the row: what you do to it, what it says, and the
+          // way to be rid of it. Top-aligned, so a subtask that wraps starts
+          // level with its own checkbox; see taskBlockRow.
+          <div key={subtask.id} className={taskBlockRow}>
+            {/* On the row's own left edge, not in a slot: a column would centre
+                the box in it and leave the tick indented from the line the
+                heading above starts on. The nudge puts it on the first line's
+                optical centre rather than its box's top. */}
+            <AppCheckbox
+              quiet
+              className="mt-0.5 shrink-0"
+              isDisabled={!canEdit}
+              isSelected={subtask.done}
+              onChange={(done) => updateSubtask.mutate({ id: subtask.id, done })}
+            >
+              <span className="sr-only">{subtask.text || strings.task.subtaskPlaceholder}</span>
+            </AppCheckbox>
+
             {isEditing ? (
               <TextField
                 aria-label={strings.task.subtaskPlaceholder}
@@ -177,25 +197,13 @@ export function TaskSubtasks({
               </span>
             )}
 
-            <span className={blockActionColumn}>
-              <AppCheckbox
-                quiet
-                isDisabled={!canEdit}
-                isSelected={subtask.done}
-                onChange={(done) => updateSubtask.mutate({ id: subtask.id, done })}
-              >
-                <span className="sr-only">{subtask.text || strings.task.subtaskPlaceholder}</span>
-              </AppCheckbox>
-            </span>
-
-            {/* The glyph and nothing else, standing in its own column beside the
-                checkbox — it used to be a ghost button that appeared on hover,
-                which meant the way to remove a subtask was invisible until you
-                happened to be over the right row. */}
+            {/* An × and nothing else, and only while the row is under the
+                cursor: five bins down a list you are reading is five invitations
+                to destroy something. It keeps the bin's place exactly. */}
             {isEditing ? (
               <button
                 type="button"
-                className={`${blockActionColumn} ${quietTextButton}`}
+                className={`${blockRowAction} ${blockRowActionOnHover} mt-1`}
                 aria-label={strings.task.removeSubtask}
                 onClick={() => {
                   playSound('delete');
@@ -207,7 +215,6 @@ export function TaskSubtasks({
             ) : null}
           </div>
         ))}
-      </div>
 
       {/* A new subtask is typed on a line of its own and committed with Enter,
           unlike a routine's checklist where "add item" appends a blank row: a
@@ -215,7 +222,7 @@ export function TaskSubtasks({
           untitled subtasks reads as broken. The line closes itself when it is
           left empty, so the block goes back to being a list. */}
       {isEditing && isAdding ? (
-        <div className={blockRow}>
+        <div className={taskBlockRow}>
           <TextField
             aria-label={strings.task.addSubtask}
             value={newText}
@@ -247,6 +254,7 @@ export function TaskSubtasks({
           </TextField>
         </div>
       ) : null}
+      </SectionScroll>
     </section>
   );
 }

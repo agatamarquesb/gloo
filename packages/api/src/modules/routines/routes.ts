@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 
+import { LabelScope } from '@gloo/shared';
 import type { CreateRoutineInput, UpdateRoutineInput } from '@gloo/shared';
 
 import { canMutate } from '../../lib/authorize';
+import { labelIdsInScope } from '../../lib/labelScope';
 import { prisma } from '../../lib/prisma';
 import { sanitizeNotes } from '../../lib/sanitizeHtml';
 
@@ -150,7 +152,12 @@ export async function routineRoutes(app: FastifyInstance) {
         attachments: toJsonAttachments(attachments),
         createdById: request.authUser.id,
         assignees: { create: assigneeIds.map((userId) => ({ userId })) },
-        labels: { create: (labelIds ?? []).map((labelId) => ({ labelId })) },
+        // Only ids from the routine pool — see labelIdsInScope.
+        labels: {
+          create: (await labelIdsInScope(labelIds ?? [], LabelScope.ROUTINE)).map((labelId) => ({
+            labelId,
+          })),
+        },
       },
       include: routineInclude,
     });
@@ -205,7 +212,14 @@ export async function routineRoutes(app: FastifyInstance) {
             ? { assignees: { deleteMany: {}, create: assigneeIds.map((userId) => ({ userId })) } }
             : {}),
           ...(labelIds !== undefined
-            ? { labels: { deleteMany: {}, create: labelIds.map((labelId) => ({ labelId })) } }
+            ? {
+                labels: {
+                  deleteMany: {},
+                  create: (await labelIdsInScope(labelIds, LabelScope.ROUTINE)).map((labelId) => ({
+                    labelId,
+                  })),
+                },
+              }
             : {}),
           // Keep the unused cadence field null so a switched routine can't keep
           // a stale weekday/day-of-month around.

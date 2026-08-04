@@ -1,6 +1,6 @@
 import {
   DEFAULT_LABEL_COLOR,
-  isLabelColor,
+  isPaletteColor,
   type AgendaDto,
   type CalendarAccountDto,
   type CalendarEventDto,
@@ -44,7 +44,7 @@ export function toAgendaDto(agenda: AgendaRow): AgendaDto {
     // Stored as a plain string, so an unknown key — a hand-edited row, or a
     // colour retired from the palette — falls back rather than reaching the UI
     // as an undefined class. Same reasoning as toLabelDto.
-    color: isLabelColor(agenda.color) ? agenda.color : DEFAULT_LABEL_COLOR,
+    color: isPaletteColor(agenda.color) ? agenda.color : DEFAULT_LABEL_COLOR,
     isHidden: agenda.isHidden,
     isDefault: agenda.isDefault,
     isReadOnly: agenda.isReadOnly,

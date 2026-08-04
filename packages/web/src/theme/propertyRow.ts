@@ -25,11 +25,14 @@ export const PROPERTY_ROW_THIRDS = 'grid grid-cols-3 items-center gap-2';
 /**
  * The same row in a dialog column that is already half a dialog wide — the task
  * modal's left column. Thirds there would leave a value like "marketing &
- * aquisição" in a 130px cell, so the label column is fixed at the width it
- * happens to have in the routine modal (a third of `sm:max-w-xl`) and the value
- * takes what is left. Both modals' labels therefore end on the same measure.
+ * aquisição" in a 130px cell, so the label column is fixed and the value takes
+ * what is left.
+ *
+ * 8rem is the longest label ("Responsável") plus its icon and no more: values
+ * now wrap rather than truncate, and every pixel this column does not need is a
+ * pixel that keeps a deadline on one line.
  */
-export const PROPERTY_ROW_SPLIT = 'grid grid-cols-[11rem_minmax(0,1fr)] items-center gap-2';
+export const PROPERTY_ROW_SPLIT = 'grid grid-cols-[8rem_minmax(0,1fr)] items-start gap-2';
 
 /**
  * One height for every row, instead of each one taking the height of whatever it
@@ -43,6 +46,17 @@ export const PROPERTY_ROW_SPLIT = 'grid grid-cols-[11rem_minmax(0,1fr)] items-ce
  * meet. See TOP_COLUMN_HEIGHT there.
  */
 export const PROPERTY_ROW_HEIGHT = 'h-10';
+
+/**
+ * Spacing instead of a height, for a list whose values may wrap.
+ *
+ * A row that could not grow had to cut what it held; one with a fixed floor put
+ * its label 6px above the first line of a value that had come down onto two. So
+ * the task modal's rows take their height from their content and this is the air
+ * around it — the same above and below, so the pitch stays even whether a row
+ * holds one line or three. See `fluid`.
+ */
+export const PROPERTY_ROW_PITCH = 'py-1.5';
 
 /**
  * A row's own vertical padding, and so the gap between two of them: the header
@@ -65,7 +79,32 @@ export const ROW_PADDING_VIEW = 'py-0.5';
  * it short of the column. Rather than fight that from outside the component, the
  * control is widened by exactly that inset so the chevron lands on the edge.
  */
-export const BARE_TRIGGER = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FIELD_GROUND} w-[calc(100%+0.5rem)] items-center gap-1 pr-6 pl-0 text-left`;
+export const BARE_TRIGGER = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FIELD_GROUND} aria-expanded:w-[calc(100%+1rem)] w-[calc(100%+0.5rem)] items-center gap-1 pr-6 pl-0 text-left`;
+
+/**
+ * The same trigger with no chevron on it — the task modal's, where the pointer
+ * is what says a value can be changed.
+ *
+ * Two things follow from dropping the glyph. The row keeps its own width instead
+ * of overhanging the column by the chevron's inset, since there is no longer a
+ * chevron to line up on that edge; and the 24px it reserved on the right goes
+ * back to the value, which is what a long sector name needed.
+ *
+ * `cursor-pointer` only where it can actually be pressed: locked, the value is
+ * text, and a hand over text promises something the dialog will not do.
+ *
+ * `p-0` rather than only `px-0`: a Select trigger brings 8px of block padding
+ * with it, so the two rows that hold a pill stood 16px taller than the four that
+ * hold text and the column lost the even pitch it is read by.
+ *
+ * The two `aria-expanded` rules are about the ground it grows while open. The
+ * width, because the ground bleeds 8px to the *left* of the value (see
+ * OPEN_FIELD_GROUND) and a `w-full` box would take those 8px off its right edge
+ * instead of adding them — leaving the grey band short of the panel hanging
+ * under it. And the padding, so the band is as deep as one option in that panel
+ * rather than a strip the height of the text alone.
+ */
+export const BARE_TRIGGER_NO_INDICATOR = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FIELD_GROUND} aria-expanded:w-[calc(100%+0.5rem)] aria-expanded:pb-1 w-full gap-1 p-0 text-left`;
 
 /**
  * The trigger's height, which sets the row's. Locked it comes down to just clear
@@ -101,8 +140,16 @@ export const VIEW_UNDIMMED = 'opacity-100! data-[disabled=true]:opacity-100!';
  */
 export const VALUE_CELL = 'w-full';
 
-/** Labels carry the icon, not the control — the value stays plain text. */
-export const FIELD_LABEL = 'flex shrink-0 items-center gap-2 text-sm text-muted';
+/**
+ * Labels carry the icon, not the control — the value stays plain text.
+ *
+ * `font-medium` explicitly: half these rows are a HeroUI `Label` (the ones
+ * inside a Select) and half a plain span, and the component brings that weight
+ * with it — so Deadline, Projeto and Status read a shade lighter than
+ * Prioridade, Setor and Responsável in the same column. Stated here, all six are
+ * the same word.
+ */
+export const FIELD_LABEL = 'flex shrink-0 items-center gap-2 text-sm font-medium text-muted';
 
 /**
  * The icons read at full text colour while their labels stay grey: at 16px a
@@ -128,15 +175,37 @@ export function propertyStyles(
      * the task modal pins them, see PROPERTY_ROW_HEIGHT.
      */
     height,
-  }: { row?: string; height?: string } = {},
+    /**
+     * Whether the value keeps its chevron. The task modal's do not — see
+     * BARE_TRIGGER_NO_INDICATOR — and the caller that turns this off is also the
+     * one that must not render a `Select.Indicator`.
+     */
+    indicator = true,
+    /**
+     * Whether a value that does not fit may wrap and take its row with it. The
+     * control's height becomes a minimum rather than a fixed one, so two lines
+     * make a taller row instead of a clipped one.
+     */
+    fluid = false,
+  }: { row?: string; height?: string; indicator?: boolean; fluid?: boolean } = {},
 ) {
   const undimmed = isEditing ? '' : VIEW_UNDIMMED;
+  const base = indicator
+    ? BARE_TRIGGER
+    : `${BARE_TRIGGER_NO_INDICATOR} ${isEditing ? 'cursor-pointer' : ''}`;
+  // Fluid, the control has no height of its own and sits at the top of its row:
+  // a value on two lines must start where its label does, and anything centred
+  // in a taller box starts lower than the label beside it.
+  // `min-h-0` and not merely "no height": a HeroUI Select trigger carries a 36px
+  // minimum of its own, so the two rows that hold a pill stood 16px taller than
+  // the four that hold text and the column lost its rhythm.
+  const align = fluid ? 'min-h-0 items-start' : 'items-center';
+  const editHeight = fluid ? align : `${align} ${TRIGGER_HEIGHT_EDIT}`;
+  const viewHeight = fluid ? align : `${align} ${TRIGGER_HEIGHT_VIEW}`;
   return {
     undimmed,
     row: `${row} ${height ?? (isEditing ? ROW_PADDING_EDIT : ROW_PADDING_VIEW)}`,
     label: `${FIELD_LABEL} ${undimmed}`,
-    trigger: `${BARE_TRIGGER} ${
-      isEditing ? TRIGGER_HEIGHT_EDIT : `${TRIGGER_HEIGHT_VIEW} ${VIEW_TRIGGER}`
-    }`,
+    trigger: `${base} ${isEditing ? editHeight : `${viewHeight} ${VIEW_TRIGGER}`}`,
   };
 }

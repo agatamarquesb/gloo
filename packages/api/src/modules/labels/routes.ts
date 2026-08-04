@@ -1,6 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 
-import { DEFAULT_LABEL_COLOR, isLabelColor, type LabelDto, type LabelInput } from '@gloo/shared';
+import {
+  DEFAULT_LABEL_COLOR,
+  isLabelScope,
+  isPaletteColor,
+  LabelScope,
+  type LabelDto,
+  type LabelInput,
+} from '@gloo/shared';
 
 import { prisma } from '../../lib/prisma';
 
@@ -10,9 +17,10 @@ function toLabelDto(label: { id: string; name: string; color: string }): LabelDt
   return {
     id: label.id,
     name: label.name,
-    // Stored as a plain string, so an unknown key (hand-edited row, retired
-    // color) falls back rather than reaching the UI as an undefined class.
-    color: isLabelColor(label.color) ? label.color : DEFAULT_LABEL_COLOR,
+    // Stored as a plain string — one of the palette keys or a hex the user
+    // mixed. Anything else (a hand-edited row, a retired key) falls back rather
+    // than reaching the UI as a colour nothing can paint.
+    color: isPaletteColor(label.color) ? label.color : DEFAULT_LABEL_COLOR,
   };
 }
 
@@ -21,18 +29,28 @@ function validate(body: Partial<LabelInput>): string | null {
   if (body.name && body.name.trim().length > MAX_NAME_LENGTH) {
     return `Nome deve ter no máximo ${MAX_NAME_LENGTH} caracteres`;
   }
-  if (body.color !== undefined && !isLabelColor(body.color)) return 'color inválida';
+  if (body.color !== undefined && !isPaletteColor(body.color)) return 'color inválida';
+  if (body.scope !== undefined && !isLabelScope(body.scope)) return 'scope inválido';
   return null;
 }
 
 /**
- * Labels are shared across routines rather than owned by one, so the picker can
- * list everything that exists and reuse it. That also means editing or deleting
- * one affects every routine wearing it — which is the intent.
+ * Labels are shared across the routines — or the tasks — that wear them, so the
+ * picker can list everything in its pool and reuse it. Editing or deleting one
+ * therefore affects every routine wearing it, which is the intent.
+ *
+ * The two pools never meet: every read filters on `scope`, and a write can only
+ * reach a label the caller asked for by id, which came from a scoped list.
  */
 export async function labelRoutes(app: FastifyInstance) {
-  app.get('/', async () => {
-    const labels = await prisma.label.findMany({ orderBy: { createdAt: 'asc' } });
+  app.get('/', async (request) => {
+    // Unscoped requests are answered with the routine pool: that is what the
+    // parameter defaulted to before it existed.
+    const { scope } = request.query as { scope?: string };
+    const labels = await prisma.label.findMany({
+      where: { scope: isLabelScope(scope) ? scope : LabelScope.ROUTINE },
+      orderBy: { createdAt: 'asc' },
+    });
     return labels.map(toLabelDto);
   });
 
@@ -44,6 +62,7 @@ export async function labelRoutes(app: FastifyInstance) {
       data: {
         name: request.body.name.trim(),
         color: request.body.color ?? DEFAULT_LABEL_COLOR,
+        scope: request.body.scope ?? LabelScope.ROUTINE,
       },
     });
 

@@ -1,3 +1,5 @@
+import { CalendarDays } from 'lucide-react';
+
 import type { TaskStatus } from '@gloo/shared';
 
 import { strings } from '@/strings/pt-BR';
@@ -14,15 +16,14 @@ import { strings } from '@/strings/pt-BR';
  * carries — see --status-*-text — so the word is the colour it means, and the
  * dot with it.
  */
-const OVERDUE_CLASS = 'bg-status-overdue text-status-overdue-text';
-
 const STATUS_CLASS: Record<TaskStatus, string> = {
   TODO: 'bg-status-todo text-status-todo-text',
   IN_PROGRESS: 'bg-status-progress text-status-progress-text',
   DONE: 'bg-status-done text-status-done-text',
-  // The status somebody set and the lateness a passed due date implies are one
-  // thing to the reader, so they wear one colour.
-  OVERDUE: OVERDUE_CLASS,
+  // Only reachable on a task marked late by hand before the status was retired
+  // — nothing can set it now, and being late is said by the mark beside the
+  // deadline instead. See OverdueMark.
+  OVERDUE: 'bg-status-overdue text-status-overdue-text',
 };
 
 /**
@@ -41,17 +42,17 @@ const STATUS_CLASS: Record<TaskStatus, string> = {
  * gives back the height that removes so the pill measures the same.
  */
 export const STATUS_PILL =
-  'inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-1 text-xs leading-none whitespace-nowrap lowercase';
+  'inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-1 text-[13px] leading-none whitespace-nowrap lowercase';
 
 /**
- * How tall that comes to: `py-1` twice over the 12px of `text-xs`, which
+ * How tall that comes to: `py-1` twice over the 13px of the label, which
  * `leading-none` holds to its own type size.
  *
  * A number rather than a class because TaskStatusChipSelect has to position a
  * panel against it in pixels — see the offsets there, which lay the dropdown's
  * own copy of the chip exactly over this one.
  */
-export const STATUS_PILL_HEIGHT = 20;
+export const STATUS_PILL_HEIGHT = 21;
 
 /**
  * The dot before the label, in the pill's own text colour at half strength.
@@ -86,14 +87,40 @@ export const LABEL_OPTICAL_LIFT = '-translate-y-[0.08em]';
  * column of them up is the fixed-width cell each sits in on the task row — see
  * STATUS_COLUMN in TaskCard.
  */
-export function StatusChip({ status, isOverdue }: { status: TaskStatus; isOverdue?: boolean }) {
-  const showOverdue = isOverdue && status !== 'DONE';
-  const label = showOverdue ? strings.task.filters.overdue : strings.task.status[status];
-
+/**
+ * That a task is late: a calendar with an exclamation beside it, in the overdue
+ * red, immediately after the date it is late against — or, on a task row where
+ * the date is only a line of meta, after the task's name.
+ *
+ * A pill is how a status is shown, and late is not a status — nobody sets it,
+ * the date does. As a fourth chip in the status column it displaced the status
+ * the task actually has ("em andamento" on a task that is also late is two
+ * facts, and the pill could only carry one).
+ *
+ * The exclamation is type rather than an icon because lucide has no
+ * calendar-with-warning, and a second glyph of a different weight beside the
+ * first looked like two icons rather than one mark.
+ */
+export function OverdueMark({ className = '' }: { className?: string }) {
   return (
-    <span className={`${STATUS_PILL} ${showOverdue ? OVERDUE_CLASS : STATUS_CLASS[status]}`}>
+    <span
+      className={`inline-flex items-center gap-0.5 text-status-overdue-text ${className}`}
+      title={strings.task.filters.overdue}
+    >
+      <CalendarDays className="size-4" aria-hidden />
+      <span aria-hidden className="text-sm leading-none font-bold">
+        !
+      </span>
+      <span className="sr-only">{strings.task.filters.overdue}</span>
+    </span>
+  );
+}
+
+export function StatusChip({ status }: { status: TaskStatus }) {
+  return (
+    <span className={`${STATUS_PILL} ${STATUS_CLASS[status]}`}>
       <span aria-hidden className={DOT} />
-      <span className={LABEL_OPTICAL_LIFT}>{label}</span>
+      <span className={LABEL_OPTICAL_LIFT}>{strings.task.status[status]}</span>
     </span>
   );
 }

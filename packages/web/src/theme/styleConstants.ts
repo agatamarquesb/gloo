@@ -14,18 +14,63 @@
 export const blockBox = 'flex flex-col gap-3 rounded-2xl p-3';
 
 /**
- * The same block, closed up, for the task modal's left-hand note.
+ * The same blocks in the task modal, where the heading and what it heads are one
+ * object rather than two.
  *
- * It starts on its cell's own top edge — no padding there — which is what puts
- * the note's first line level with the deadline in the column beside it. The gap
- * under the heading is the same 12px every other block gives its own: Notas and
- * Anexos sit side by side in the task modal, and a heading that sat 2px closer
- * to what it heads on one side than on the other was visible across the gutter.
+ * The dialog is four quadrants closed off by rules, and inside a quadrant the
+ * 12px between "Subtarefas" and its first row read as a gap in the section — the
+ * heading looked like it belonged to the rule above it rather than to the list
+ * under it. So the gap is the caller's to choose: none for the note and the
+ * subtasks, half for Anexos, whose rows carry a coloured tile that needs a
+ * little air under the word.
+ *
+ * No padding of any kind, unlike the routine modal's blocks. The dialog's inset
+ * belongs to its two columns (see COLUMN_INSET in TaskModal) rather than to each
+ * block inside them — that is what puts every rule, every heading and the right
+ * edge of every bin on the same two vertical lines, instead of the sections
+ * sitting 12px inside rules that were drawn a level up.
  */
-export const blockBoxTight = 'flex flex-col gap-3 rounded-2xl px-3 pt-0 pb-3';
+export function taskBlockBox(gap: string): string {
+  return `flex flex-col ${gap}`;
+}
 
-/** And the locked version of it, which has no frame to pad. */
-export const blockBoxBareTight = 'flex flex-col gap-3';
+/**
+ * A row's own control in the task dialog — the × that removes a subtask or a
+ * file, the + that adds one.
+ *
+ * The glyph and nothing else: no padding, no ground, no border, so the box *is*
+ * the ink and lands exactly on the block's right edge — the edge the rules
+ * across the dialog end on. An icon button's 32px square could not: pulled left
+ * it stopped short of the line, pulled right it overhung the section and gave
+ * the list a horizontal scrollbar.
+ */
+export const blockRowAction =
+  'flex size-4 shrink-0 cursor-pointer items-center justify-center text-muted transition-colors hover:text-foreground';
+
+/**
+ * The same control, only while the row is under the cursor — for the ×, which
+ * is destructive and has no business being the most visible thing on a row you
+ * are only reading. `group-hover` on the row, plus focus so it can still be
+ * reached from the keyboard.
+ */
+export const blockRowActionOnHover =
+  'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100';
+
+/**
+ * A trailing control in a task-modal row — a subtask's checkbox and bin, an
+ * attachment's pencil and bin.
+ *
+ * Paired inside one flex rather than each in a column of its own: those controls
+ * used to sit a full row-gap apart, which put the checkbox nearer the subtask's
+ * text than the bin it belongs with. Closed up, the two read as one cluster on
+ * the row's right edge.
+ *
+ * The slot is the button's own footprint, so a checkbox and a glyph — which do
+ * not measure the same — still stack into straight columns down the block.
+ */
+export const blockActionCluster = 'flex shrink-0 items-center gap-0.5';
+/** A HeroUI icon button's footprint, so a bare glyph lines up with one. */
+export const blockActionSlot = 'flex size-8 shrink-0 items-center justify-center';
 
 /**
  * The same blocks once the routine modal is locked. Reading a routine is not
@@ -80,8 +125,18 @@ export const blockDivider = `${modalDivider} mt-2 mb-1`;
  */
 export const blockLeadColumn = 'flex w-5 shrink-0 items-center justify-center';
 
-export function blockTitle(isEditing: boolean): string {
-  return isEditing ? 'text-sm font-medium' : 'text-sm font-bold';
+/**
+ * A block heading, one step up in size and weight, for the task modal.
+ *
+ * "Visão geral", "Subtarefas" and "Anexos" name the four quadrants of a dialog
+ * rather than sections of a scrolling page, so they carry a little more than the
+ * routine modal's — 15px against 14, and semibold where that one is medium. Not
+ * two steps: they still must not compete with the task's own title above them.
+ */
+export function blockTitle(isEditing: boolean, large = false): string {
+  const size = large ? 'text-[0.9375rem]' : 'text-sm';
+  const weight = large ? (isEditing ? 'font-semibold' : 'font-bold') : isEditing ? 'font-medium' : 'font-bold';
+  return `${size} ${weight}`;
 }
 
 /**
@@ -102,13 +157,15 @@ export const blockRowList = 'flex flex-col gap-1';
 export const blockRow = 'flex min-h-9 items-center gap-3 md:min-h-8';
 
 /**
- * A trailing control in one of those rows — a subtask's checkbox and its ×, an
- * attachment's pencil and bin. The column is that same button's width, so
- * controls of different natural sizes still stack into straight columns down the
- * right of the block, and the distance between two of them is the row's gap
- * whichever pair of controls the row happens to hold.
+ * The same row in the task dialog, where a title too long for its column wraps
+ * rather than being cut — nothing in that dialog scrolls sideways.
+ *
+ * So the row is top-aligned: a two-line name starts level with the icon beside
+ * it instead of straddling it, and the controls at either end stay on the first
+ * line where they belong. `group` is what lets the × appear with the row.
  */
-export const blockActionColumn = 'flex w-9 shrink-0 items-center justify-center md:w-8';
+export const taskBlockRow = 'group flex min-h-8 items-start gap-3 py-1';
+
 
 /**
  * The app's one "sitting on the card" surface: a routine row's fill, the disc in

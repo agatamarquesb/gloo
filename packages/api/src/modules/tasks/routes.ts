@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 
-import { isTaskStatus } from '@gloo/shared';
+import { isTaskStatus, LabelScope } from '@gloo/shared';
 import type { CreateTaskInput, TaskBySectorDto, TaskSummaryDto, UpdateTaskInput } from '@gloo/shared';
 
 import { canMutate } from '../../lib/authorize';
+import { labelIdsInScope } from '../../lib/labelScope';
 import { prisma } from '../../lib/prisma';
 import { sanitizeNotes } from '../../lib/sanitizeHtml';
 import { toJsonAttachments } from '../routines/mapper';
@@ -187,7 +188,7 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Body: CreateTaskInput }>('/', async (request, reply) => {
-    const { title, description, priority, dueDate, sectorId, assigneeIds, attachments } =
+    const { title, description, priority, dueDate, sectorId, assigneeIds, attachments, labelIds } =
       request.body;
 
     if (!title || !priority || !sectorId) {
@@ -206,6 +207,12 @@ export async function taskRoutes(app: FastifyInstance) {
         sectorId,
         createdById: request.authUser.id,
         assignees: { create: (assigneeIds ?? []).map((userId) => ({ userId })) },
+        // Only ids from the task pool — see labelIdsInScope.
+        labels: {
+          create: (await labelIdsInScope(labelIds ?? [], LabelScope.TASK)).map((labelId) => ({
+            labelId,
+          })),
+        },
       },
       include: taskInclude,
     });
@@ -221,7 +228,7 @@ export async function taskRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'Sem permissão para editar esta tarefa' });
     }
 
-    const { title, description, priority, dueDate, sectorId, assigneeIds, attachments } =
+    const { title, description, priority, dueDate, sectorId, assigneeIds, attachments, labelIds } =
       request.body;
 
     const task = await prisma.task.update({
@@ -235,6 +242,18 @@ export async function taskRoutes(app: FastifyInstance) {
         ...(sectorId !== undefined ? { sectorId } : {}),
         ...(assigneeIds !== undefined
           ? { assignees: { deleteMany: {}, create: assigneeIds.map((userId) => ({ userId })) } }
+          : {}),
+        // Replaced wholesale, like the assignees: the modal sends the set it
+        // wants, not a diff. Filtered to this pool, as on create.
+        ...(labelIds !== undefined
+          ? {
+              labels: {
+                deleteMany: {},
+                create: (await labelIdsInScope(labelIds, LabelScope.TASK)).map((labelId) => ({
+                  labelId,
+                })),
+              },
+            }
           : {}),
       },
       include: taskInclude,

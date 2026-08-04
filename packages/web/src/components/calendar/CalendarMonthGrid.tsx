@@ -3,7 +3,7 @@ import type { CalendarDate } from '@internationalized/date';
 import type { AgendaDto, CalendarEventDto } from '@gloo/shared';
 
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
-import { LABEL_BG_CLASS, LABEL_EDGE_CLASS } from '@/theme/labelColors';
+import { colorBlock } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
 import { formatEventTime } from './EventBlock';
@@ -134,13 +134,14 @@ export function CalendarMonthGrid({
                         key={key}
                         type="button"
                         onClick={() => onSelectEvent(event)}
-                        className={`flex w-full items-center gap-1 truncate rounded-md border px-1 py-0.5 text-left text-[10px] text-black ${
-                          LABEL_BG_CLASS[color]
-                        } ${LABEL_EDGE_CLASS[color]} ${
-                          selectedEventId === key
-                            ? 'ring-1 ring-foreground ring-offset-1 ring-offset-surface'
-                            : ''
-                        }`}
+                        {...colorBlock(
+                          color,
+                          `flex w-full items-center gap-1 truncate rounded-md border px-1 py-0.5 text-left text-[10px] text-black ${
+                            selectedEventId === key
+                              ? 'ring-1 ring-foreground ring-offset-1 ring-offset-surface'
+                              : ''
+                          }`,
+                        )}
                       >
                         {/* No clock time on an all-day event: it does not have
                             one, and formatting its UTC midnight in the viewer's

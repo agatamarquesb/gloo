@@ -1,4 +1,9 @@
-import type { TaskDetailDto, TaskListItemDto } from '@gloo/shared';
+import {
+  DEFAULT_LABEL_COLOR,
+  isPaletteColor,
+  type TaskDetailDto,
+  type TaskListItemDto,
+} from '@gloo/shared';
 
 import { toUserDto } from '../../lib/userDto';
 import { parseAttachments } from '../routines/mapper';
@@ -9,6 +14,7 @@ const taskWithRelations = {
     sector: true,
     assignees: { include: { user: true } },
     subtasks: true,
+    labels: { include: { label: true } },
   },
 } satisfies Prisma.TaskDefaultArgs;
 
@@ -59,6 +65,13 @@ export function toTaskDetailDto(task: TaskWithRelations): TaskDetailDto {
   return {
     ...toTaskListItemDto(task),
     description: task.description,
+    // The same tags a routine carries, read the same way — an unknown colour
+    // falls back rather than reaching the client as a class nobody has.
+    labels: task.labels.map(({ label }) => ({
+      id: label.id,
+      name: label.name,
+      color: isPaletteColor(label.color) ? label.color : DEFAULT_LABEL_COLOR,
+    })),
     attachments: parseAttachments(task.attachments),
     subtasks: task.subtasks
       .toSorted((a, b) => a.order - b.order)

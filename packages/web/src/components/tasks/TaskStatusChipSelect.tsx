@@ -29,9 +29,8 @@ const STATUS_OPTIONS = [TaskStatus.TODO, TaskStatus.IN_PROGRESS, TaskStatus.DONE
  * The chip is the control: press a task's status on a list row and the three
  * options drop down under it.
  *
- * Late or not makes no difference to any of this — the trigger shows "atrasada"
- * because the deadline passed, and the three options underneath stay open and
- * settable the whole time.
+ * Late or not makes no difference to any of this: lateness is said beside the
+ * deadline (see OverdueMark) and the status stays the status the user set.
  *
  * The trigger carries no chrome of its own — the chip already has a shape and a
  * colour, and a second border around it would read as a chip inside a field.
@@ -68,15 +67,15 @@ const PANEL_OVER_CHIP = { offset: -(STATUS_PILL_HEIGHT + 4), crossOffset: -8 };
 
 export function TaskStatusChipSelect({
   status,
-  isOverdue,
   isDisabled = false,
   onChange,
 }: {
   status: TaskStatus;
-  isOverdue?: boolean;
   isDisabled?: boolean;
   onChange: (status: TaskStatus) => void;
 }) {
+  const shown = <StatusChip status={status} />;
+
   return (
     <Select
       isDisabled={isDisabled}
@@ -84,13 +83,9 @@ export function TaskStatusChipSelect({
       aria-label={strings.task.fields.status}
       onChange={(key) => onChange(String(key) as TaskStatus)}
     >
-      <Select.Trigger className={CHIP_TRIGGER}>
-        <StatusChip status={status} isOverdue={isOverdue} />
-      </Select.Trigger>
+      <Select.Trigger className={CHIP_TRIGGER}>{shown}</Select.Trigger>
       <Select.Popover {...listboxPopover} {...PANEL_OVER_CHIP} className={PANEL_OWNS_FIELD}>
-        <div className={PANEL_FIELD}>
-          <StatusChip status={status} isOverdue={isOverdue} />
-        </div>
+        <div className={PANEL_FIELD}>{shown}</div>
 
         <ListBox>
           {STATUS_OPTIONS.map((option) => (

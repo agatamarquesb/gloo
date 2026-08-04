@@ -123,6 +123,7 @@ model Task {
 
   subtasks  Subtask[]
   assignees TaskAssignee[]
+  labels    TaskLabel[]
 
   @@index([status])
   @@index([dueDate])
@@ -200,18 +201,46 @@ model RoutineAssignee {
   @@map("routine_assignees")
 }
 
-/// User-defined tag, shared across routines rather than owned by one — the
-/// picker lists every label that exists so they can be reused.
+/// User-defined tag. Shared across the routines (or the tasks) that wear it —
+/// the picker lists every label in its own pool so they can be reused — but
+/// never across the two: see `scope`.
 model Label {
   id        String   @id @default(uuid())
   name      String
-  /// A key into the `--label-*` palette in globals.css, never a hex value.
+  /// A key into the `--label-*` palette in globals.css, or a `#rrggbb` the user
+  /// mixed — see PaletteColor in the shared package, which validates both.
   color     String
+  /// Which pool this tag belongs to: "ROUTINE" or "TASK".
+  ///
+  /// The two are separate vocabularies that happen to look alike. A routine's
+  /// tags describe recurring work ("gestão interna"), a task's describe a piece
+  /// of it — and mixing them meant renaming one in a task quietly renamed it on
+  /// somebody's routine. Every query for the picker filters on this, so a label
+  /// created on one side is invisible on the other.
+  ///
+  /// A string rather than a Postgres enum: the set is closed but tiny, and the
+  /// shared package already validates it the way it validates colours.
+  scope     String   @default("ROUTINE")
   createdAt DateTime @default(now())
 
   routines RoutineLabel[]
+  tasks    TaskLabel[]
 
+  @@index([scope])
   @@map("labels")
+}
+
+/// The same tag on a task. A join table of its own rather than one shared with
+/// routines: the two owners are different tables, and a single table would need
+/// a nullable column per owner and a check constraint to keep them exclusive.
+model TaskLabel {
+  taskId  String
+  labelId String
+  task    Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@map("task_labels")
 }
 
 model RoutineLabel {

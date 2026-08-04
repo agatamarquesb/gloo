@@ -1,6 +1,6 @@
 import type { LabelDto } from '@gloo/shared';
 
-import { LABEL_BG_CLASS, LABEL_PILL } from '@/theme/labelColors';
+import { colorFill, LABEL_PILL } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
 /** Beyond three, the pills crowd the row and push the title into a second line. */
@@ -58,9 +58,10 @@ export function RoutineLabels({
         // mistake.
         <span
           key={label.id}
-          className={`${isCollapsed ? COLLAPSED_PILL : LABEL_PILL} ${
-            LABEL_BG_CLASS[label.color]
-          } transition-[font-weight] group-hover:font-medium`}
+          {...colorFill(
+            label.color,
+            `${isCollapsed ? COLLAPSED_PILL : LABEL_PILL} transition-[font-weight] group-hover:font-medium`,
+          )}
         >
           {isCollapsed ? null : label.name}
         </span>

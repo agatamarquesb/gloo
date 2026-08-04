@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Bold, Italic, Strikethrough, Underline } from 'lucide-react';
 import { Button } from '@heroui/react';
 
+import { SectionScroll } from '@/components/common/SectionScroll';
 import { strings } from '@/strings/pt-BR';
 
 /**
@@ -39,6 +40,7 @@ export function RichNotes({
   actions,
   contentClassName = '',
   compact = false,
+  scrollFade = false,
 }: {
   value: string;
   onChange: (html: string) => void;
@@ -66,6 +68,13 @@ export function RichNotes({
    * modal keeps the rule under Notas level with the one across the dialog.
    */
   contentClassName?: string;
+  /**
+   * Softens the edge a long note is cut on, on whichever side there is more of
+   * it — the same fade the Routines card wears, and only while the note actually
+   * overflows. Without it a note that runs past the block ends in a hard line
+   * through a row of letters.
+   */
+  scrollFade?: boolean;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
 
@@ -106,7 +115,16 @@ export function RichNotes({
       {/* Heading, then the formatting buttons, then whatever the caller adds —
           the toolbar shares the block's header row rather than taking one of
           its own. */}
-      <div className={`flex items-center gap-1 ${compact ? 'h-10 shrink-0' : 'flex-wrap'}`}>
+      {/* Compact, the row is 10px of air and then the heading — the same 10 the
+          tags across the gutter sit on, so the two start on one line — and
+          nothing under it: the note follows straight on. Centring the heading in
+          a 40px row put a second 10px below it, which read as a gap between the
+          section and its own content. */}
+      <div
+        className={`flex gap-1 ${
+          compact ? 'h-[34px] shrink-0 items-start pt-[10px]' : 'flex-wrap items-center'
+        }`}
+      >
         {title}
 
         {isEditing
@@ -139,7 +157,7 @@ export function RichNotes({
       {/* Flush with the block's own edge, which is where the heading's icon
           starts — the note is the block's content, so it runs the full width
           rather than hanging off the word above it. */}
-      <div className={`relative ${contentClassName}`}>
+      <NoteBody scrollFade={scrollFade} className={contentClassName}>
         {/* Compact, the placeholder is an empty state rather than a prompt, and
             takes the size Anexos' own "nothing here" line has — the two sit side
             by side in the task modal and used to say the same thing at two
@@ -167,9 +185,36 @@ export function RichNotes({
           suppressContentEditableWarning
           onInput={(event) => onChange(event.currentTarget.innerHTML)}
           onPaste={handlePaste}
-          className="min-h-16 text-sm break-words text-foreground outline-none"
+          // Grey once the task dialog is locked: the note is the longest block
+          // of text in it, and at full strength it out-weighed the task's own
+          // title. Typing it keeps full contrast — you should see what you are
+          // writing at the colour you are writing it.
+          className={`min-h-16 text-sm break-words outline-none ${
+            compact && !isEditing ? 'text-muted' : 'text-foreground'
+          }`}
         />
-      </div>
+      </NoteBody>
     </>
   );
+}
+
+/**
+ * The note's own box: a plain block in a routine, a scroll area with soft edges
+ * in the task dialog — see SectionScroll, which is what the lists beside it use
+ * so all three sections are cut the same way.
+ *
+ * `relative` either way, because the placeholder is laid over the first line.
+ */
+function NoteBody({
+  scrollFade,
+  className,
+  children,
+}: {
+  scrollFade: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  if (!scrollFade) return <div className={`relative ${className}`}>{children}</div>;
+
+  return <SectionScroll className={`relative ${className}`}>{children}</SectionScroll>;
 }

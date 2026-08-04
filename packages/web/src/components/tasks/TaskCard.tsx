@@ -11,6 +11,7 @@ import { strings } from '@/strings/pt-BR';
 
 import { AssigneeAvatars } from './AssigneeAvatars';
 import { TaskProgressBar } from './TaskProgressBar';
+import { OverdueMark } from './StatusChip';
 import { TaskStatusChipSelect } from './TaskStatusChipSelect';
 
 /**
@@ -84,10 +85,16 @@ export function TaskCard({
       {/* Compact, the title takes a routine title's text-sm and the line under it
           the text-xs a routine's date carries — see `compact` above. */}
       <div className="pointer-events-none relative min-w-0 flex-1">
+        {/* The mark ends the title rather than joining the meta line under it:
+            the date on that line is the *due* date either way, and what is worth
+            noticing at a glance is that this row is late. */}
         <p
-          className={`truncate font-medium text-surface-foreground ${compact ? 'text-sm' : ''}`}
+          className={`flex items-center gap-1.5 font-medium text-surface-foreground ${
+            compact ? 'text-sm' : ''
+          }`}
         >
-          {task.title}
+          <span className="truncate">{task.title}</span>
+          {task.isOverdue ? <OverdueMark /> : null}
         </p>
         <p className={`truncate text-muted ${compact ? 'text-xs' : 'text-sm'}`}>
           {dueDate ? `${dueDate} · ` : ''}
@@ -105,7 +112,6 @@ export function TaskCard({
         <div className={`pointer-events-auto ${STATUS_COLUMN}`}>
           <TaskStatusChipSelect
             status={task.status}
-            isOverdue={task.isOverdue}
             isDisabled={!canEdit}
             onChange={(status: TaskStatus) => updateStatus.mutate(status)}
           />

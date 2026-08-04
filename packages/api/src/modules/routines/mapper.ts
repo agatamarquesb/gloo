@@ -1,7 +1,7 @@
 import {
   AttachmentKind,
   DEFAULT_LABEL_COLOR,
-  isLabelColor,
+  isPaletteColor,
   MAX_ROUTINE_CHECKLISTS,
   type AttachmentDto,
   type ChecklistItemDto,
@@ -100,7 +100,7 @@ export function toRoutineDto(routine: RoutineWithRelations): RoutineDto {
     labels: routine.labels.map(({ label }) => ({
       id: label.id,
       name: label.name,
-      color: isLabelColor(label.color) ? label.color : DEFAULT_LABEL_COLOR,
+      color: isPaletteColor(label.color) ? label.color : DEFAULT_LABEL_COLOR,
     })),
     assignees: routine.assignees.map(({ user }) => toUserDto(user)),
     createdById: routine.createdById,

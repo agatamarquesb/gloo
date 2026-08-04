@@ -2,7 +2,8 @@ import type {
   AttachmentKind,
   CalendarProvider,
   EventRecurrence,
-  LabelColor,
+  LabelScope,
+  PaletteColor,
   Role,
   RoutineRecurrence,
   TaskPriority,
@@ -90,6 +91,11 @@ export function elapsedMs(
 
 export interface TaskDetailDto extends TaskListItemDto {
   description: string | null;
+  /**
+   * The task's tags, from the same shared pool a routine's come from — only on
+   * the detail DTO, since only the modal shows them.
+   */
+  labels: LabelDto[];
   /** Null when the task has no attachments block; `[]` when it has an empty one. */
   attachments: AttachmentDto[] | null;
   subtasks: SubtaskDto[];
@@ -118,6 +124,8 @@ export interface CreateTaskInput {
   assigneeIds: string[];
   /** Null for no attachments block; `[]` for an empty one — as with routines. */
   attachments?: AttachmentDto[] | null;
+  /** The tags to carry, as ids into the shared label pool. */
+  labelIds?: string[];
 }
 
 export type UpdateTaskInput = Partial<CreateTaskInput>;
@@ -167,12 +175,15 @@ export interface AttachmentDto {
 export interface LabelDto {
   id: string;
   name: string;
-  color: LabelColor;
+  /** One of the ten palette keys, or a hex the user mixed — see PaletteColor. */
+  color: PaletteColor;
 }
 
 export interface LabelInput {
   name: string;
-  color: LabelColor;
+  color: PaletteColor;
+  /** Which pool it is created in. Never changes afterwards. */
+  scope: LabelScope;
 }
 
 export interface RoutineDto {
@@ -261,8 +272,8 @@ export interface AgendaDto {
   id: string;
   accountId: string;
   name: string;
-  /** A key into the `--label-*` palette, never a hex — as with a Label. */
-  color: LabelColor;
+  /** A key into the `--label-*` palette, or a hex — as with a Label. */
+  color: PaletteColor;
   /** Hidden by the eye icon: the agenda stays in the list, its events leave the grid. */
   isHidden: boolean;
   /** Where a new event lands when the user doesn't pick an agenda. Exactly one per user. */
@@ -395,12 +406,12 @@ export interface CreateAgendaInput {
    * already using. A better default than making someone choose a colour before
    * they have seen the agenda exist.
    */
-  color?: LabelColor;
+  color?: PaletteColor;
 }
 
 export interface UpdateAgendaInput {
   name?: string;
-  color?: LabelColor;
+  color?: PaletteColor;
   isHidden?: boolean;
   isDefault?: boolean;
 }

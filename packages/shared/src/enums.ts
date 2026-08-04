@@ -73,10 +73,53 @@ export const LABEL_COLORS = [
 ] as const;
 export type LabelColor = (typeof LABEL_COLORS)[number];
 
+/**
+ * A colour a user mixed themselves, as `#rrggbb`.
+ *
+ * The ten above are the palette; this is the escape from it. Stored in the same
+ * column and read by the same code — anything that paints a label or an agenda
+ * takes either, and the web package decides between a class and an inline value.
+ */
+export type HexColor = `#${string}`;
+
+/** Either kind: one of the ten keys, or a hex a user chose. */
+export type PaletteColor = LabelColor | HexColor;
+
 export const DEFAULT_LABEL_COLOR: LabelColor = 'green';
 
 export function isLabelColor(value: unknown): value is LabelColor {
   return typeof value === 'string' && (LABEL_COLORS as readonly string[]).includes(value);
+}
+
+/** Six digits and a hash, lower or upper case. Three-digit shorthand is not stored. */
+export function isHexColor(value: unknown): value is HexColor {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+}
+
+/**
+ * What may be written to a colour column. Validated on the way in and again on
+ * the way out, so a hand-edited row can never reach the UI as a colour nobody
+ * can paint.
+ */
+export function isPaletteColor(value: unknown): value is PaletteColor {
+  return isLabelColor(value) || isHexColor(value);
+}
+
+/**
+ * Which pool a tag belongs to.
+ *
+ * Routines and tasks keep separate vocabularies: creating, renaming, recolouring
+ * or deleting a tag on one side leaves the other untouched, and neither picker
+ * ever lists the other's. They share only the design.
+ */
+export const LabelScope = {
+  ROUTINE: 'ROUTINE',
+  TASK: 'TASK',
+} as const;
+export type LabelScope = (typeof LabelScope)[keyof typeof LabelScope];
+
+export function isLabelScope(value: unknown): value is LabelScope {
+  return value === LabelScope.ROUTINE || value === LabelScope.TASK;
 }
 
 /** A link the user pasted, or a file they uploaded. */

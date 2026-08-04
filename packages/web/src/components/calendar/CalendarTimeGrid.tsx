@@ -4,7 +4,7 @@ import type { CalendarDate } from '@internationalized/date';
 import type { AgendaDto, CalendarEventDto } from '@gloo/shared';
 
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
-import { LABEL_BG_CLASS, LABEL_EDGE_CLASS } from '@/theme/labelColors';
+import { colorBlock } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
 import { EventBlock } from './EventBlock';
@@ -181,13 +181,14 @@ export function CalendarTimeGrid({
                     gridColumn: `${columnStart + 1} / span ${columnSpan}`,
                     gridRow: row + 1,
                   }}
-                  className={`mx-0.5 truncate rounded-md border px-1.5 py-0.5 text-left text-[11px] text-black ${
-                    LABEL_BG_CLASS[color]
-                  } ${LABEL_EDGE_CLASS[color]} ${
-                    selectedEventId === key
-                      ? 'ring-2 ring-foreground ring-offset-1 ring-offset-surface'
-                      : ''
-                  }`}
+                  {...colorBlock(
+                    color,
+                    `mx-0.5 truncate rounded-md border px-1.5 py-0.5 text-left text-[11px] text-black ${
+                      selectedEventId === key
+                        ? 'ring-2 ring-foreground ring-offset-1 ring-offset-surface'
+                        : ''
+                    }`,
+                  )}
                 >
                   {original.title || strings.calendar.event.untitled}
                 </button>

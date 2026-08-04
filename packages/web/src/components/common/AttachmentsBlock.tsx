@@ -1,5 +1,5 @@
-import { useRef, useState, type FormEvent } from 'react';
-import { Download, Eye, FileText, Globe, Paperclip, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Download, Eye, FileText, Globe, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { Button, Input, Label, Modal, Popover } from '@heroui/react';
 import { TextField } from 'react-aria-components';
 
@@ -10,15 +10,21 @@ import { assetUrl } from '@/lib/assetUrl';
 import { playSound } from '@/lib/sounds';
 import { BUTTON_LIKE_FIELD, FLAT_INPUT } from '@/theme/fieldStyles';
 import {
+  blockActionCluster,
   blockBox,
   blockBoxBare,
   blockHeaderRow,
   blockLeadColumn,
   blockRow,
   blockRowList,
+  blockRowAction,
+  blockRowActionOnHover,
   blockTitle,
   outlineControl,
+  taskBlockBox,
+  taskBlockRow,
 } from '@/theme/styleConstants';
+import { SectionScroll } from '@/components/common/SectionScroll';
 import { SecondaryButton } from '@/components/common/SecondaryButton';
 import { strings } from '@/strings/pt-BR';
 
@@ -26,6 +32,13 @@ const ICON_BY_KIND = {
   [AttachmentKind.LINK]: Globe,
   [AttachmentKind.FILE]: FileText,
 };
+
+/**
+ * A file's name: wrapped in the task dialog, cut in the routine's. Nothing in
+ * the task dialog scrolls sideways, so the name that does not fit takes a second
+ * line instead of an ellipsis.
+ */
+const TITLE_WRAP = (compact: boolean) => (compact ? 'break-words' : 'truncate');
 
 /** Shared height, so the link field and the file button line up exactly. */
 const CONTROL_HEIGHT = 'h-9';
@@ -186,6 +199,20 @@ function AttachmentEditor({
 }
 
 /**
+ * The list of files, plain in a routine and a scroll area in the task dialog.
+ *
+ * The `<ul>` is the same either way — the rows are list items and have to stay
+ * ones — so the scroller is a wrapper around it rather than a different element
+ * in its place.
+ */
+function ListScroller({ compact, children }: { compact: boolean; children: ReactNode }) {
+  const list = <ul className={blockRowList}>{children}</ul>;
+  if (!compact) return list;
+
+  return <SectionScroll>{list}</SectionScroll>;
+}
+
+/**
  * The attachments a routine or a task carries: pasted links and uploaded files
  * in one list. Files upload immediately (they need a URL before they can be
  * listed), but the list itself is form state and only persists with the owning
@@ -196,11 +223,25 @@ export function AttachmentsBlock({
   onChange,
   isEditing,
   canOpen = true,
+  compact = false,
 }: {
   attachments: AttachmentDto[];
   onChange: (attachments: AttachmentDto[]) => void;
   /** Outside edit mode the list is still readable, and still links out. */
   isEditing: boolean;
+  /**
+   * The block as one quadrant of the task dialog rather than the last section of
+   * a routine.
+   *
+   * Three things follow. The paperclip goes — a routine's three block headings
+   * share a left edge and that icon is what marks the column; a task's Anexos has
+   * nothing beside it, and with the icon gone the file tiles start on the
+   * heading's own edge instead of overhanging it. The gap under the heading
+   * halves, since the dialog's sections close up against their titles. And the
+   * list fills the height it is given and scrolls inside it, because the dialog
+   * itself does not scroll.
+   */
+  compact?: boolean;
   /**
    * Whether the files can be reached at all — false for a deleted routine, whose
    * attachments are on their way out with it. The list still shows what it had,
@@ -249,85 +290,102 @@ export function AttachmentsBlock({
     });
   }
 
+  /**
+   * One way in: the two controls it holds — paste a link, pick a file — used to
+   * sit in the block itself, where they were the first thing you read about a
+   * task's files whether you were adding one or not. The block now shows what it
+   * has, and this asks for more.
+   *
+   * In the routine modal it opens from the heading; in the task dialog it ends
+   * the list, under the last file — see ListScroller.
+   */
+  const addControl = isEditing ? (
+    <Popover isOpen={isAdding} onOpenChange={setAdding}>
+      {compact ? (
+        // The bare glyph on the heading's right end, which is where the rule
+        // above this block ends — see blockRowAction.
+        <button type="button" className={blockRowAction} aria-label={strings.attachment.add}>
+          <Plus className="size-4" />
+        </button>
+      ) : (
+        <Button isIconOnly size="sm" variant="ghost" className="shrink-0 text-muted" aria-label={strings.attachment.add}>
+          <Plus className="size-4" />
+        </Button>
+      )}
+
+      <Popover.Content className={ADD_PANEL} placement="bottom end">
+        <Popover.Dialog className="flex flex-col gap-2 p-3">
+          {/* A form, so Enter is the same as pressing Salvar — both add the
+              link and close the panel. */}
+          <form onSubmit={addLink}>
+            <TextField
+              aria-label={strings.attachment.linkPlaceholder}
+              value={linkDraft}
+              onChange={setLinkDraft}
+            >
+              <Input
+                fullWidth
+                className={LINK_FIELD}
+                placeholder={strings.attachment.linkPlaceholder}
+              />
+            </TextField>
+          </form>
+
+          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFile} />
+          <Button
+            size="sm"
+            variant="outline"
+            className={`${CONTROL_HEIGHT} w-full rounded-full ${outlineControl}`}
+            isDisabled={uploadFile.isPending}
+            onPress={() => fileInputRef.current?.click()}
+          >
+            <Upload className="size-4" />
+            {uploadFile.isPending ? strings.attachment.uploading : strings.attachment.chooseFile}
+          </Button>
+
+          <Button
+            size="sm"
+            className={`${CONTROL_HEIGHT} w-full rounded-full`}
+            isDisabled={!linkDraft.trim()}
+            onPress={() => addLink()}
+          >
+            {strings.common.save}
+          </Button>
+        </Popover.Dialog>
+      </Popover.Content>
+    </Popover>
+  ) : null;
+
   return (
     // No gap of its own: the block's default is what sets the distance from a
     // heading to what it heads, and Notas, the checklists and this one all have
     // to sit at the same one.
-    <section className={isEditing ? blockBox : blockBoxBare}>
-      <div className={blockHeaderRow}>
+    <section
+      className={`${
+        compact ? taskBlockBox('gap-1.5') : isEditing ? blockBox : blockBoxBare
+      } ${compact ? 'h-full min-h-0' : ''}`}
+    >
+      <div className={`${blockHeaderRow} ${compact ? 'shrink-0' : ''}`}>
         {/* The shared column, so this heading starts exactly where Notas' and a
-            checklist's titles do. */}
-        <span className={blockLeadColumn}>
-          <Paperclip className="size-4 text-foreground" aria-hidden />
-        </span>
-        <span className={`flex-1 text-foreground ${blockTitle(isEditing)}`}>
+            checklist's titles do. Dropped in the task modal — see `compact`. */}
+        {compact ? null : (
+          <span className={blockLeadColumn}>
+            <Paperclip className="size-4 text-foreground" aria-hidden />
+          </span>
+        )}
+        <span className={`flex-1 text-foreground ${blockTitle(isEditing, compact)}`}>
           {strings.attachment.title}
         </span>
-        {/* One way in, opened from the heading: the two controls it holds —
-            paste a link, pick a file — used to sit in the block itself, where
-            they were the first thing you read about a task's files whether you
-            were adding one or not. The block now shows what it has, and this
-            asks for more. */}
-        {isEditing ? (
-          <Popover isOpen={isAdding} onOpenChange={setAdding}>
-            <Button
-              isIconOnly
-              size="sm"
-              variant="ghost"
-              className="shrink-0 text-muted"
-              aria-label={strings.attachment.add}
-            >
-              <Plus className="size-4" />
-            </Button>
-
-            <Popover.Content className={ADD_PANEL} placement="bottom end">
-              <Popover.Dialog className="flex flex-col gap-2 p-3">
-                {/* A form, so Enter is the same as pressing Salvar — both add
-                    the link and close the panel. */}
-                <form onSubmit={addLink}>
-                  <TextField
-                    aria-label={strings.attachment.linkPlaceholder}
-                    value={linkDraft}
-                    onChange={setLinkDraft}
-                  >
-                    <Input
-                      fullWidth
-                      className={LINK_FIELD}
-                      placeholder={strings.attachment.linkPlaceholder}
-                    />
-                  </TextField>
-                </form>
-
-                <input ref={fileInputRef} type="file" className="hidden" onChange={handleFile} />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={`${CONTROL_HEIGHT} w-full rounded-full ${outlineControl}`}
-                  isDisabled={uploadFile.isPending}
-                  onPress={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="size-4" />
-                  {uploadFile.isPending ? strings.attachment.uploading : strings.attachment.chooseFile}
-                </Button>
-
-                <Button
-                  size="sm"
-                  className={`${CONTROL_HEIGHT} w-full rounded-full`}
-                  isDisabled={!linkDraft.trim()}
-                  onPress={() => addLink()}
-                >
-                  {strings.common.save}
-                </Button>
-              </Popover.Dialog>
-            </Popover.Content>
-          </Popover>
-        ) : null}
+        {addControl}
       </div>
 
       {attachments.length === 0 ? (
         <p className="text-xs text-muted">{strings.attachment.empty}</p>
       ) : (
-        <ul className={blockRowList}>
+        // Compact, the list is the part of the block that moves: it takes the
+        // height left under the heading and scrolls inside it, softening
+        // whichever edge has more past it — see SectionScroll.
+        <ListScroller compact={compact}>
           {attachments.map((attachment) => {
             const Icon = ICON_BY_KIND[attachment.kind];
             return (
@@ -337,94 +395,168 @@ export function AttachmentsBlock({
               // column by a couple of pixels either side, which eats into the
               // gap. The extra puts the visible distance from tile to title back
               // on a par with a checklist's checkbox to its item.
-              <li key={attachment.id} className={blockRow}>
+              <li key={attachment.id} className={compact ? taskBlockRow : blockRow}>
+                {/* The pencil leads the row in the task dialog, on the tile's
+                    left: it acts on the file rather than on the list, and at the
+                    far end it was one of three glyphs competing for the row's
+                    right edge. */}
+                {compact && isEditing ? (
+                  <button
+                    type="button"
+                    className={`${blockRowAction} mt-1.5`}
+                    aria-label={strings.attachment.edit}
+                    onClick={() => setEditingId(attachment.id)}
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                ) : null}
                 {/* Centred on the shared lead column rather than sized to it:
                     the tile is wider than the column and overhangs it evenly, so
                     it still sits under the Paperclip in the heading while every
-                    row's title stays on the heading's own left edge. */}
-                <span className={blockLeadColumn}>
+                    row's title stays on the heading's own left edge.
+
+                    Compact, there is no Paperclip to sit under and no column to
+                    centre on, so the tile simply starts on the block's own left
+                    edge — level with the word "Anexos" above it, instead of
+                    hanging outside the section. */}
+                {compact ? (
                   <span
                     aria-hidden
                     className="flex size-7 shrink-0 items-center justify-center rounded-md bg-green text-black"
                   >
                     <Icon className="size-4" />
                   </span>
-                </span>
+                ) : (
+                  <span className={blockLeadColumn}>
+                    <span
+                      aria-hidden
+                      className="flex size-7 shrink-0 items-center justify-center rounded-md bg-green text-black"
+                    >
+                      <Icon className="size-4" />
+                    </span>
+                  </span>
+                )}
+                {/* Wrapped in the task dialog, cut in the routine's: nothing in
+                    that dialog scrolls sideways, so a long name comes down onto
+                    a second line — starting level with its own tile, since the
+                    row is top-aligned. */}
                 {canOpen ? (
                   <a
                     href={assetUrl(attachment.url)}
                     target="_blank"
                     rel="noreferrer"
-                    className="min-w-0 flex-1 truncate text-sm text-foreground hover:underline"
+                    className={`min-w-0 flex-1 text-sm font-medium text-foreground hover:underline ${TITLE_WRAP(compact)}`}
                   >
                     {attachment.title}
                   </a>
                 ) : (
-                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                  <span className={`min-w-0 flex-1 text-sm font-medium text-foreground ${TITLE_WRAP(compact)}`}>
                     {attachment.title}
                   </span>
                 )}
 
+                {/* Editing, all that is left on this end is the ×: the pencil
+                    moved to the head of the row. In the task dialog it is the
+                    bare glyph, on the block's own right edge and only while the
+                    row is under the cursor; the routine keeps its pair of
+                    buttons, which `contents` leaves exactly as they were. */}
                 {isEditing ? (
-                  <>
-                    <Button
-                      isIconOnly
-                      size="sm"
-                      variant="ghost"
-                      className="shrink-0 text-muted"
-                      aria-label={strings.attachment.edit}
-                      onPress={() => setEditingId(attachment.id)}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button
-                      isIconOnly
-                      size="sm"
-                      variant="ghost"
-                      className="shrink-0 text-muted"
+                  compact ? (
+                    <button
+                      type="button"
+                      className={`${blockRowAction} ${blockRowActionOnHover} mt-1.5`}
                       aria-label={strings.attachment.remove}
-                      onPress={() => {
+                      onClick={() => {
                         playSound('delete');
                         onChange(attachments.filter((current) => current.id !== attachment.id));
                       }}
                     >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </>
+                      <X className="size-4" />
+                    </button>
+                  ) : (
+                    <span className="contents">
+                      <Button
+                        isIconOnly
+                        size="sm"
+                        variant="ghost"
+                        className="shrink-0 text-muted"
+                        aria-label={strings.attachment.edit}
+                        onPress={() => setEditingId(attachment.id)}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        isIconOnly
+                        size="sm"
+                        variant="ghost"
+                        className="shrink-0 text-muted"
+                        aria-label={strings.attachment.remove}
+                        onPress={() => {
+                          playSound('delete');
+                          onChange(attachments.filter((current) => current.id !== attachment.id));
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </span>
+                  )
                 ) : canOpen ? (
                   /* Locked, an attachment is something you take away with you
                      rather than change: save it, or look at it without leaving
                      the routine — the preview opens in its own tab. Neither is
                      offered for a deleted routine. */
-                  <>
-                    <Button
-                      isIconOnly
-                      size="sm"
-                      variant="ghost"
-                      className="shrink-0 text-muted"
-                      aria-label={strings.attachment.download}
-                      onPress={() => void downloadAttachment(attachment)}
-                    >
-                      <Download className="size-4" />
-                    </Button>
-                    <Button
-                      isIconOnly
-                      size="sm"
-                      variant="ghost"
-                      className="shrink-0 text-muted"
-                      aria-label={strings.attachment.preview}
-                      onPress={() =>
-                        window.open(assetUrl(attachment.url), '_blank', 'noreferrer')
-                      }
-                    >
-                      <Eye className="size-4" />
-                    </Button>
-                  </>
+                  compact ? (
+                    /* Bare glyphs on the row's right edge, the same column the
+                       × takes while editing. */
+                    <span className={`${blockActionCluster} mt-1.5 gap-2`}>
+                      <button
+                        type="button"
+                        className={blockRowAction}
+                        aria-label={strings.attachment.download}
+                        onClick={() => void downloadAttachment(attachment)}
+                      >
+                        <Download className="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className={blockRowAction}
+                        aria-label={strings.attachment.preview}
+                        onClick={() => window.open(assetUrl(attachment.url), '_blank', 'noreferrer')}
+                      >
+                        <Eye className="size-4" />
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="contents">
+                      <Button
+                        isIconOnly
+                        size="sm"
+                        variant="ghost"
+                        className="shrink-0 text-muted"
+                        aria-label={strings.attachment.download}
+                        onPress={() => void downloadAttachment(attachment)}
+                      >
+                        <Download className="size-4" />
+                      </Button>
+                      <Button
+                        isIconOnly
+                        size="sm"
+                        variant="ghost"
+                        className="shrink-0 text-muted"
+                        aria-label={strings.attachment.preview}
+                        onPress={() =>
+                          window.open(assetUrl(attachment.url), '_blank', 'noreferrer')
+                        }
+                      >
+                        <Eye className="size-4" />
+                      </Button>
+                    </span>
+                  )
                 ) : null}
               </li>
             );
           })}
-        </ul>
+        </ListScroller>
       )}
 
       {editing ? (

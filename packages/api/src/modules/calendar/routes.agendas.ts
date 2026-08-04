@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
-import { isLabelColor, type CreateAgendaInput, type UpdateAgendaInput } from '@gloo/shared';
+import { isPaletteColor, type CreateAgendaInput, type UpdateAgendaInput } from '@gloo/shared';
 
 import { prisma } from '../../lib/prisma';
 import { createRemoteCalendar } from './google/push';
@@ -31,7 +31,7 @@ export async function calendarAgendaRoutes(app: FastifyInstance) {
     if (name.trim().length > MAX_NAME_LENGTH) {
       return reply.code(400).send({ error: `Nome deve ter no máximo ${MAX_NAME_LENGTH} caracteres` });
     }
-    if (color !== undefined && !isLabelColor(color)) {
+    if (color !== undefined && !isPaletteColor(color)) {
       return reply.code(400).send({ error: 'color inválida' });
     }
 
@@ -104,7 +104,7 @@ export async function calendarAgendaRoutes(app: FastifyInstance) {
         }
       }
 
-      if (color !== undefined && !isLabelColor(color)) {
+      if (color !== undefined && !isPaletteColor(color)) {
         return reply.code(400).send({ error: 'color inválida' });
       }
 

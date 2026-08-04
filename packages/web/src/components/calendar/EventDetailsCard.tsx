@@ -7,7 +7,7 @@ import { AssigneeAvatars } from '@/components/tasks/AssigneeAvatars';
 import { isNotesEmpty, RichNotes } from '@/components/common/RichNotes';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
-import { LABEL_BG_CLASS } from '@/theme/labelColors';
+import { colorFill } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
 import { formatEventTime } from './EventBlock';
@@ -83,7 +83,7 @@ export function EventDetailsCard({
         <Row label={strings.calendar.details.category}>
           <span className="inline-flex items-center gap-2">
             <span
-              className={`size-3 shrink-0 rounded-sm ${LABEL_BG_CLASS[agenda?.color ?? 'gray']}`}
+              {...colorFill(agenda?.color ?? 'gray', 'size-3 shrink-0 rounded-sm')}
             />
             {agenda?.name ?? '—'}
           </span>

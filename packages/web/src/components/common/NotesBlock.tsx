@@ -5,12 +5,11 @@ import { playSound } from '@/lib/sounds';
 import {
   blockBox,
   blockBoxBare,
-  blockBoxBareTight,
-  blockBoxTight,
   blockDivider,
   blockLeadColumn,
   blockTitle,
   outlineControl,
+  taskBlockBox,
 } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
@@ -77,17 +76,12 @@ export function NotesBlock({
          "Prioridade" and the note itself begins level with "Deadline" — the two
          columns read as one set of rows. */
       className={`${
-        compact
-          ? isEditing
-            ? blockBoxTight
-            : blockBoxBareTight
-          : isEditing
-            ? blockBox
-            : blockBoxBare
+        compact ? taskBlockBox('gap-0') : isEditing ? blockBox : blockBoxBare
       } ${fill ? 'h-full min-h-0' : ''}`}
     >
       <RichNotes
         compact={compact}
+        scrollFade={fill}
         isEditing={isEditing}
         value={value}
         onChange={onChange}
@@ -100,11 +94,7 @@ export function NotesBlock({
         // anywhere in the block puts the caret in the note — without it the
         // field is only as tall as what has been typed, and clicking the empty
         // space below a one-line note did nothing at all.
-        contentClassName={
-          fill
-            ? 'min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin] [&>[role=textbox]]:min-h-full'
-            : ''
-        }
+        contentClassName={fill ? '[&>[role=textbox]]:min-h-full' : ''}
         title={
           /* One flex of its own rather than two children of the toolbar: the
              toolbar's gap is tuned for the formatting buttons, and a routine's
@@ -125,7 +115,7 @@ export function NotesBlock({
             {/* Never wrapped: the toolbar shares this row, and a two-line
                 heading beside it pushed the whole block a line taller than the
                 column it has to end level with. */}
-            <span className={`whitespace-nowrap text-foreground ${blockTitle(isEditing)}`}>
+            <span className={`whitespace-nowrap text-foreground ${blockTitle(isEditing, compact)}`}>
               {title}
             </span>
           </div>
