@@ -3,15 +3,21 @@
  * stay consistent without repeating magic numbers in every component.
  */
 /**
- * The blocks inside both entity modals — notes, checklist, subtasks,
- * attachments — while the dialog is unlocked.
+ * The blocks inside the routine modal — notes, checklist, attachments — in both
+ * of the dialog's modes.
  *
- * No frame any more: a green rule round each of four blocks made the dialog read
- * as four cards on a page rather than as one thing being edited, and the fields
- * inside them already say what is editable. What is left is the same 12px on
- * every side, so the blocks sit on one grid however deep their content runs.
+ * One box, not two. The frame went first: a green rule round each of four blocks
+ * made the dialog read as four cards on a page rather than as one thing being
+ * edited, and the fields inside them already say what is editable. The 12px of
+ * padding it left behind went next — it was the frame's inset with no frame to
+ * inset from, and since only the *editing* box carried it, unlocking the dialog
+ * slid Notas, the checklists and Anexos 12px in from the properties above them.
+ *
+ * So there is now nothing here but the stack and its gap, and the blocks sit on
+ * the same left edge as everything else in the dialog whichever mode it is in.
+ * The locked look is the look.
  */
-export const blockBox = 'flex flex-col gap-3 rounded-2xl p-3';
+export const blockBox = 'flex flex-col gap-3';
 
 /**
  * The same blocks in the task modal, where the heading and what it heads are one
@@ -73,12 +79,14 @@ export const blockActionCluster = 'flex shrink-0 items-center gap-0.5';
 export const blockActionSlot = 'flex size-8 shrink-0 items-center justify-center';
 
 /**
- * The same blocks once the routine modal is locked. Reading a routine is not
- * filling in a form, so the frames come off and the three blocks run down the
- * page as plain sections — which also drops the left padding the border needed,
- * putting their content on the same left edge as the properties above.
+ * A scroller with no bar of its own — the routine modal's body, and every
+ * section inside the task dialog.
+ *
+ * Both take their edges from a fade instead (see dialogBodyFade and
+ * SectionScroll): a dialog made of hairlines and rules gains nothing from one
+ * more line down its right-hand side, and that one moved as you read.
  */
-export const blockBoxBare = 'flex flex-col gap-3';
+export const hiddenScrollbar = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 /**
  * The modal's hairline rule: under the header actions, and between a routine's
@@ -122,8 +130,21 @@ export const blockDivider = `${modalDivider} mt-2 mb-1`;
  * the three block headings and a checklist's own rows all start at slightly
  * different places. Declaring the column once puts every one of them on a single
  * left edge whatever sits inside it.
+ *
+ * 28px, which is the widest thing that ever sits in it: an attachment row's
+ * green tile. At 20 the tile was centred on a column narrower than itself and
+ * hung 4px past the section's left edge on one side and into the gap on the
+ * other — the dialog's body had to be un-clipped by hand to stop it being sliced
+ * flat. Sized to its largest occupant, the column contains everything it holds.
+ *
+ * And left-justified rather than centred, which is what makes the column worth
+ * widening: centring a 16px icon in a 28px cell would start it 6px in, so the
+ * three block headings would sit that far right of the property icons above
+ * them. Packed left, every glyph in the dialog — property icon, block icon,
+ * checkbox, file tile — begins on one vertical line, and everything they label
+ * begins on the next.
  */
-export const blockLeadColumn = 'flex w-5 shrink-0 items-center justify-center';
+export const blockLeadColumn = 'flex w-7 shrink-0 items-center justify-start';
 
 /**
  * A block heading, one step up in size and weight, for the task modal.
@@ -167,15 +188,23 @@ export const blockRow = 'flex min-h-9 items-center gap-3 md:min-h-8';
 export const taskBlockRow = 'group flex min-h-8 items-start gap-3 py-1';
 
 /**
+ * The same row for an attachment, which is centred rather than top-aligned.
+ *
+ * A subtask's row leads with a checkbox — a control, on the line it belongs to,
+ * so a wrapped subtask has to grow downward from it. A file's row leads with a
+ * 28px tile that is a *picture of the file*, and a picture beside a two-line
+ * name belongs level with the name, not with its first line. So the tile, the
+ * title and the row's controls all take the middle.
+ */
+export const taskAttachmentRow = 'group flex min-h-8 items-center gap-3 py-1';
+
+/**
  * The name in such a row, set against the tile beside it.
  *
- * Top-aligning the row is right for the name that wraps and wrong for the one
- * that doesn't: a single 20px line at the top of a 28px tile sits four pixels
- * above its middle. This gets both without asking which case it is — the title
- * is its own box, at least as tall as the tile, with its lines centred in it.
- * One line is then centred on the tile; two grow the box past the minimum, and
- * centring 40px of text in a 40px box puts the first line back on the tile's own
- * top edge, which is where a wrapped name belongs.
+ * At least as tall as the tile, so a one-line name is a 28px box with its line
+ * centred in it rather than a 20px line that has to be positioned — the row
+ * centres the two boxes and both come out on the same axis whether the name
+ * takes one line or three.
  */
 export const taskBlockRowTitle = 'flex min-h-7 items-center';
 

@@ -7,13 +7,7 @@ import type { ChecklistItemDto, RoutineChecklistDto } from '@gloo/shared';
 import { AppCheckbox } from '@/components/common/AppCheckbox';
 import { playSound } from '@/lib/sounds';
 import { FLAT_INPUT, GREEN_UNDERLINE } from '@/theme/fieldStyles';
-import {
-  blockBox,
-  blockBoxBare,
-  blockDivider,
-  blockLeadColumn,
-  blockTitle,
-} from '@/theme/styleConstants';
+import { blockBox, blockDivider, blockLeadColumn, blockTitle } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 /** How many blank rows a fresh checklist starts with. */
@@ -82,10 +76,10 @@ export function RoutineChecklist({
   }
 
   return (
-    // Green outline while editing, same as a task row on the Dashboard — the
-    // modal's blocks and the task rows are the same kind of object. Locked, the
-    // frame comes off and it is just a list.
-    <section className={isEditing ? blockBox : blockBoxBare}>
+    // The same box in both modes — see blockBox. A checklist is a list of things
+    // to tick off whether or not the dialog happens to be unlocked, and it has
+    // no business moving sideways when it is.
+    <section className={blockBox}>
       {/* Same header shape as the attachments block: icon, name, delete. The one
           difference is that this name is editable, which the green rule under it
           signals — the same marker the routine title uses. */}
@@ -112,11 +106,12 @@ export function RoutineChecklist({
             />
           </TextField>
         ) : (
-          /* Colon appended here rather than stored on the title: it punctuates
-             the heading against the items below it, so it belongs to how the
-             name is presented and not to the name itself. */
+          /* The name as given, with nothing added to it. It used to be
+             punctuated with a colon against the items below it, which only made
+             the one heading in the dialog that is the user's own words read as
+             though it had been labelled. */
           <span className={`min-w-0 flex-1 truncate text-foreground ${blockTitle(false)}`}>
-            {title ? `${title}:` : ''}
+            {title}
           </span>
         )}
 
@@ -220,9 +215,10 @@ export function RoutineChecklist({
         </Button>
       ) : null}
 
-      {/* Closes the checklist off from whatever follows it. Only needed once the
-          frame is gone: editing, the box's own edge already does this. */}
-      {isEditing ? null : <div className={blockDivider} />}
+      {/* Closes the checklist off from whatever follows it, in both modes — the
+          blocks have no frame in either one now, so there is nothing else doing
+          this job while the dialog is unlocked. */}
+      <div className={blockDivider} />
     </section>
   );
 }

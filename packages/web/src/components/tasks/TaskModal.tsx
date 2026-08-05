@@ -531,41 +531,18 @@ function DeadlineValue({
 }
 
 /**
- * The project the task belongs to.
+ * Projects, as a sketch.
  *
- * There are no projects yet — no page, no model, nothing to pick — so the row
- * exists and says so when pressed. It is here rather than waiting for the
- * feature because the property list is the shape of a task, and leaving a gap in
- * it would have to be filled in twice: once now and once when projects land.
+ * There is no project behind any of these — no model, no page, no endpoint. They
+ * are three names hard-coded so the row can be *seen*: what a project reads like
+ * in the property column, and what the list that sets one looks like dropping
+ * out of it. Choosing between them moves the trigger and nothing else; nothing
+ * here is saved, and nothing reads it back.
+ *
+ * When projects become real this list is what they replace — the row, its
+ * trigger and its panel are already the shape they need to be.
  */
-function ProjectValue({ isEditing, triggerClass }: { isEditing: boolean; triggerClass: string }) {
-  if (!isEditing) {
-    return <span className={`${PROPERTY_VALUE_LOWER} text-muted!`}>{EMPTY_VALUE}</span>;
-  }
-
-  return (
-    <Popover>
-      <AriaButton className={`${triggerClass} ${POPOVER_TRIGGER}`}>
-        <span className={`${PROPERTY_VALUE_LOWER} text-muted!`}>{EMPTY_VALUE}</span>
-      </AriaButton>
-      {/* Sized to what it says rather than to a fixed 16rem — empty, it was a
-          wide flat capsule instead of the small card the status dropdown drops
-          under its own chip. The message a step down in size, and enough padding
-          that the box has a card's height even with a single line in it. */}
-      <Popover.Content {...listboxPopover} className={`${PROPERTY_PANEL} ${FIELD_PANEL}`}>
-        <Popover.Dialog className="flex min-h-28 items-center justify-center px-4 py-4">
-          {/* Centred and wrapping: the panel is only as wide as the property it
-              hangs from, and a line that refused to break ran out of it. A step
-              below the lists' own size — this is the panel saying it has nothing
-              to offer, not an option in it. */}
-          <p className="text-center text-xs break-words text-muted">
-            {strings.task.projectsEmpty}
-          </p>
-        </Popover.Dialog>
-      </Popover.Content>
-    </Popover>
-  );
-}
+const SAMPLE_PROJECTS = ['Lançamento', 'ID Juliana', 'Ferramenta ABC'] as const;
 
 /**
  * The task's tags, over its title — the pills it wears, and the one way to
@@ -715,6 +692,14 @@ function TaskModalContent({
    * click on anything else at all.
    */
   const [isTitleFocused, setTitleFocused] = useState(false);
+
+  /**
+   * Which of the placeholder projects the row is showing. Component state and
+   * nothing more — it is not in `FormState`, is never sent anywhere and resets
+   * with the dialog, because there is nothing behind it yet to send it to. See
+   * SAMPLE_PROJECTS.
+   */
+  const [project, setProject] = useState<string>(SAMPLE_PROJECTS[0]);
 
   /**
    * Unlocking the dialog puts the caret in the title, as if it had been pressed:
@@ -941,16 +926,47 @@ function TaskModalContent({
       </Select>
     ),
 
+    // The sector row's twin, down to the panel and the option class — the two
+    // are the same kind of property (one name, chosen from a short list) and
+    // there is no reason for them to open different-looking lists. What it holds
+    // is a placeholder; see SAMPLE_PROJECTS.
     project: (
-      <div className={row}>
-        <span className={fieldLabel}>
-          <FolderKanban className={LABEL_ICON} aria-hidden />
-          {strings.task.fields.project}
-        </span>
-        <div className={VALUE_CELL}>
-          <ProjectValue isEditing={isEditing} triggerClass={trigger} />
+      <Select
+        isDisabled={!isEditing}
+        className={undimmed}
+        value={project}
+        onChange={(key) => setProject(String(key))}
+      >
+        <div className={row}>
+          <Label className={fieldLabel}>
+            <FolderKanban className={LABEL_ICON} aria-hidden />
+            {strings.task.fields.project}
+          </Label>
+          <div className={VALUE_CELL}>
+            <Select.Trigger className={trigger}>
+              {/* Not lower-cased, unlike the sector beside it: a sector is a
+                  part of the business and reads as one word of the column's own
+                  voice, while a project is a name someone gave a thing — and
+                  "id juliana" is not that name. */}
+              <span className={`break-words ${PROPERTY_VALUE}`}>{project}</span>
+            </Select.Trigger>
+          </div>
         </div>
-      </div>
+        <Select.Popover {...listboxPopover} className={PROPERTY_PANEL}>
+          <ListBox className={LISTBOX_FLUSH}>
+            {SAMPLE_PROJECTS.map((name) => (
+              <ListBox.Item
+                key={name}
+                id={name}
+                textValue={name}
+                className={`${TEXT_LISTBOX_ITEM} ${LISTBOX_TEXT}`}
+              >
+                {name}
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
     ),
 
     // Live in both modes, like a routine's checkboxes: moving a task along is

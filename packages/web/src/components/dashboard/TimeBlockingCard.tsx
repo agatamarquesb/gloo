@@ -157,13 +157,16 @@ export function TimeBlockingCard() {
       {/* text-3xl font-semibold matches the counts on the task-summary tiles —
           the app's one size for a headline number.
 
-          py-2.5 is not a spacing choice so much as the card's height: this is the
-          only slack in the right-hand column, so it is what lands this card's
-          bottom edge on the same line as Rotinas and Tarefas abertas por setor
-          across the page. 10px rather than 8 is exactly that — the two columns
-          were 28px out, and this padding is doubled. */}
+          The vertical padding is not a spacing choice so much as the card's
+          height: this is the only slack in the right-hand column, so it is what
+          lands this card's bottom edge on the same line as Rotinas and Tarefas
+          por setor across the page. 18px is exactly that, and it moves whenever
+          anything above it does: the month grid gained a few pixels when its
+          days stopped touching (see .gloo-dashboard-calendar), and this came
+          down to meet it. The padding is doubled, so it buys twice what it
+          says. */}
       <p
-        className="py-2.5 text-center text-3xl font-semibold tabular-nums text-foreground transition-colors"
+        className="py-[18px] text-center text-3xl font-semibold tabular-nums text-foreground transition-colors"
         aria-live="polite"
       >
         {format(remaining)}

@@ -27,10 +27,20 @@ function toQueryString(filters: TaskFilters): string {
   return qs ? `?${qs}` : '';
 }
 
-export function useTasks(filters: TaskFilters) {
+export function useTasks(
+  filters: TaskFilters,
+  /**
+   * Whether to ask at all. For a caller whose question only exists some of the
+   * time — the Dashboard's day summary, which needs a month of tasks once a day
+   * has been picked and none before that. Without it the alternative is calling
+   * with no filters, which fetches every task in the business to answer nothing.
+   */
+  { enabled = true }: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: taskKeys.list(filters),
     queryFn: () => apiClient.get<TaskListItemDto[]>(`/tasks${toQueryString(filters)}`),
+    enabled,
     // Every filter and every keystroke is a new query key, and without this each
     // one empties the list to "Carregando..." for as long as the request takes —
     // which is the flicker you see pressing along a row of filter pills. Keeping

@@ -33,7 +33,13 @@ import {
 import { useLabels } from '@/hooks/queries/labels';
 import { useMe } from '@/hooks/queries/auth';
 import { useUsers } from '@/hooks/queries/users';
-import { FLAT_INPUT, TEXT_LISTBOX_ITEM, listboxPopover } from '@/theme/fieldStyles';
+import {
+  FLAT_INPUT,
+  LISTBOX_FLUSH,
+  PANEL_MATCHES_TRIGGER,
+  TEXT_LISTBOX_ITEM,
+  listboxPopover,
+} from '@/theme/fieldStyles';
 // The property list is shared with the task modal — see theme/propertyRow.ts.
 import {
   LABEL_ICON,
@@ -50,9 +56,9 @@ import {
   dialogBodyFade,
   dialogClose,
   dialogFooter,
-  dialogPadding,
   dialogSection,
   dialogShape,
+  hiddenScrollbar,
   modalDivider,
   modalDividerGap,
   quietTextButton,
@@ -65,8 +71,34 @@ import { NotesBlock } from '@/components/common/NotesBlock';
 
 import { LabelPicker } from './LabelPicker';
 import { emptyChecklist, RoutineChecklist } from './RoutineChecklist';
+import { formatWeekdays, WEEKDAY_NAMES } from './routineWeekdays';
+import { WeekdayPickerModal } from './WeekdayPickerModal';
 
-const WEEKDAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+/**
+ * The id the "Personalizado" option carries.
+ *
+ * A string that cannot be a weekday: every other option in that list is a number
+ * 0–6 as text, so nothing can collide with it, and the change handler tells the
+ * two apart by comparing against this rather than by parsing.
+ */
+const CUSTOM_WEEKDAY = 'custom';
+
+/**
+ * A property's value in this dialog, matching the task modal's exactly — see
+ * PROPERTY_VALUE there. Same size, same weight, so the two dialogs read at one
+ * scale rather than at two that happen to be close.
+ */
+const PROPERTY_VALUE = 'text-sm font-medium text-foreground';
+
+/**
+ * An option in one of the property lists, again the task modal's: the flush
+ * inset that lands an option on the same vertical line as the value it replaces,
+ * the half-strength hover, and wrapping rather than truncation — the panel is
+ * only as wide as the row it drops from, and "marketing & aquisição" or
+ * "segunda, quarta e sexta" has to take a second line rather than lose its end.
+ */
+const LISTBOX_ITEM = `${TEXT_LISTBOX_ITEM} text-sm whitespace-normal break-words [&>*]:whitespace-normal [&>*]:break-words`;
+
 /**
  * Two digits throughout — "01", not "1". The value stays the plain number; only
  * how it reads changes, and it has to match the "01 de ago." the Routines card
@@ -103,7 +135,17 @@ const HEADER_STACK_EDIT = 'gap-4';
  */
 const HEADER_ROW_VIEW = 'py-1.5';
 
-/** How long after the last edit an autosave fires. */
+/**
+ * The dialog's own inset, matching the task modal's exactly: 20px of dialog
+ * padding plus the 12px its two columns carry (see DIALOG_PADDING and
+ * COLUMN_INSET there) is 32px from the window to the first letter, and this
+ * dialog now starts on the same line. Vertically it keeps what it was tuned for.
+ *
+ * Its own constant rather than the shared `dialogPadding`, which the three
+ * calendar dialogs still use — they are small confirmations rather than the
+ * app's two entity modals, and those two are what have to agree.
+ */
+const DIALOG_PADDING = 'px-8 pt-[18px] pb-[15px]';
 
 const ATTACHMENTS_ANCHOR = 'routine-attachments';
 const checklistAnchor = (index: number) => `routine-checklist-${index}`;
@@ -112,6 +154,11 @@ interface FormState {
   description: string;
   recurrence: RoutineRecurrence;
   weekday: number;
+  /**
+   * The full set for a custom weekly schedule, empty for the ordinary case of a
+   * single `weekday`. The same distinction the DTO draws — see RoutineDto.
+   */
+  weekdays: number[];
   dayOfMonth: number;
   notes: string;
   checklists: RoutineChecklistDto[];
@@ -124,6 +171,7 @@ const emptyForm = (assigneeId: string): FormState => ({
   description: '',
   recurrence: RoutineRecurrence.WEEKLY,
   weekday: 1,
+  weekdays: [],
   dayOfMonth: 1,
   notes: '',
   checklists: [],
@@ -170,6 +218,24 @@ export function RoutineModal({
   const [isEditing, setEditing] = useState(false);
   /** Anchor id of a block just added, so the dialog can scroll it into view. */
   const [scrollTo, setScrollTo] = useState<string | null>(null);
+  /** Whether the "Personalizado" day picker is open over this dialog. */
+  const [isWeekdayPickerOpen, setWeekdayPickerOpen] = useState(false);
+
+  /**
+   * Whether the caret is in the title — the task modal's rule, restated here so
+   * the two dialogs behave the same way when you press Editar.
+   *
+   * The title is bold: it is what the routine is called. A bold field being
+   * typed into looks like a heading that has started moving, so it drops to a
+   * plain weight while it holds the caret and goes back to bold the moment it
+   * loses it. And unlocking the dialog puts the caret there to begin with — the
+   * title is what you came to change often enough that having to click it first
+   * was a step for nothing.
+   */
+  const [isTitleFocused, setTitleFocused] = useState(false);
+  useEffect(() => {
+    setTitleFocused(isEditing);
+  }, [isEditing]);
 
   /** The routine as a form — what the dialog opens with, and what Cancelar returns to. */
   const seedForm = useCallback(
@@ -179,6 +245,7 @@ export function RoutineModal({
             description: routine.description,
             recurrence: routine.recurrence,
             weekday: routine.weekday ?? 1,
+            weekdays: routine.weekdays,
             dayOfMonth: routine.dayOfMonth ?? 1,
             notes: routine.notes ?? '',
             checklists: routine.checklists,
@@ -207,16 +274,35 @@ export function RoutineModal({
     setScrollTo(null);
   }, [scrollTo]);
 
-  /** The row rhythm and control height both follow the mode — see propertyRow.ts. */
+  /**
+   * The row rhythm and control height both follow the mode — see propertyRow.ts.
+   *
+   * The same options the task modal passes, so the two dialogs' property columns
+   * are one control seen twice: no chevrons (six arrows down a column say what
+   * the cursor already says on the way past), and rows that grow with a value
+   * that wraps rather than clipping it — "segunda, quarta e sexta" is longer
+   * than the column it sits in.
+   */
   const {
     row: propertyRow,
     label: fieldLabel,
     trigger,
     undimmed,
-  } = propertyStyles(isEditing);
+  } = propertyStyles(isEditing, { indicator: false, fluid: true });
 
   const isWeekly = form.recurrence === RoutineRecurrence.WEEKLY;
+  /** Whether the weekly schedule is one the plain list of seven can't express. */
+  const isCustom = form.weekdays.length > 1;
+  /**
+   * What the weekday row reads: one day by name, or the custom set summarised —
+   * "Todos os dias", "Segunda - sexta", "Segunda, quarta e sexta". See
+   * formatWeekdays, which is what decides between a range and a list.
+   */
+  const weekdayLabel = isCustom ? formatWeekdays(form.weekdays) : WEEKDAY_NAMES[form.weekday];
   const canSubmit = form.description.trim() && form.assigneeIds.length > 0;
+
+  /** The people it belongs to, for the Responsável row's faces. */
+  const assignees = users.filter((user) => form.assigneeIds.includes(user.id));
   const canAddChecklist = form.checklists.length < MAX_ROUTINE_CHECKLISTS;
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -244,6 +330,9 @@ export function RoutineModal({
       description: form.description.trim(),
       recurrence: form.recurrence,
       weekday: isWeekly ? form.weekday : null,
+      // Always sent, empty included: `[]` is how a routine leaves a custom
+      // schedule, and the API deliberately reads a missing key as "unchanged".
+      weekdays: isWeekly ? form.weekdays : [],
       dayOfMonth: isWeekly ? null : form.dayOfMonth,
       notes: form.notes.trim() || null,
       // Kept verbatim, blank rows included: adding a checklist or opening the
@@ -383,7 +472,7 @@ export function RoutineModal({
   return (
     <Modal.Backdrop isOpen={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <Modal.Container scroll="inside">
-        <Modal.Dialog className={`sm:max-w-[34rem] ${dialogShape} ${dialogPadding}`}>
+        <Modal.Dialog className={`sm:max-w-[34rem] ${dialogShape} ${DIALOG_PADDING}`}>
           {/* No Modal.CloseTrigger: that one positions itself against the
               dialog's corner, which is never quite where the header's own row
               sits. The close button is a member of that row instead — see the
@@ -510,23 +599,20 @@ export function RoutineModal({
               inside the body's own right padding, so nothing visible is clipped
               — and a vertical form should never scroll sideways anyway.
 
-              `-mx-1 px-1` is what stops that hidden overflow cutting the *left*
-              edge off an attachment's green tile. The tile is 28px centred on a
-              20px column, so it hangs 4px outside the body on that side and was
-              being sliced flat — see blockLeadColumn, which is what puts it
-              under the Paperclip in the heading. The pair moves the clip 4px out
-              and gives the 4px straight back as padding, so the tile is whole
-              and nothing else moves by a pixel. The dialog's own 24px of padding
-              is what those 4 are borrowed from.
+              Nothing else overhangs any more: an attachment's green tile used to
+              hang 4px past the body on the left and be sliced flat by that same
+              clip, which took a `-mx px` pair to buy back. The tile's column is
+              now as wide as the tile (see blockLeadColumn), so there is nothing
+              to rescue. `mx-0` is all that is left — it undoes the -3px inline
+              margin HeroUI pairs with its own 3px of body padding, padding
+              `dialogSection` zeroes, which otherwise showed as three pixels of
+              overhang on each side.
 
-              7 rather than 4 because the margin *replaces* HeroUI's own -3px
-              inline margin rather than adding to it — so 3 of the 7 only buy
-              back what the component already had, and the remaining 4 are the
-              tile's. And `px-1` is marked important because `dialogSection`
-              zeroes the body's padding on all four sides, and `pl-0` beats a
-              plain `px-1` whichever order the two are written in. */}
+              And no bar down the side: the body's edges already fade to say
+              there is more (see dialogBodyFade), so the scrollbar was a second,
+              moving answer to a question the fade had already settled. */}
           <Modal.Body
-            className={`-mx-[7px] flex flex-col gap-4 overflow-x-hidden ${dialogSection} px-1! ${dialogBodyFade}`}
+            className={`mx-0 flex flex-col gap-4 overflow-x-hidden ${dialogSection} ${hiddenScrollbar} ${dialogBodyFade}`}
           >
             {/* Title, tags and properties are one group so their spacing can be
                 set together — see HEADER_STACK_EDIT. */}
@@ -541,23 +627,53 @@ export function RoutineModal({
               >
                 {/* Locked, the routine's name is a heading, not a field switched
                     off: a read-only Input still draws its own edge under the
-                    cursor, which put a rule under a title nobody was editing. */}
-                {isEditing ? (
+                    cursor, which put a rule under a title nobody was editing.
+                    The same is true of an unlocked dialog whose title nobody has
+                    the caret in — see `isTitleFocused`. */}
+                {isEditing && isTitleFocused ? (
                   <TextField
                     aria-label={strings.routine.titleLabel}
                     value={form.description}
                     onChange={(description) => set('description', description)}
                     className="min-w-0 flex-1"
                   >
+                    {/* The field only exists because the dialog was just
+                        unlocked or the title just pressed, so the caret has to
+                        arrive with it — without the focus the press would look
+                        like it did nothing at all. */}
                     <Input
                       fullWidth
+                      // eslint-disable-next-line jsx-a11y/no-autofocus
+                      autoFocus
                       placeholder={strings.routine.titleLabel}
-                      className={`${FLAT_INPUT} ${TITLE_FIELD} text-xl font-bold`}
+                      className={`${FLAT_INPUT} ${TITLE_FIELD} text-xl font-normal`}
+                      // The caret lands after the last letter, not before the
+                      // first: a focused input starts its selection at 0, which
+                      // put the cursor at the head of a name you were about to
+                      // add to.
+                      onFocus={(event) => {
+                        const end = event.currentTarget.value.length;
+                        event.currentTarget.setSelectionRange(end, end);
+                      }}
+                      onBlur={() => setTitleFocused(false)}
                     />
                   </TextField>
                 ) : (
                   <h2 className="min-w-0 flex-1 truncate text-xl font-bold text-foreground">
-                    {form.description}
+                    {isEditing ? (
+                      // Editing but not being typed in — where you land after
+                      // clicking away from the title. Still the heading, and
+                      // pressing it puts the caret back.
+                      <button
+                        type="button"
+                        className="w-full cursor-text truncate text-left"
+                        onClick={() => setTitleFocused(true)}
+                      >
+                        {form.description}
+                      </button>
+                    ) : (
+                      form.description
+                    )}
                   </h2>
                 )}
               </div>
@@ -592,22 +708,22 @@ export function RoutineModal({
                   </Label>
                   <div className={VALUE_CELL}>
                     <Select.Trigger className={trigger}>
-                      <Select.Value />
-                      {isEditing ? <Select.Indicator /> : null}
+                      <span className={PROPERTY_VALUE}>
+                        {strings.routine.recurrence[form.recurrence]}
+                      </span>
                     </Select.Trigger>
                   </div>
                 </div>
-                <Select.Popover {...listboxPopover}>
-                  <ListBox>
+                <Select.Popover {...listboxPopover} className={PANEL_MATCHES_TRIGGER}>
+                  <ListBox className={LISTBOX_FLUSH}>
                     {Object.values(RoutineRecurrence).map((value) => (
                       <ListBox.Item
                         key={value}
                         id={value}
                         textValue={strings.routine.recurrence[value]}
-                        className={`${TEXT_LISTBOX_ITEM} lowercase`}
+                        className={LISTBOX_ITEM}
                       >
                         {strings.routine.recurrence[value]}
-                        <ListBox.ItemIndicator />
                       </ListBox.Item>
                     ))}
                   </ListBox>
@@ -617,9 +733,27 @@ export function RoutineModal({
               {isWeekly ? (
                 <Select
                   isDisabled={!isEditing}
-                className={undimmed}
-                  value={String(form.weekday)}
-                  onChange={(key) => set('weekday', Number(key))}
+                  className={undimmed}
+                  // Empty while the schedule is custom: the value is not one of
+                  // the seven days, and handing a Select a key it has no option
+                  // for makes it show nothing at all. The trigger below writes
+                  // the summary itself, so there is nothing to select.
+                  value={isCustom ? '' : String(form.weekday)}
+                  onChange={(key) => {
+                    // The eighth option is not a day, it is a question — so it
+                    // opens the picker and leaves the schedule alone until that
+                    // dialog is saved.
+                    if (String(key) === CUSTOM_WEEKDAY) {
+                      setWeekdayPickerOpen(true);
+                      return;
+                    }
+                    setForm((current) => ({
+                      ...current,
+                      weekday: Number(key),
+                      // Picking a single day is how you leave a custom schedule.
+                      weekdays: [],
+                    }));
+                  }}
                 >
                   <div className={propertyRow}>
                     <Label className={fieldLabel}>
@@ -628,31 +762,41 @@ export function RoutineModal({
                     </Label>
                     <div className={VALUE_CELL}>
                       <Select.Trigger className={trigger}>
-                        <Select.Value />
-                        {isEditing ? <Select.Indicator /> : null}
+                        {/* Wrapped rather than cut: "segunda, quarta e sexta" is
+                            longer than the column, and a summary of a schedule
+                            that stops halfway through tells you nothing. */}
+                        <span className={`break-words ${PROPERTY_VALUE}`}>{weekdayLabel}</span>
                       </Select.Trigger>
                     </div>
                   </div>
-                  <Select.Popover {...listboxPopover}>
-                    <ListBox>
-                      {WEEKDAYS.map((label, index) => (
+                  <Select.Popover {...listboxPopover} className={PANEL_MATCHES_TRIGGER}>
+                    <ListBox className={LISTBOX_FLUSH}>
+                      {WEEKDAY_NAMES.map((label, index) => (
                         <ListBox.Item
                           key={label}
                           id={String(index)}
                           textValue={label}
-                          className={`${TEXT_LISTBOX_ITEM} lowercase`}
+                          className={LISTBOX_ITEM}
                         >
                           {label}
-                          <ListBox.ItemIndicator />
                         </ListBox.Item>
                       ))}
+                      {/* Last, and set apart by being the one option that is not
+                          a day of the week. */}
+                      <ListBox.Item
+                        id={CUSTOM_WEEKDAY}
+                        textValue={strings.routine.weekdayPicker.custom}
+                        className={LISTBOX_ITEM}
+                      >
+                        {strings.routine.weekdayPicker.custom}
+                      </ListBox.Item>
                     </ListBox>
                   </Select.Popover>
                 </Select>
               ) : (
                 <Select
                   isDisabled={!isEditing}
-                className={undimmed}
+                  className={undimmed}
                   value={String(form.dayOfMonth)}
                   onChange={(key) => set('dayOfMonth', Number(key))}
                 >
@@ -663,33 +807,34 @@ export function RoutineModal({
                     </Label>
                     <div className={VALUE_CELL}>
                       <Select.Trigger className={trigger}>
-                        <Select.Value />
-                        {isEditing ? <Select.Indicator /> : null}
+                        <span className={PROPERTY_VALUE}>
+                          {String(form.dayOfMonth).padStart(2, '0')}
+                        </span>
                       </Select.Trigger>
                     </div>
                   </div>
-                  <Select.Popover {...listboxPopover}>
-                    <ListBox>
+                  <Select.Popover {...listboxPopover} className={PANEL_MATCHES_TRIGGER}>
+                    <ListBox className={LISTBOX_FLUSH}>
                       {MONTH_DAYS.map((day) => (
                         <ListBox.Item
                           key={day.value}
                           id={day.value}
                           textValue={day.label}
-                          className={`${TEXT_LISTBOX_ITEM} lowercase`}
+                          className={LISTBOX_ITEM}
                         >
                           {day.label}
-                          <ListBox.ItemIndicator />
                         </ListBox.Item>
                       ))}
                     </ListBox>
                   </Select.Popover>
                 </Select>
               )}
-            <Select
-                  selectionMode="multiple"
-                  isDisabled={!isEditing}
-                  className={undimmed}
-                  value={form.assigneeIds}
+
+              <Select
+                selectionMode="multiple"
+                isDisabled={!isEditing}
+                className={undimmed}
+                value={form.assigneeIds}
                 onChange={(keys) => set('assigneeIds', (keys as (string | number)[]).map(String))}
               >
                 <div className={propertyRow}>
@@ -699,20 +844,48 @@ export function RoutineModal({
                   </Label>
                   <div className={VALUE_CELL}>
                     <Select.Trigger className={trigger}>
-                      <Select.Value />
-                      {isEditing ? <Select.Indicator /> : null}
+                      {/* The faces and their names, written here rather than
+                          left to Select.Value — which prints a comma-separated
+                          list of keys and cannot show an avatar. The task
+                          modal's Responsável row reads exactly this way. */}
+                      <span className="flex min-w-0 flex-wrap items-center gap-2">
+                        {assignees.length === 0 ? (
+                          <span className={`${PROPERTY_VALUE} text-muted!`}>
+                            {strings.task.noAssignees}
+                          </span>
+                        ) : (
+                          assignees.map((user) => (
+                            <span
+                              key={user.id}
+                              className={`flex min-w-0 items-center gap-2 ${PROPERTY_VALUE}`}
+                            >
+                              <UserAvatar
+                                name={user.name}
+                                avatarUrl={user.avatarUrl}
+                                size="sm"
+                                className="size-5"
+                              />
+                              <span className="truncate">{user.name}</span>
+                            </span>
+                          ))
+                        )}
+                      </span>
                     </Select.Trigger>
                   </div>
                 </div>
-                <Select.Popover {...listboxPopover}>
-                  <ListBox selectionMode="multiple">
+                <Select.Popover {...listboxPopover} className={PANEL_MATCHES_TRIGGER}>
+                  <ListBox selectionMode="multiple" className={LISTBOX_FLUSH}>
                     {users.map((user) => (
-                      <ListBox.Item key={user.id} id={user.id} textValue={user.name}>
+                      <ListBox.Item
+                        key={user.id}
+                        id={user.id}
+                        textValue={user.name}
+                        className={LISTBOX_ITEM}
+                      >
                         <span className="flex items-center gap-2">
                           <UserAvatar name={user.name} avatarUrl={user.avatarUrl} size="sm" className="size-5" />
                           {user.name}
                         </span>
-                        <ListBox.ItemIndicator />
                       </ListBox.Item>
                     ))}
                   </ListBox>
@@ -858,6 +1031,28 @@ export function RoutineModal({
           </Modal.Footer>
         </Modal.Dialog>
       </Modal.Container>
+
+      {/* Over this dialog rather than inside it: the routine underneath is the
+          context for the answer, and a panel hanging off the weekday row would
+          have closed the moment the user reached for the second day. Nothing is
+          written until its own Salvar — see WeekdayPickerModal. */}
+      <WeekdayPickerModal
+        isOpen={isWeekdayPickerOpen}
+        initialDays={form.weekdays.length > 0 ? form.weekdays : [form.weekday]}
+        onClose={() => setWeekdayPickerOpen(false)}
+        onSave={(days) => {
+          const sorted = [...days].toSorted((a, b) => a - b);
+          setForm((current) => ({
+            ...current,
+            // One day chosen in the picker is not a custom schedule, it is that
+            // day — so it collapses back to the plain form rather than leaving
+            // the row summarising a set of one.
+            weekday: sorted[0],
+            weekdays: sorted.length > 1 ? sorted : [],
+          }));
+          setWeekdayPickerOpen(false);
+        }}
+      />
     </Modal.Backdrop>
   );
 }

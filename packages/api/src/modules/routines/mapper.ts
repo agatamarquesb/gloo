@@ -85,12 +85,32 @@ export function parseAttachments(value: unknown): AttachmentDto[] | null {
   });
 }
 
+/**
+ * A set of weekdays as the rest of the app expects to read one: 0–6, each at
+ * most once, in order.
+ *
+ * Both ends of the wire go through this. On the way in it is validation; on the
+ * way out it is the guarantee the client leans on when it abbreviates a run of
+ * days to "segunda - quarta", which is only true of a sorted list.
+ */
+export function normaliseWeekdays(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  const days = value.filter(
+    (day): day is number => Number.isInteger(day) && day >= 0 && day <= 6,
+  );
+  return [...new Set(days)].toSorted((a, b) => a - b);
+}
+
 export function toRoutineDto(routine: RoutineWithRelations): RoutineDto {
   return {
     id: routine.id,
     description: routine.description,
     recurrence: routine.recurrence,
     weekday: routine.weekday,
+    // Sorted and de-duplicated on the way out as well as on the way in: the
+    // column is an array a hand-written UPDATE could put anything into, and the
+    // client renders these in order to say "segunda - quarta".
+    weekdays: normaliseWeekdays(routine.weekdays),
     dayOfMonth: routine.dayOfMonth,
     // Effective state for "now", not the stored flag — see reset.ts.
     done: isCurrentlyDone(routine),

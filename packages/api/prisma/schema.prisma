@@ -159,7 +159,21 @@ model Routine {
   /// routine's only text and every consumer already reads it by that name.
   description     String
   recurrence      RoutineRecurrence
+  /// The single weekday a weekly routine falls on, 0=Sunday … 6=Saturday.
+  ///
+  /// Still the common case, and still what a routine picked from the plain list
+  /// stores. A routine set to repeat on several days keeps its earliest day here
+  /// too, so anything that only knows how to ask "which day?" — an old client, a
+  /// query, a report — gets an answer that is true rather than null.
   weekday         Int?
+  /// Every weekday a weekly routine repeats on, when the user chose more than
+  /// one. Empty for a routine that falls on a single day, which is what makes
+  /// `weekday` alone enough to describe it.
+  ///
+  /// A Postgres array rather than a bitmask or a join table: there are seven
+  /// possible values, they are read as a set and written as a set, and nothing
+  /// ever queries by one of them.
+  weekdays        Int[]             @default([])
   dayOfMonth      Int?
   /// Free-text annotation shown in the routine's edit modal.
   notes           String?

@@ -1,17 +1,17 @@
 /**
- * Central PT-BR copy. "Tasks" and "Dashboard" stay in English per spec;
- * everything else is translated here — components should never inline
- * literal copy, always reference this file.
+ * Central PT-BR copy. "Dashboard" stays in English — it is the product's own
+ * name for that page — and everything else is translated here; components
+ * should never inline literal copy, always reference this file.
  */
 export const strings = {
   appName: 'Gloo',
   nav: {
+    // PT-BR like everything else in the app. "Dashboard" is the exception and
+    // stays as it is: it is the word the product uses for that page, not a
+    // translation waiting to happen.
     dashboard: 'Dashboard',
-    tasks: 'Tasks',
-    // English like its two neighbours: these three are the page names, and a
-    // sidebar reading "Dashboard / Tasks / Calendário" reads as an oversight.
-    // Everything *inside* the page is PT-BR, as everywhere else.
-    calendar: 'Calendar',
+    tasks: 'Tarefas',
+    calendar: 'Calendário',
     signOut: 'Sair',
   },
   auth: {
@@ -78,12 +78,6 @@ export const strings = {
     addSubtask: 'Adicionar subtarefa',
     subtaskPlaceholder: 'Subtarefa',
     removeSubtask: 'Remover subtarefa',
-    /**
-     * Projects have no page of their own yet, so the picker opens on this and
-     * nothing else — the row exists, and says plainly that there is nothing to
-     * choose from rather than opening an empty list.
-     */
-    projectsEmpty: 'Nenhum projeto por aqui',
     noAssignees: 'Ninguém',
   },
   routine: {
@@ -97,11 +91,19 @@ export const strings = {
     title: 'Rotinas',
     recurrenceLabel: 'Recorrência',
     weekdayLabel: 'Dia da semana',
+    /** The last option in the weekday list, and the popup it opens. */
+    weekdayPicker: {
+      custom: 'Personalizado',
+      heading: 'Dias da semana',
+      everyDay: 'Todos os dias',
+      businessDays: 'Dias úteis',
+      close: 'Fechar',
+    },
     dayOfMonthLabel: 'Dia do mês',
     assigneeLabel: 'Responsável',
     empty: 'Nenhuma rotina por aqui.',
     titleLabel: 'Título',
-    notesTitle: 'Notas:',
+    notesTitle: 'Notas',
     notesPlaceholder: 'Notas sobre esta rotina',
     clearNotes: 'Limpar',
     bold: 'Negrito',
@@ -109,7 +111,7 @@ export const strings = {
     underline: 'Sublinhado',
     strikethrough: 'Traçado',
     checklist: 'Checklist',
-    checklistTitlePlaceholder: 'Título da checklist:',
+    checklistTitlePlaceholder: 'Título da checklist',
     deleteChecklist: 'Excluir',
     checklistItemPlaceholder: 'Item',
     addChecklistItem: 'Adicionar item',
@@ -135,6 +137,23 @@ export const strings = {
       deletePermanently: 'Deletar permanente',
       deletedAt: 'Apagada em',
     },
+    /** The two panels the card's `···` opens onto. */
+    menu: 'Ver rotinas',
+    all: {
+      open: 'Todas as rotinas',
+      heading: 'Todas as rotinas',
+      close: 'Voltar',
+      /** The footer toggle: whichever cadence is *not* on screen names it. */
+      weekly: 'Semanais',
+      monthly: 'Mensais',
+      empty: 'Nenhuma rotina por aqui.',
+    },
+    /**
+     * Nothing due soon, which is not the same as having no routines — the card
+     * only looks four days ahead, so it has to say which kind of empty it is or
+     * a full schedule reads as a lost one. See ROUTINE_LOOKAHEAD_DAYS.
+     */
+    emptySoon: 'Nada por aqui nos próximos dias.',
   },
   label: {
     title: 'Etiquetas',
@@ -190,6 +209,24 @@ export const strings = {
     },
     noTasks: 'Nenhuma tarefa por aqui.',
     tasksSuffix: 'tarefas',
+    /** The summary that opens under the month when a day is picked. */
+    day: {
+      openCalendar: 'Abrir no calendário',
+      close: 'Fechar resumo do dia',
+      empty: 'Não tem nada pra hoje',
+      type: 'Tipo',
+      date: 'Data',
+      time: 'Hora',
+      assignee: 'Responsável',
+      /** No hour of its own — a task is due on a day, an event is all-day. */
+      noTime: 'Dia todo',
+      kind: {
+        TASK: 'Tarefa',
+        EVENT: 'Evento',
+        MEETING: 'Reunião',
+        PROJECT: 'Projeto',
+      },
+    },
   },
   profile: {
     title: 'Meu perfil',

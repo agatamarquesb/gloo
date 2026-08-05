@@ -9,6 +9,7 @@ import { prisma } from '../../lib/prisma';
 import { sanitizeNotes } from '../../lib/sanitizeHtml';
 
 import {
+  normaliseWeekdays,
   routineInclude,
   toJsonAttachments,
   toJsonChecklists,
@@ -35,13 +36,40 @@ function mutationSubject(routine: RoutineWithRelations) {
   };
 }
 
+/**
+ * What a weekly routine's cadence comes down to on the way into the database.
+ *
+ * A custom schedule is the set; an ordinary one is the single day. Either way
+ * `weekday` ends up holding the earliest day in the set, so the two columns can
+ * never tell different stories about the same routine — see the schema.
+ */
+function weeklyCadence(
+  weekday: number | null | undefined,
+  weekdays: number[] | undefined,
+): { weekday: number | null; weekdays: number[] } {
+  const set = normaliseWeekdays(weekdays);
+  if (set.length > 0) return { weekday: set[0], weekdays: set };
+  return { weekday: weekday ?? null, weekdays: [] };
+}
+
 function validateRecurrenceFields(
   recurrence: string | undefined,
   weekday: number | null | undefined,
   dayOfMonth: number | null | undefined,
+  weekdays: number[] | undefined,
 ): string | null {
-  if (recurrence === 'WEEKLY' && (weekday === undefined || weekday === null)) {
+  if (
+    recurrence === 'WEEKLY' &&
+    (weekday === undefined || weekday === null) &&
+    normaliseWeekdays(weekdays).length === 0
+  ) {
     return 'weekday é obrigatório para rotinas semanais';
+  }
+  // Only when something was actually sent: an array that survives normalising
+  // as empty is either "no custom schedule" or a list of nothing but rubbish,
+  // and silently accepting the second would store a weekly routine with no day.
+  if (Array.isArray(weekdays) && weekdays.length > 0 && normaliseWeekdays(weekdays).length === 0) {
+    return 'weekdays deve conter dias entre 0 e 6';
   }
   if (recurrence === 'MONTHLY' && (dayOfMonth === undefined || dayOfMonth === null)) {
     return 'dayOfMonth é obrigatório para rotinas mensais';
@@ -125,6 +153,7 @@ export async function routineRoutes(app: FastifyInstance) {
       description,
       recurrence,
       weekday,
+      weekdays,
       dayOfMonth,
       notes,
       checklists,
@@ -138,14 +167,17 @@ export async function routineRoutes(app: FastifyInstance) {
         .code(400)
         .send({ error: 'description, recurrence e assigneeIds são obrigatórios' });
     }
-    const invalid = validateRecurrenceFields(recurrence, weekday, dayOfMonth);
+    const invalid = validateRecurrenceFields(recurrence, weekday, dayOfMonth, weekdays);
     if (invalid) return reply.code(400).send({ error: invalid });
+
+    const weekly = weeklyCadence(weekday, weekdays);
 
     const routine = await prisma.routine.create({
       data: {
         description,
         recurrence,
-        weekday: recurrence === 'WEEKLY' ? (weekday ?? null) : null,
+        weekday: recurrence === 'WEEKLY' ? weekly.weekday : null,
+        weekdays: recurrence === 'WEEKLY' ? weekly.weekdays : [],
         dayOfMonth: recurrence === 'MONTHLY' ? (dayOfMonth ?? null) : null,
         notes: sanitizeNotes(notes),
         checklists: toJsonChecklists(checklists),
@@ -178,6 +210,7 @@ export async function routineRoutes(app: FastifyInstance) {
         description,
         recurrence,
         weekday,
+        weekdays,
         dayOfMonth,
         notes,
         checklists,
@@ -191,12 +224,20 @@ export async function routineRoutes(app: FastifyInstance) {
       }
 
       const nextRecurrence = recurrence ?? existing.recurrence;
+      // A PATCH that names neither falls back to what is stored, so switching a
+      // routine from monthly to weekly keeps the weekday it had. `weekdays` is
+      // the exception: sending `[]` is how a custom schedule is turned back into
+      // a single day, so an explicit empty array must not be read as "unchanged".
+      const nextWeekdays = weekdays === undefined ? existing.weekdays : weekdays;
       const invalid = validateRecurrenceFields(
         nextRecurrence,
         weekday ?? existing.weekday,
         dayOfMonth ?? existing.dayOfMonth,
+        nextWeekdays,
       );
       if (invalid) return reply.code(400).send({ error: invalid });
+
+      const weekly = weeklyCadence(weekday ?? existing.weekday, nextWeekdays);
 
       const routine = await prisma.routine.update({
         where: { id: request.params.id },
@@ -223,9 +264,13 @@ export async function routineRoutes(app: FastifyInstance) {
             : {}),
           // Keep the unused cadence field null so a switched routine can't keep
           // a stale weekday/day-of-month around.
-          ...(recurrence !== undefined || weekday !== undefined || dayOfMonth !== undefined
+          ...(recurrence !== undefined ||
+          weekday !== undefined ||
+          weekdays !== undefined ||
+          dayOfMonth !== undefined
             ? {
-                weekday: nextRecurrence === 'WEEKLY' ? (weekday ?? existing.weekday) : null,
+                weekday: nextRecurrence === 'WEEKLY' ? weekly.weekday : null,
+                weekdays: nextRecurrence === 'WEEKLY' ? weekly.weekdays : [],
                 dayOfMonth:
                   nextRecurrence === 'MONTHLY' ? (dayOfMonth ?? existing.dayOfMonth) : null,
               }

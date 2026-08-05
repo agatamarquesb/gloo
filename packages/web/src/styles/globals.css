@@ -455,18 +455,30 @@ body {
  * theme's own, which on a box that size is a circle. So the grid was as deep as
  * it was wide, and today was a dot.
  *
- * Here a day is a fixed 28px square with a 10px radius: the rounded square the
+ * Here a day is a fixed 28×26 box with an 8px radius: the rounded square the
  * rest of the app is built from, big enough for two digits and no bigger. The
  * columns still divide the card — `place-self: center`, which HeroUI already
  * sets, centres each square in the column it belongs to, so the month keeps its
  * full width while the marks in it come down to their own size.
+ *
+ * Two things follow from the box being what gets *painted*. It is shorter than
+ * the row it sits in and carries 2px of margin above and below, so a filled
+ * Wednesday and the filled Wednesday under it are two marks with a gap rather
+ * than one green column — at 28px tall in a 28px row they met exactly. And it
+ * reserves the bottom 7px for the dots that say the day has something on it:
+ * `border-box` plus `padding-bottom` lifts the number into the space that is
+ * left, so the dots sit under it *inside* the fill instead of hanging off the
+ * cell's bottom edge onto the row below.
  */
 .gloo-dashboard-calendar {
   .calendar__cell {
-    aspect-ratio: 1;
+    box-sizing: border-box;
+    /* Explicitly off: HeroUI squares the cell, and a 28×26 box is not one. */
+    aspect-ratio: auto;
     width: 28px;
-    height: 28px;
-    border-radius: 10px;
+    height: 26px;
+    padding-bottom: 7px;
+    border-radius: 8px;
     /*
      * And centred in the column it belongs to. HeroUI's own `place-self: center`
      * does nothing here: the grid is laid out on the cells' *parents* (the `td`s
@@ -475,7 +487,7 @@ body {
      * 10px left of the weekday named above it. At the width it used to be, 100%,
      * there was nothing to centre.
      */
-    margin-inline: auto;
+    margin: 2px auto;
   }
 
   .calendar__header-cell {

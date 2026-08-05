@@ -40,6 +40,7 @@ export function toTaskListItemDto(task: TaskWithRelations): TaskListItemDto {
   return {
     id: task.id,
     title: task.title,
+    description: task.description,
     dueDate: task.dueDate ? task.dueDate.toISOString() : null,
     priority: task.priority,
     status: task.status,
@@ -64,7 +65,6 @@ export function toTaskListItemDto(task: TaskWithRelations): TaskListItemDto {
 export function toTaskDetailDto(task: TaskWithRelations): TaskDetailDto {
   return {
     ...toTaskListItemDto(task),
-    description: task.description,
     // The same tags a routine carries, read the same way — an unknown colour
     // falls back rather than reaching the client as a class nobody has.
     labels: task.labels.map(({ label }) => ({

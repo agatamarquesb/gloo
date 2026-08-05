@@ -61,6 +61,21 @@ export const BUTTON_LIKE_FIELD = 'border [--field-border:var(--outline-control)]
 export const listboxPopover = { offset: 0, placement: 'bottom start' } as const;
 
 /**
+ * A panel exactly as wide as the field it dropped from.
+ *
+ * react-aria publishes the trigger's measured width on the popover as
+ * `--trigger-width`, so a panel that asks for it can never disagree with the
+ * value above it — no number to keep in step as a column's width changes.
+ *
+ * The task modal's property panels deliberately do *not* use this: two of their
+ * triggers are chips that hug their own labels, so a panel measured from one
+ * came out two thirds the width of the row it dropped from. Everything in the
+ * routine modal's property list is full width, which is exactly when this is the
+ * right answer. See PROPERTY_PANEL in TaskModal for the other case.
+ */
+export const PANEL_MATCHES_TRIGGER = 'w-[var(--trigger-width)]';
+
+/**
  * The list itself, with the 4px HeroUI insets it from the panel's left and right
  * edges taken back.
  *

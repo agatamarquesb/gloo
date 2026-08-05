@@ -38,6 +38,13 @@ export interface SubtaskDto {
 export interface TaskListItemDto {
   id: string;
   title: string;
+  /**
+   * The task's notes, as markup — on the list DTO rather than only the detail
+   * one because the Dashboard's day summary reads a whole day of tasks at once
+   * and shows each one's note under it. Fetching a detail per row to reach a
+   * single text column would be a request each for something already loaded.
+   */
+  description: string | null;
   dueDate: string | null;
   priority: TaskPriority;
   status: TaskStatus;
@@ -90,7 +97,6 @@ export function elapsedMs(
 }
 
 export interface TaskDetailDto extends TaskListItemDto {
-  description: string | null;
   /**
    * The task's tags, from the same shared pool a routine's come from — only on
    * the detail DTO, since only the modal shows them.
@@ -197,7 +203,18 @@ export interface RoutineDto {
   /** Shown as "Título" in the UI. */
   description: string;
   recurrence: RoutineRecurrence;
+  /**
+   * The weekday a weekly routine falls on, 0=Sunday … 6=Saturday — and the
+   * earliest of them when it falls on several, so this is never null for a
+   * weekly routine whatever the user chose. See `weekdays`.
+   */
   weekday: number | null;
+  /**
+   * Every weekday it repeats on, when the user picked more than one. Empty for
+   * the ordinary case of a single day, which `weekday` already describes — so
+   * "is this a custom schedule?" is `weekdays.length > 1`.
+   */
+  weekdays: number[];
   dayOfMonth: number | null;
   done: boolean;
   /** Free-text annotation. */
@@ -223,6 +240,11 @@ export interface CreateRoutineInput {
   description: string;
   recurrence: RoutineRecurrence;
   weekday?: number | null;
+  /**
+   * The full set for a custom weekly schedule. Sent whole or not at all — the
+   * API derives `weekday` from it, so the two can never disagree.
+   */
+  weekdays?: number[];
   dayOfMonth?: number | null;
   notes?: string | null;
   checklists?: RoutineChecklistDto[];

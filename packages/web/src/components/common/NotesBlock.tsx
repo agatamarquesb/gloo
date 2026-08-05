@@ -4,7 +4,6 @@ import { Button } from '@heroui/react';
 import { playSound } from '@/lib/sounds';
 import {
   blockBox,
-  blockBoxBare,
   blockDivider,
   blockLeadColumn,
   blockTitle,
@@ -75,9 +74,9 @@ export function NotesBlock({
          takes a property row's height, so the title sits on the same line as
          "Prioridade" and the note itself begins level with "Deadline" — the two
          columns read as one set of rows. */
-      className={`${
-        compact ? taskBlockBox('gap-0') : isEditing ? blockBox : blockBoxBare
-      } ${fill ? 'h-full min-h-0' : ''}`}
+      className={`${compact ? taskBlockBox('gap-0') : blockBox} ${
+        fill ? 'h-full min-h-0' : ''
+      }`}
     >
       <RichNotes
         compact={compact}
@@ -147,9 +146,13 @@ export function NotesBlock({
         }
       />
 
-      {/* Same rule, and the same clearance, as the one that closes a checklist.
-          Locked only: editing, the box's own edge does it. */}
-      {showDivider && !isEditing ? <div className={blockDivider} /> : null}
+      {/* Same rule, and the same clearance, as the one that closes a checklist —
+          and in both of the dialog's modes now that the blocks have no frame in
+          either of them. It used to be locked-only, back when an unlocked block
+          had an edge of its own; without one, dropping the rule left the
+          sections running together and moved every one below it up a notch the
+          moment you pressed Editar. */}
+      {showDivider ? <div className={blockDivider} /> : null}
     </section>
   );
 }

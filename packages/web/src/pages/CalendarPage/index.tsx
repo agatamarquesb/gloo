@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
+import { getLocalTimeZone, parseDate, today, type CalendarDate } from '@internationalized/date';
+import { useSearchParams } from 'react-router';
 
 import {
   CalendarProvider,
@@ -30,6 +31,12 @@ import {
 import { strings } from '@/strings/pt-BR';
 
 /**
+ * Which day the page should open on, as `YYYY-MM-DD`. Exported so the one place
+ * that writes it and the one place that reads it name it once.
+ */
+export const CALENDAR_DATE_PARAM = 'data';
+
+/**
  * The Calendar page.
  *
  * Two columns at xl, the same split the Dashboard uses: the grid takes two
@@ -42,7 +49,24 @@ import { strings } from '@/strings/pt-BR';
  * the range they cover, and the toolbar's arrows move them.
  */
 export function CalendarPage() {
-  const [focusedDate, setFocusedDate] = useState<CalendarDate>(() => today(getLocalTimeZone()));
+  const [searchParams] = useSearchParams();
+  /**
+   * Opens on the day the caller named, or on today.
+   *
+   * The Dashboard's day summary is what names one: its chevron is the way from
+   * "what is on the 12th" to the 12th itself, and landing on today instead would
+   * make that a link to somewhere else. Read once, as the initial state — the
+   * page owns the focused date from then on, and re-reading it would drag the
+   * grid back every time the arrows moved it.
+   */
+  const [focusedDate, setFocusedDate] = useState<CalendarDate>(() => {
+    const requested = searchParams.get(CALENDAR_DATE_PARAM);
+    try {
+      return requested ? parseDate(requested) : today(getLocalTimeZone());
+    } catch {
+      return today(getLocalTimeZone());
+    }
+  });
   const [viewMode, setViewMode] = useState<CalendarViewMode>(CalendarViewMode.WEEK);
   const [search, setSearch] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { hiddenScrollbar } from '@/theme/styleConstants';
+
 /**
  * How a section inside the task dialog scrolls.
  *
@@ -45,8 +47,7 @@ const EDGE_SLACK = 1;
  * whose edges already fade to say there is more; a scrollbar in each of three
  * boxes was three more lines in a layout made of lines.
  */
-const SCROLLER =
-  'min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+const SCROLLER = `min-h-0 flex-1 overflow-y-auto overflow-x-hidden ${hiddenScrollbar}`;
 
 /**
  * A section's scrolling content, with a soft edge wherever it continues past the

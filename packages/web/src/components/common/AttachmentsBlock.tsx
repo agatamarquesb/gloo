@@ -1,7 +1,11 @@
 import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Download, Eye, FileText, Globe, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { Button, Input, Label, Modal, Popover } from '@heroui/react';
-import { TextField } from 'react-aria-components';
+// react-aria's own Button for the compact "+", not a plain `<button>`: HeroUI's
+// Popover is a react-aria DialogTrigger, which hands its press handling down
+// through a PressResponder that only a pressable component picks up. A bare DOM
+// button receives nothing at all and the panel never opens.
+import { Button as AriaButton, TextField } from 'react-aria-components';
 
 import { AttachmentKind, type AttachmentDto } from '@gloo/shared';
 
@@ -12,7 +16,6 @@ import { BUTTON_LIKE_FIELD, FLAT_INPUT } from '@/theme/fieldStyles';
 import {
   blockActionCluster,
   blockBox,
-  blockBoxBare,
   blockHeaderRow,
   blockLeadColumn,
   blockRow,
@@ -22,7 +25,7 @@ import {
   blockTitle,
   outlineControl,
   taskBlockBox,
-  taskBlockRow,
+  taskAttachmentRow,
   taskBlockRowTitle,
 } from '@/theme/styleConstants';
 import { SectionScroll } from '@/components/common/SectionScroll';
@@ -304,10 +307,11 @@ export function AttachmentsBlock({
     <Popover isOpen={isAdding} onOpenChange={setAdding}>
       {compact ? (
         // The bare glyph on the heading's right end, which is where the rule
-        // above this block ends — see blockRowAction.
-        <button type="button" className={blockRowAction} aria-label={strings.attachment.add}>
+        // above this block ends — see blockRowAction. AriaButton rather than a
+        // plain one so the trigger is actually pressable; see the import.
+        <AriaButton className={blockRowAction} aria-label={strings.attachment.add}>
           <Plus className="size-4" />
-        </button>
+        </AriaButton>
       ) : (
         <Button isIconOnly size="sm" variant="ghost" className="shrink-0 text-muted" aria-label={strings.attachment.add}>
           <Plus className="size-4" />
@@ -362,9 +366,9 @@ export function AttachmentsBlock({
     // heading to what it heads, and Notas, the checklists and this one all have
     // to sit at the same one.
     <section
-      className={`${
-        compact ? taskBlockBox('gap-1.5') : isEditing ? blockBox : blockBoxBare
-      } ${compact ? 'h-full min-h-0' : ''}`}
+      className={`${compact ? taskBlockBox('gap-1.5') : blockBox} ${
+        compact ? 'h-full min-h-0' : ''
+      }`}
     >
       <div className={`${blockHeaderRow} ${compact ? 'shrink-0' : ''}`}>
         {/* The shared column, so this heading starts exactly where Notas' and a
@@ -396,7 +400,7 @@ export function AttachmentsBlock({
               // column by a couple of pixels either side, which eats into the
               // gap. The extra puts the visible distance from tile to title back
               // on a par with a checklist's checkbox to its item.
-              <li key={attachment.id} className={compact ? taskBlockRow : blockRow}>
+              <li key={attachment.id} className={compact ? taskAttachmentRow : blockRow}>
                 {/* The pencil leads the row in the task dialog, on the tile's
                     left: it acts on the file rather than on the list, and at the
                     far end it was one of three glyphs competing for the row's
@@ -404,22 +408,22 @@ export function AttachmentsBlock({
                 {compact && isEditing ? (
                   <button
                     type="button"
-                    className={`${blockRowAction} mt-1.5`}
+                    className={blockRowAction}
                     aria-label={strings.attachment.edit}
                     onClick={() => setEditingId(attachment.id)}
                   >
                     <Pencil className="size-4" />
                   </button>
                 ) : null}
-                {/* Centred on the shared lead column rather than sized to it:
-                    the tile is wider than the column and overhangs it evenly, so
-                    it still sits under the Paperclip in the heading while every
-                    row's title stays on the heading's own left edge.
+                {/* In the shared lead column, which is the tile's own 28px wide
+                    (see blockLeadColumn): the tile sits under the Paperclip in
+                    the heading, every row's title starts on the heading's own
+                    left edge, and nothing hangs out past the section on either
+                    side — which it did while the column was 20.
 
                     Compact, there is no Paperclip to sit under and no column to
                     centre on, so the tile simply starts on the block's own left
-                    edge — level with the word "Anexos" above it, instead of
-                    hanging outside the section. */}
+                    edge — level with the word "Anexos" above it. */}
                 {compact ? (
                   <span
                     aria-hidden
@@ -439,9 +443,10 @@ export function AttachmentsBlock({
                 )}
                 {/* Wrapped in the task dialog, cut in the routine's: nothing in
                     that dialog scrolls sideways, so a long name comes down onto
-                    a second line — starting level with its own tile, since the
-                    row is top-aligned. On one line it is centred on the tile
-                    instead; see taskBlockRowTitle, which is what does both. */}
+                    a second line. Either way its middle sits on the tile's —
+                    the row centres them (see taskAttachmentRow) and the name is
+                    a box at least as tall as the tile (taskBlockRowTitle), so
+                    one line and three both come out on the same axis. */}
                 {canOpen ? (
                   <a
                     href={assetUrl(attachment.url)}
@@ -472,7 +477,7 @@ export function AttachmentsBlock({
                   compact ? (
                     <button
                       type="button"
-                      className={`${blockRowAction} ${blockRowActionOnHover} mt-1.5`}
+                      className={`${blockRowAction} ${blockRowActionOnHover}`}
                       aria-label={strings.attachment.remove}
                       onClick={() => {
                         playSound('delete');
@@ -516,7 +521,7 @@ export function AttachmentsBlock({
                   compact ? (
                     /* Bare glyphs on the row's right edge, the same column the
                        × takes while editing. */
-                    <span className={`${blockActionCluster} mt-1.5 gap-2`}>
+                    <span className={`${blockActionCluster} gap-2`}>
                       <button
                         type="button"
                         className={blockRowAction}
