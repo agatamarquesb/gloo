@@ -166,6 +166,19 @@ export const blockRow = 'flex min-h-9 items-center gap-3 md:min-h-8';
  */
 export const taskBlockRow = 'group flex min-h-8 items-start gap-3 py-1';
 
+/**
+ * The name in such a row, set against the tile beside it.
+ *
+ * Top-aligning the row is right for the name that wraps and wrong for the one
+ * that doesn't: a single 20px line at the top of a 28px tile sits four pixels
+ * above its middle. This gets both without asking which case it is — the title
+ * is its own box, at least as tall as the tile, with its lines centred in it.
+ * One line is then centred on the tile; two grow the box past the minimum, and
+ * centring 40px of text in a 40px box puts the first line back on the tile's own
+ * top edge, which is where a wrapped name belongs.
+ */
+export const taskBlockRowTitle = 'flex min-h-7 items-center';
+
 
 /**
  * The app's one "sitting on the card" surface: a routine row's fill, the disc in

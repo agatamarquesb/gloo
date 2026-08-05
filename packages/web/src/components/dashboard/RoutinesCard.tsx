@@ -28,6 +28,7 @@ import { duplicateRoutineName } from './duplicateRoutineName';
 import { RoutineLabels } from './RoutineLabels';
 import { RoutineModal } from './RoutineModal';
 import { RoutineTrash } from './RoutineTrash';
+import { readLabelsCollapsed, writeLabelsCollapsed } from './routineLabelsView';
 import { formatRoutineDay, groupRoutinesByMonth } from './routineSchedule';
 
 /**
@@ -156,8 +157,11 @@ export function RoutinesCard() {
    * Whether the tag rows are folded down to bars — one flag for the whole list,
    * because the gesture switches how you read the card rather than dressing a
    * single routine. See RoutineLabels.
+   *
+   * Seeded from where it was left rather than from `false`, so a refresh brings
+   * the card back the way it was being read — see routineLabelsView.
    */
-  const [areLabelsCollapsed, setLabelsCollapsed] = useState(false);
+  const [areLabelsCollapsed, setLabelsCollapsed] = useState(readLabelsCollapsed);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const groups = groupRoutinesByMonth(routines);
@@ -192,6 +196,15 @@ export function RoutinesCard() {
   function openEdit(routine: RoutineDto) {
     setEditing(routine);
     setModalOpen(true);
+  }
+
+  /** Folds every tag row, or unfolds them, and remembers which for next time. */
+  function toggleLabels() {
+    setLabelsCollapsed((current) => {
+      const next = !current;
+      writeLabelsCollapsed(next);
+      return next;
+    });
   }
 
   /**
@@ -292,7 +305,7 @@ export function RoutinesCard() {
                     onEdit={() => openEdit(routine)}
                     onDuplicate={() => duplicate(routine)}
                     areLabelsCollapsed={areLabelsCollapsed}
-                    onToggleLabels={() => setLabelsCollapsed((current) => !current)}
+                    onToggleLabels={toggleLabels}
                   />
                 ))}
               </ul>

@@ -1,5 +1,3 @@
-import { CalendarDays } from 'lucide-react';
-
 import type { TaskStatus } from '@gloo/shared';
 
 import { strings } from '@/strings/pt-BR';
@@ -88,29 +86,34 @@ export const LABEL_OPTICAL_LIFT = '-translate-y-[0.08em]';
  * STATUS_COLUMN in TaskCard.
  */
 /**
- * That a task is late: a calendar with an exclamation beside it, in the overdue
- * red, immediately after the date it is late against — or, on a task row where
- * the date is only a line of meta, after the task's name.
+ * That a task is late: two bold exclamations in the overdue red, immediately
+ * after the date it is late against — or, on a task row where the date is only a
+ * line of meta, after the task's name.
  *
  * A pill is how a status is shown, and late is not a status — nobody sets it,
  * the date does. As a fourth chip in the status column it displaced the status
  * the task actually has ("em andamento" on a task that is also late is two
  * facts, and the pill could only carry one).
  *
- * The exclamation is type rather than an icon because lucide has no
- * calendar-with-warning, and a second glyph of a different weight beside the
- * first looked like two icons rather than one mark.
+ * Type rather than a drawing, and no glyph beside it. Both of the icons this has
+ * been — a calendar with a "!" after it, then a calendar ringed into a badge —
+ * spent their detail saying "deadline", which the date next to them already
+ * says. What is left is the only part that was new: that it has passed. Two of
+ * them rather than one because a single "!" at this size reads as punctuation on
+ * the end of the date.
+ *
+ * No line-height of its own, deliberately. The rows that carry it centre their
+ * items, and a mark set to `leading-none` is a 14px box centred against a 20px
+ * line — which put it a pixel above the date's own middle. At the line height it
+ * inherits, centring the boxes and sitting on the same line are the same thing.
  */
 export function OverdueMark({ className = '' }: { className?: string }) {
   return (
     <span
-      className={`inline-flex items-center gap-0.5 text-status-overdue-text ${className}`}
+      className={`shrink-0 text-sm font-bold text-status-overdue-text ${className}`}
       title={strings.task.filters.overdue}
     >
-      <CalendarDays className="size-4" aria-hidden />
-      <span aria-hidden className="text-sm leading-none font-bold">
-        !
-      </span>
+      <span aria-hidden>!!</span>
       <span className="sr-only">{strings.task.filters.overdue}</span>
     </span>
   );

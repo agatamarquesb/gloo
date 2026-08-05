@@ -17,9 +17,15 @@ import { TaskStatusChipSelect } from './TaskStatusChipSelect';
 /**
  * The status pill hugs its own label, so no two are the same width. This is the
  * cell it sits in: fixed, and left-aligned inside, so every row's pill starts on
- * one edge however long its label is. Sized to the longest — "em andamento".
+ * one edge however long its label is.
+ *
+ * 7.5rem is the longest pill — "em andamento", which measures 118px — and not a
+ * pixel less. At 7rem it overhung the cell by six, which the row's `gap-4` then
+ * paid for: the pill sat 10px from the subtask marker after it and 16px from the
+ * progress bar before it, so the one thing on the row you can press looked
+ * shunted to the right.
  */
-const STATUS_COLUMN = 'flex w-28 shrink-0 justify-start';
+const STATUS_COLUMN = 'flex w-30 shrink-0 justify-start';
 
 export function TaskCard({
   task,
@@ -74,7 +80,10 @@ export function TaskCard({
     //
     // motion-safe on the hover lift: it's decoration, so it goes away under
     // prefers-reduced-motion while the colour change stays.
-    <div className="gloo-rise relative flex w-full flex-col gap-3 rounded-2xl border border-outline-green bg-transparent p-4 text-left transition-[background-color,transform] duration-200 hover:bg-default/40 motion-safe:hover:scale-[1.015] sm:flex-row sm:items-center sm:gap-4">
+    // The hover fill is a fifth of the neutral rather than two fifths: the row
+    // sits on the card's own white, and at the old strength the grey read as a
+    // selected state rather than as the pointer passing over.
+    <div className="gloo-rise relative flex w-full flex-col gap-3 rounded-2xl border border-outline-green bg-transparent p-4 text-left transition-[background-color,transform] duration-200 hover:bg-default/20 motion-safe:hover:scale-[1.015] sm:flex-row sm:items-center sm:gap-4">
       <button
         type="button"
         onClick={open}
@@ -85,16 +94,33 @@ export function TaskCard({
       {/* Compact, the title takes a routine title's text-sm and the line under it
           the text-xs a routine's date carries — see `compact` above. */}
       <div className="pointer-events-none relative min-w-0 flex-1">
-        {/* The mark ends the title rather than joining the meta line under it:
+        {/* The mark leads the title rather than joining the meta line under it:
             the date on that line is the *due* date either way, and what is worth
-            noticing at a glance is that this row is late. */}
+            noticing at a glance is that this row is late — which is also why the
+            name goes red and a step heavier with it.
+
+            In front, not after, because that is where a list is read from: down
+            the left edge, one title at a time, and a mark at the end of a name
+            of unknown length is somewhere different on every row. It is also the
+            one place a long name cannot push it out of sight — the title
+            truncates, and anything after it would go with the last word. The
+            deadline row in the dialog keeps its mark on the right, where it
+            follows the date it is late against rather than heading a list.
+
+            A step heavier, one step and not two: a late row has to be the first
+            thing your eye lands on in a list of rows that otherwise look alike,
+            and the colour alone was doing that only on the second look. The
+            dialog does not follow, deliberately: there is one task in it, so
+            there is nothing for it to stand out from. */}
         <p
-          className={`flex items-center gap-1.5 font-medium text-surface-foreground ${
-            compact ? 'text-sm' : ''
-          }`}
+          className={`flex items-center gap-1.5 ${
+            task.isOverdue
+              ? 'font-semibold text-status-overdue-text'
+              : 'font-medium text-surface-foreground'
+          } ${compact ? 'text-sm' : ''}`}
         >
-          <span className="truncate">{task.title}</span>
           {task.isOverdue ? <OverdueMark /> : null}
+          <span className="truncate">{task.title}</span>
         </p>
         <p className={`truncate text-muted ${compact ? 'text-xs' : 'text-sm'}`}>
           {dueDate ? `${dueDate} · ` : ''}

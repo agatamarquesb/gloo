@@ -180,7 +180,7 @@ export const strings = {
   dashboard: {
     taskSummary: 'Resumo de tarefas',
     myTasks: 'Minhas tarefas',
-    openBySector: 'Tarefas abertas por setor',
+    bySector: 'Tarefas por setor',
     calendar: 'Calendário',
     summary: {
       upcoming: 'A fazer',
@@ -222,7 +222,7 @@ export const strings = {
     },
   },
   timeBlocking: {
-    title: 'Time blocking',
+    title: 'Timer',
     customOpen: 'Tempo personalizado',
     customLabel: 'Tempo (hh:mm:ss)',
     customConfirm: 'Confirmar tempo',

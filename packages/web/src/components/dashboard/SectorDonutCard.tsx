@@ -24,13 +24,17 @@ export function SectorDonutCard() {
     [unordered],
   );
 
-  const total = bySector.reduce((sum, entry) => sum + entry.pendingCount, 0);
+  // Every task the sector has, not only the open ones — see TaskBySectorDto.
+  // The slices, the numbers beside them and the routes out of this card all read
+  // the same figure, so pressing a sector lands on that sector's whole list
+  // rather than on a filter of it.
+  const total = bySector.reduce((sum, entry) => sum + entry.totalCount, 0);
   // Recharts renders nothing for an all-zero dataset; a flat placeholder ring
   // keeps the card's shape instead of collapsing it.
-  const slices = total > 0 ? bySector : bySector.map((entry) => ({ ...entry, pendingCount: 1 }));
+  const slices = total > 0 ? bySector : bySector.map((entry) => ({ ...entry, totalCount: 1 }));
 
   return (
-    <DashboardCard title={strings.dashboard.openBySector}>
+    <DashboardCard title={strings.dashboard.bySector}>
       {/* Container query, not a viewport breakpoint: this card sits in a narrow
           column on wide screens and full-width on phones, so it has to lay out
           against its own width or the long sector names get truncated.
@@ -51,7 +55,7 @@ export function SectorDonutCard() {
             <PieChart>
               <Pie
                 data={slices}
-                dataKey="pendingCount"
+                dataKey="totalCount"
                 nameKey="sector.name"
                 innerRadius="62%"
                 outerRadius="100%"
@@ -82,7 +86,7 @@ export function SectorDonutCard() {
                     className="cursor-pointer transition-opacity"
                     onMouseEnter={() => setActiveIndex(index)}
                     onMouseLeave={() => setActiveIndex(null)}
-                    onClick={() => navigate(`/tasks?sectorId=${entry.sector.id}&status=TODO`)}
+                    onClick={() => navigate(`/tasks?sectorId=${entry.sector.id}`)}
                   />
                 ))}
               </Pie>
@@ -126,7 +130,7 @@ export function SectorDonutCard() {
                 type="button"
                 onMouseEnter={() => setActiveIndex(index)}
                 onMouseLeave={() => setActiveIndex(null)}
-                onClick={() => navigate(`/tasks?sectorId=${entry.sector.id}&status=TODO`)}
+                onClick={() => navigate(`/tasks?sectorId=${entry.sector.id}`)}
                 // The row's edge takes the slice's own colour while either of
                 // them is hovered — which is what says *this* row is *that*
                 // slice, in both directions, without a tooltip.
@@ -140,7 +144,7 @@ export function SectorDonutCard() {
                 />
                 <span className="flex-1 text-xs text-foreground">{entry.sector.name}</span>
                 <span className="shrink-0 text-xs font-semibold text-foreground">
-                  {entry.pendingCount}
+                  {entry.totalCount}
                 </span>
               </button>
             </li>

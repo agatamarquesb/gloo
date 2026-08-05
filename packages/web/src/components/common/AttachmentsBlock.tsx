@@ -23,6 +23,7 @@ import {
   outlineControl,
   taskBlockBox,
   taskBlockRow,
+  taskBlockRowTitle,
 } from '@/theme/styleConstants';
 import { SectionScroll } from '@/components/common/SectionScroll';
 import { SecondaryButton } from '@/components/common/SecondaryButton';
@@ -439,18 +440,25 @@ export function AttachmentsBlock({
                 {/* Wrapped in the task dialog, cut in the routine's: nothing in
                     that dialog scrolls sideways, so a long name comes down onto
                     a second line — starting level with its own tile, since the
-                    row is top-aligned. */}
+                    row is top-aligned. On one line it is centred on the tile
+                    instead; see taskBlockRowTitle, which is what does both. */}
                 {canOpen ? (
                   <a
                     href={assetUrl(attachment.url)}
                     target="_blank"
                     rel="noreferrer"
-                    className={`min-w-0 flex-1 text-sm font-medium text-foreground hover:underline ${TITLE_WRAP(compact)}`}
+                    className={`min-w-0 flex-1 text-sm font-medium text-foreground hover:underline ${TITLE_WRAP(compact)} ${
+                      compact ? taskBlockRowTitle : ''
+                    }`}
                   >
                     {attachment.title}
                   </a>
                 ) : (
-                  <span className={`min-w-0 flex-1 text-sm font-medium text-foreground ${TITLE_WRAP(compact)}`}>
+                  <span
+                    className={`min-w-0 flex-1 text-sm font-medium text-foreground ${TITLE_WRAP(compact)} ${
+                      compact ? taskBlockRowTitle : ''
+                    }`}
+                  >
                     {attachment.title}
                   </span>
                 )}

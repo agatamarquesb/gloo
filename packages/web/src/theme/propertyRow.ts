@@ -28,11 +28,13 @@ export const PROPERTY_ROW_THIRDS = 'grid grid-cols-3 items-center gap-2';
  * aquisição" in a 130px cell, so the label column is fixed and the value takes
  * what is left.
  *
- * 8rem is the longest label ("Responsável") plus its icon and no more: values
- * now wrap rather than truncate, and every pixel this column does not need is a
- * pixel that keeps a deadline on one line.
+ * 7.5rem is the longest label ("Responsável") plus its icon and no more — 107px
+ * of content in a 120px column. Values now wrap rather than truncate, and every
+ * pixel this column does not need is a pixel that goes to the value beside it:
+ * the deadline's calendar and the sector's list are both as wide as the trigger
+ * they drop from, so the label column is the one place their width comes from.
  */
-export const PROPERTY_ROW_SPLIT = 'grid grid-cols-[8rem_minmax(0,1fr)] items-start gap-2';
+export const PROPERTY_ROW_SPLIT = 'grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-2';
 
 /**
  * One height for every row, instead of each one taking the height of whatever it
@@ -97,14 +99,21 @@ export const BARE_TRIGGER = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FI
  * with it, so the two rows that hold a pill stood 16px taller than the four that
  * hold text and the column lost the even pitch it is read by.
  *
- * The two `aria-expanded` rules are about the ground it grows while open. The
- * width, because the ground bleeds 8px to the *left* of the value (see
- * OPEN_FIELD_GROUND) and a `w-full` box would take those 8px off its right edge
- * instead of adding them — leaving the grey band short of the panel hanging
- * under it. And the padding, so the band is as deep as one option in that panel
- * rather than a strip the height of the text alone.
+ * The `aria-expanded` rules are the ground it grows while open, and they only
+ * touch its height: 6px of air above and below the value, so the band reads as a
+ * field the list belongs to rather than as a strip the height of the text. The
+ * `-mt-1.5 pt-1.5` pair is the vertical twin of OPEN_FIELD_GROUND's `-ml-2 pl-2`
+ * — the margin grows the fill upwards and the padding gives that space back to
+ * the text, so the band gets its height and the value does not move as the list
+ * opens.
+ *
+ * The width deliberately does *not* change with it. Every trigger and every
+ * panel in the task modal's property column is one width — see PROPERTY_PANEL
+ * there — and the band is `w-full` in both states, sliding 8px left with the
+ * ground rather than growing by it. So the band and the panel under it are the
+ * same box seen twice, whichever property opened them.
  */
-export const BARE_TRIGGER_NO_INDICATOR = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FIELD_GROUND} aria-expanded:w-[calc(100%+0.5rem)] aria-expanded:pb-1 w-full gap-1 p-0 text-left`;
+export const BARE_TRIGGER_NO_INDICATOR = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FIELD_GROUND} aria-expanded:-mt-1.5 aria-expanded:pt-1.5 aria-expanded:pb-1.5 w-full gap-1 p-0 text-left`;
 
 /**
  * The trigger's height, which sets the row's. Locked it comes down to just clear

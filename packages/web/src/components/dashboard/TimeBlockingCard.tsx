@@ -155,10 +155,15 @@ export function TimeBlockingCard() {
       }
     >
       {/* text-3xl font-semibold matches the counts on the task-summary tiles —
-          the app's one size for a headline number. py-3 on top of the card's own
-          gap keeps it from sitting tight against the header and preset grid. */}
+          the app's one size for a headline number.
+
+          py-2.5 is not a spacing choice so much as the card's height: this is the
+          only slack in the right-hand column, so it is what lands this card's
+          bottom edge on the same line as Rotinas and Tarefas abertas por setor
+          across the page. 10px rather than 8 is exactly that — the two columns
+          were 28px out, and this padding is doubled. */}
       <p
-        className="py-3 text-center text-3xl font-semibold tabular-nums text-foreground transition-colors"
+        className="py-2.5 text-center text-3xl font-semibold tabular-nums text-foreground transition-colors"
         aria-live="polite"
       >
         {format(remaining)}

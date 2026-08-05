@@ -11,6 +11,7 @@ export function DashboardCard({
   action,
   children,
   className = '',
+  hideTitle = false,
   ref,
 }: {
   title: string;
@@ -19,17 +20,37 @@ export function DashboardCard({
   children: ReactNode;
   className?: string;
   /**
+   * Keep the card's name for screen readers but take the heading row off the
+   * card — the Calendar, whose month is already written across the top of the
+   * grid in type of its own. Two headings meant the card opened with the word
+   * "Calendário" over "agosto de 2026", and the second one is the useful one.
+   *
+   * Not simply omitting the title: the section still needs a name, and the
+   * heading is what gives it one.
+   */
+  hideTitle?: boolean;
+  /**
    * The card's own element, for a card that has to bring itself into view — see
    * MyTasksCard, which scrolls to itself when you change the filter.
    */
   ref?: Ref<HTMLElement>;
 }) {
   return (
+    // No gap under a hidden heading: `gap-4` is the space between the header row
+    // and the body, and with no header row on screen it was 16px of nothing at
+    // the top of the card. The card's own padding is then the only margin, which
+    // is what makes the four sides equal.
     <section
       ref={ref}
-      className={`gloo-rise flex flex-col gap-4 rounded-3xl bg-surface p-4 shadow-surface md:p-5 ${className}`}
+      className={`gloo-rise flex flex-col rounded-3xl bg-surface p-4 shadow-surface md:p-5 ${
+        hideTitle ? '' : 'gap-4'
+      } ${className}`}
     >
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header
+        className={`flex flex-wrap items-start justify-between gap-3 ${
+          hideTitle ? 'sr-only' : ''
+        }`}
+      >
         <div>
           <h2 className="text-lg font-semibold text-surface-foreground">{title}</h2>
           {subtitle ? <p className="text-sm text-muted">{subtitle}</p> : null}

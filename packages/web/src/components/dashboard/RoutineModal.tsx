@@ -78,10 +78,15 @@ const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => ({
 }));
 
 /**
- * The gap under the tags, which is bigger than the one above them: they close
- * off the routine's identity, and the schedule below is a new kind of thing.
+ * The tags carry no padding of their own any more.
+ *
+ * They used to hold the schedule off with 12px under them, on the reasoning that
+ * they close the routine's identity and what follows is a new kind of thing. But
+ * the pills already have height and a gap, and between the title above and the
+ * first property below that came to a band of empty dialog wider than either of
+ * the rows it separated. The row is now exactly as tall as the tags in it.
  */
-const TAGS_ROW_VIEW = 'pt-1.5 pb-3';
+const TAGS_ROW_VIEW = '';
 
 /**
  * Locked, the title, its tags and the properties read as one list with no gap
@@ -503,9 +508,25 @@ export function RoutineModal({
               column by the chevron's 8px inset (see BARE_TRIGGER), and that
               overhang propagates up as a horizontal scrollbar. The 8px lands
               inside the body's own right padding, so nothing visible is clipped
-              — and a vertical form should never scroll sideways anyway. */}
+              — and a vertical form should never scroll sideways anyway.
+
+              `-mx-1 px-1` is what stops that hidden overflow cutting the *left*
+              edge off an attachment's green tile. The tile is 28px centred on a
+              20px column, so it hangs 4px outside the body on that side and was
+              being sliced flat — see blockLeadColumn, which is what puts it
+              under the Paperclip in the heading. The pair moves the clip 4px out
+              and gives the 4px straight back as padding, so the tile is whole
+              and nothing else moves by a pixel. The dialog's own 24px of padding
+              is what those 4 are borrowed from.
+
+              7 rather than 4 because the margin *replaces* HeroUI's own -3px
+              inline margin rather than adding to it — so 3 of the 7 only buy
+              back what the component already had, and the remaining 4 are the
+              tile's. And `px-1` is marked important because `dialogSection`
+              zeroes the body's padding on all four sides, and `pl-0` beats a
+              plain `px-1` whichever order the two are written in. */}
           <Modal.Body
-            className={`flex flex-col gap-4 overflow-x-hidden ${dialogSection} ${dialogBodyFade}`}
+            className={`-mx-[7px] flex flex-col gap-4 overflow-x-hidden ${dialogSection} px-1! ${dialogBodyFade}`}
           >
             {/* Title, tags and properties are one group so their spacing can be
                 set together — see HEADER_STACK_EDIT. */}

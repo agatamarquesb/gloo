@@ -61,6 +61,30 @@ export const BUTTON_LIKE_FIELD = 'border [--field-border:var(--outline-control)]
 export const listboxPopover = { offset: 0, placement: 'bottom start' } as const;
 
 /**
+ * The list itself, with the 4px HeroUI insets it from the panel's left and right
+ * edges taken back.
+ *
+ * That inset is what stopped an option lining up with the value it replaces: the
+ * field above carries 8px of its own (see PANEL_FIELD and OPEN_FIELD_GROUND) and
+ * the option carried 8 more on top of the list's 4, so every dropdown in the app
+ * read 4px to the right of the thing it dropped from. The vertical padding stays
+ * — that one is keeping the first and last options off the panel's edges.
+ */
+export const LISTBOX_FLUSH = 'px-0';
+
+/**
+ * And how far in from the panel's edge an option's content then starts: 7px, not
+ * the 8 the field above it uses.
+ *
+ * The odd number is the panel's own hairline, which is drawn inside its box —
+ * so 1px is already spent before any padding applies, and 7 + 1 lands an option
+ * on exactly the vertical line the value it replaces sits on. The field inside a
+ * panel takes it too, for the same sum; the field on the *page* keeps its 8,
+ * having no border to pay for.
+ */
+export const LISTBOX_ITEM_INSET = 'px-[7px]';
+
+/**
  * A list option that *is* a pill — the status dropdown, the priority one.
  *
  * Nothing but the tap area around it: the pill carries the colour and the shape,
@@ -68,9 +92,11 @@ export const listboxPopover = { offset: 0, placement: 'bottom start' } as const;
  * a mark on the current one) reads as a second shape wrapped round the first.
  * So hover and selected are both cleared, and what tells the options apart is
  * the pills themselves — the same pills you are looking at on the row.
+ *
+ * The inset rather than the 12px this started at, so a pill in the list starts on
+ * the same vertical line as the pill in the field above it.
  */
-export const PILL_LISTBOX_ITEM =
-  'cursor-pointer rounded-full border-0 px-3 py-1.5 hover:bg-transparent data-[hovered=true]:bg-transparent data-[selected=true]:bg-transparent';
+export const PILL_LISTBOX_ITEM = `cursor-pointer rounded-full border-0 ${LISTBOX_ITEM_INSET} py-1.5 hover:bg-transparent data-[hovered=true]:bg-transparent data-[selected=true]:bg-transparent`;
 
 /**
  * A list option that is a line of text — recurrence, the day of the week, a
@@ -83,14 +109,14 @@ export const PILL_LISTBOX_ITEM =
  * the list look like it had already been chosen from.
  */
 export const TEXT_LISTBOX_ITEM = [
-  'min-h-0 rounded-md px-2 py-0',
+  `min-h-0 rounded-md ${LISTBOX_ITEM_INSET} py-0`,
   'hover:bg-default/50 data-[hovered=true]:bg-default/50',
 ].join(' ');
 
 /**
  * Marks a panel that carries its own field inside it rather than joining the one
  * on the page — the status dropdown, which lays its own copy of the chip over
- * the trigger (see TaskStatusChipSelect).
+ * the trigger (see ChipSelect).
  *
  * It exists to opt out of the squared-off top edge in globals.css: that edge is
  * there to meet a field above, and a panel that already contains its field has

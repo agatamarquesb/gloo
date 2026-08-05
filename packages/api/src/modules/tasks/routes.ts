@@ -142,16 +142,16 @@ export async function taskRoutes(app: FastifyInstance) {
 
   app.get('/by-sector', async (): Promise<TaskBySectorDto[]> => {
     const sectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
-    const counts = await prisma.task.groupBy({
-      by: ['sectorId'],
-      where: { status: { not: 'DONE' } },
-      _count: true,
-    });
+    // Every task, in every state. No `where` at all: the chart is the volume of
+    // work each sector carries, and a finished task is still work that sector
+    // did — see TaskBySectorDto. Filtering out DONE made a sector that had
+    // cleared its list indistinguishable from one that never had anything.
+    const counts = await prisma.task.groupBy({ by: ['sectorId'], _count: true });
     const countBySector = new Map(counts.map((c) => [c.sectorId, c._count]));
 
     return sectors.map((sector) => ({
       sector: { id: sector.id, name: sector.name },
-      pendingCount: countBySector.get(sector.id) ?? 0,
+      totalCount: countBySector.get(sector.id) ?? 0,
     }));
   });
 

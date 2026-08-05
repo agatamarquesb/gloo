@@ -32,9 +32,9 @@ import { Button as AriaButton, TextArea, TextField } from 'react-aria-components
 
 import {
   LabelScope,
-  TaskPriority,
   type AttachmentDto,
   type TaskDetailDto,
+  type TaskPriority,
   type TaskStatus,
   type UserDto,
 } from '@gloo/shared';
@@ -56,7 +56,7 @@ import { useUsers } from '@/hooks/queries/users';
 import { formatDay } from '@/lib/formatDate';
 import { canMutateEntity } from '@/lib/permissions';
 import { playSound } from '@/lib/sounds';
-import { FIELD_PANEL, PILL_LISTBOX_ITEM, TEXT_LISTBOX_ITEM, listboxPopover } from '@/theme/fieldStyles';
+import { FIELD_PANEL, LISTBOX_FLUSH, TEXT_LISTBOX_ITEM, listboxPopover } from '@/theme/fieldStyles';
 import { colorFill } from '@/theme/labelColors';
 import {
   EMPTY_VALUE,
@@ -77,17 +77,11 @@ import {
 } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
-import { PriorityChip } from './PriorityChip';
 import { OverdueMark } from './StatusChip';
+import { TaskPriorityChipSelect } from './TaskPriorityChipSelect';
 import { TaskProgressBar } from './TaskProgressBar';
 import { TaskStatusChipSelect } from './TaskStatusChipSelect';
 import { TaskSubtasks } from './TaskSubtasks';
-
-const PRIORITY_OPTIONS: TaskPriority[] = [
-  TaskPriority.LOW,
-  TaskPriority.MEDIUM,
-  TaskPriority.HIGH,
-];
 
 /**
  * The air between the last property and the rule that closes the dialog's upper
@@ -170,10 +164,10 @@ const PROPERTY_VALUE_LOWER = `${PROPERTY_VALUE} lowercase`;
  * so choosing is recognising the value you are looking at, and a step down in
  * size made the options read as a footnote about it instead.
  *
- * And they wrap. The panel is only as wide as the property it hangs from, so a
- * sector with two words in it ran off the edge; an option that does not fit now
- * takes a second line and its own row grows by one, which keeps the spacing
- * between options exactly where it was.
+ * And they wrap. The panel is a fixed 171.5px (see PROPERTY_PANEL), so a sector
+ * with two words in it ran off the edge; an option that does not fit now takes a
+ * second line and its own row grows by one, which keeps the spacing between
+ * options exactly where it was.
  *
  * The deadline's calendar is the exception: it is a grid rather than a list, and
  * has a scale of its own — see .gloo-compact-calendar in globals.css.
@@ -182,18 +176,36 @@ const LISTBOX_TEXT =
   'text-sm whitespace-normal break-words [&>*]:whitespace-normal [&>*]:break-words';
 
 /**
- * And how wide the panel is: the value column, so its right edge lands on the
- * same line the rules across the dialog end on — the line the × in Anexos sits
- * against. HeroUI sizes a Select's panel to its content otherwise, which left a
- * list of two-word sectors narrower than the row it dropped from.
+ * One width for everything the property column opens: 171.5px, which is the
+ * value column itself — the dialog's 46rem, less its padding, the gutter and the
+ * rule, halved, less the column inset and the 7.5rem the labels take.
  *
- * The trigger's width and no more: HeroUI measures it *after* the field has
- * grown its open-state ground, so `--trigger-width` is already the width of the
- * grey band the panel hangs from — and the two share both edges by
- * construction. (Adding the ground's 8px here, which an earlier reading of that
- * variable seemed to need, made the panel overhang by exactly that much.)
+ * Stated as a number rather than derived from `--trigger-width`, because not
+ * every trigger here *is* that width: the status and priority chips hug their
+ * own labels, and a panel measured from one of those came out at two thirds of
+ * the row it dropped from. Six properties opening six differently sized panels
+ * down one column was the thing you noticed about the column.
+ *
+ * The panels hang 8px to the left of the value, where the open field's ground
+ * also starts (see OPEN_FIELD_GROUND), so a panel and the band above it are one
+ * box with a hairline across it.
+ *
+ * A list narrower than its longest option is why options wrap rather than
+ * truncate — see LISTBOX_TEXT.
  */
-const LISTBOX_PANEL = 'w-(--trigger-width)';
+const PROPERTY_PANEL = 'w-[171.5px]';
+
+/**
+ * No tick against the option a list is already set to.
+ *
+ * It was at the end of a line whose length is the option's, so it landed
+ * somewhere different on every row and on the longest one ("marketing &
+ * aquisição") it sat on the last letter; moved to a column of its own on the
+ * left, it pushed every option 24px clear of the value it was meant to line up
+ * with. Both are worse than saying it the way the panel already says it: the
+ * field at the head of the list *is* the current value, sat directly above the
+ * option that matches it.
+ */
 
 /**
  * The task's name, in both of its states — the heading you read and the field
@@ -282,17 +294,25 @@ type TaskPropertyKey = (typeof PROPERTY_ORDER)[number];
  * its column by exactly that 8px (see BARE_TRIGGER), so every chevron in the
  * list — HeroUI's and this one — lands on one vertical line.
  */
-// No width of its own: the shared trigger class already overhangs the column by
-// the chevron's inset, and a `w-full` here would take that back and pull this
-// chevron 8px left of every Select's.
-const POPOVER_TRIGGER = 'relative flex rounded-md outline-none';
+// No width of its own: the shared trigger class is already `w-full` (see
+// BARE_TRIGGER_NO_INDICATOR) and restating it here would only be a second place
+// to change. `items-baseline` because the overdue mark beside the date is type
+// rather than a glyph — see OverdueMark — so what lines the two up is the line
+// they are written on, not the middle of their boxes.
+const POPOVER_TRIGGER = 'relative flex items-center rounded-md outline-none';
 
 /**
- * The calendar cut to the panel it now lives in: a shorter spacing scale for the
- * gaps between cells, and the type a step down — see .gloo-compact-calendar in
+ * The calendar cut to the panel it lives in — PROPERTY_PANEL's 171.5px, like
+ * every other popover in the column, which for a month of seven columns leaves a
+ * little over 22px a day.
+ *
+ * That is what the shorter spacing scale is for: at the default the gaps between
+ * the cells were taking the width the cells needed, and Saturday was being cut
+ * off by the panel's edge. Everything else — the numbers, the weekday initials,
+ * the month at the head of it — is a step down in .gloo-compact-calendar in
  * globals.css, which is where the class-name selectors live and why.
  */
-const CALENDAR_TYPE = 'gloo-compact-calendar [--spacing:0.2rem]';
+const CALENDAR_TYPE = 'gloo-compact-calendar [--spacing:0.15rem]';
 
 /**
  * Everything the dialog edits as a form. Status is deliberately not here: it
@@ -444,12 +464,14 @@ function DeadlineValue({
   const label = formatDay(value) ?? EMPTY_VALUE;
   const tone = isOverdue ? 'text-status-overdue-text!' : '';
   // The mark belongs to the date, not to the row: it says this *day* has passed,
-  // so it follows the day itself and moves with it into and out of edit mode.
+  // so it follows the day itself and moves with it into and out of edit mode —
+  // hence `gap-1` below as well as on the trigger it turns into (see
+  // BARE_TRIGGER_NO_INDICATOR), so unlocking the dialog moves it by nothing.
   const mark = isOverdue ? <OverdueMark className="shrink-0" /> : null;
 
   if (!isEditing) {
     return (
-      <span className="flex items-center gap-1.5">
+      <span className="flex items-center gap-1">
         <span className={`${PROPERTY_VALUE} ${tone}`}>{label}</span>
         {mark}
       </span>
@@ -465,12 +487,11 @@ function DeadlineValue({
         {mark}
       </AriaButton>
 
-      {/* Cut to the field it hangs from: the popover takes the trigger's own
-          width and the calendar fills it, instead of a 252px card sitting wider
-          than the row it belongs to. HeroUI's calendar is `container-type:
-          inline-size` — its cells are a share of its width — so narrowing the
-          panel shrinks the whole grid rather than clipping it. */}
-      <Popover.Content {...listboxPopover} className={`${LISTBOX_PANEL} ${FIELD_PANEL}`}>
+      {/* The column's one panel width, like every other property's. HeroUI's
+          calendar is `container-type: inline-size` — its cells are a share of
+          its width — so the month is cut to the panel rather than overflowing
+          it; see CALENDAR_TYPE for the scale that makes seven columns fit. */}
+      <Popover.Content {...listboxPopover} className={`${PROPERTY_PANEL} ${FIELD_PANEL}`}>
         <Popover.Dialog className="p-2">
           <Calendar
             className={`w-full max-w-none ${CALENDAR_TYPE}`}
@@ -531,7 +552,7 @@ function ProjectValue({ isEditing, triggerClass }: { isEditing: boolean; trigger
           wide flat capsule instead of the small card the status dropdown drops
           under its own chip. The message a step down in size, and enough padding
           that the box has a card's height even with a single line in it. */}
-      <Popover.Content {...listboxPopover} className={`${LISTBOX_PANEL} ${FIELD_PANEL}`}>
+      <Popover.Content {...listboxPopover} className={`${PROPERTY_PANEL} ${FIELD_PANEL}`}>
         <Popover.Dialog className="flex min-h-28 items-center justify-center px-4 py-4">
           {/* Centred and wrapping: the panel is only as wide as the property it
               hangs from, and a line that refused to break ran out of it. A step
@@ -837,48 +858,25 @@ function TaskModalContent({
    * heading, where what it measures is on screen beside it.
    */
   const propertyRows: Record<TaskPropertyKey, ReactNode> = {
+    // The same control as the status row below, in the priority palette: the
+    // chip is the field and the options are the same chip in the other two
+    // colours. See TaskPriorityChipSelect, and ChipSelect under it, which the
+    // two share.
     priority: (
-      <Select
-        isDisabled={!isEditing}
-        className={undimmed}
-        value={form.priority}
-        onChange={(key) => set('priority', String(key) as TaskPriority)}
-      >
-        <div className={row}>
-          <Label className={fieldLabel}>
-            <Flag className={LABEL_ICON} aria-hidden />
-            {strings.task.fields.priority}
-          </Label>
-          <div className={VALUE_CELL}>
-            {/* The chosen pill, not its name in text: the options are pills, so
-                the field has to be the same object or picking one looks like it
-                did nothing. Same reasoning as the status row, which has read
-                this way all along. */}
-            <Select.Trigger className={trigger}>
-              <PriorityChip priority={form.priority} />
-            </Select.Trigger>
-          </div>
+      <div className={row}>
+        <span className={fieldLabel}>
+          <Flag className={LABEL_ICON} aria-hidden />
+          {strings.task.fields.priority}
+        </span>
+        <div className={VALUE_CELL}>
+          <TaskPriorityChipSelect
+            priority={form.priority}
+            isDisabled={!isEditing}
+            panelWidth={PROPERTY_PANEL}
+            onChange={(priority) => set('priority', priority)}
+          />
         </div>
-        {/* The options are pills, like the status dropdown's: priority is the
-            other property on this list that is a fixed set of named steps, and
-            reading it as a colour is faster than reading it as a word. No tick
-            beside the current one — see STATUS_ITEM in TaskStatusChipSelect for
-            why a mark behind a pill reads as a second shape around it. */}
-        <Select.Popover {...listboxPopover} className={LISTBOX_PANEL}>
-          <ListBox>
-            {PRIORITY_OPTIONS.map((priority) => (
-              <ListBox.Item
-                key={priority}
-                id={priority}
-                textValue={strings.task.priority[priority]}
-                className={PILL_LISTBOX_ITEM}
-              >
-                <PriorityChip priority={priority} />
-              </ListBox.Item>
-            ))}
-          </ListBox>
-        </Select.Popover>
-      </Select>
+      </div>
     ),
 
     deadline: (
@@ -920,8 +918,8 @@ function TaskModalContent({
             </Select.Trigger>
           </div>
         </div>
-        <Select.Popover {...listboxPopover} className={LISTBOX_PANEL}>
-          <ListBox>
+        <Select.Popover {...listboxPopover} className={PROPERTY_PANEL}>
+          <ListBox className={LISTBOX_FLUSH}>
             {sectors.map((sector) => (
               <ListBox.Item
                 key={sector.id}
@@ -936,7 +934,6 @@ function TaskModalContent({
                 className={`${TEXT_LISTBOX_ITEM} ${LISTBOX_TEXT} lowercase`}
               >
                 {sector.name}
-                <ListBox.ItemIndicator />
               </ListBox.Item>
             ))}
           </ListBox>
@@ -971,6 +968,7 @@ function TaskModalContent({
           <TaskStatusChipSelect
             status={task.status}
             isDisabled={!canEdit}
+            panelWidth={PROPERTY_PANEL}
             onChange={(status: TaskStatus) => updateStatus.mutate(status)}
           />
         </div>
@@ -1012,14 +1010,14 @@ function TaskModalContent({
             </Select.Trigger>
           </div>
         </div>
-        <Select.Popover {...listboxPopover} className={LISTBOX_PANEL}>
-          <ListBox selectionMode="multiple">
+        <Select.Popover {...listboxPopover} className={PROPERTY_PANEL}>
+          <ListBox selectionMode="multiple" className={LISTBOX_FLUSH}>
             {users.map((user) => (
               <ListBox.Item
                 key={user.id}
                 id={user.id}
                 textValue={user.name}
-                className={LISTBOX_TEXT}
+                className={`${TEXT_LISTBOX_ITEM} ${LISTBOX_TEXT}`}
               >
                 <span className="flex items-center gap-2">
                   <UserAvatar
@@ -1030,7 +1028,6 @@ function TaskModalContent({
                   />
                   {user.name}
                 </span>
-                <ListBox.ItemIndicator />
               </ListBox.Item>
             ))}
           </ListBox>

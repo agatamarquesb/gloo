@@ -19,6 +19,11 @@ interface MonthCalendarProps {
    * calendar page uses it to band the week being viewed.
    */
   cellClassName?: (date: CalendarDate) => string;
+  /**
+   * Extra classes for the calendar itself, where a caller has a scale of its own
+   * — the Dashboard's card, whose rows are shorter than the grid's own squares.
+   */
+  className?: string;
 }
 
 /**
@@ -39,6 +44,7 @@ export function MonthCalendar({
   onChange,
   renderCellExtra,
   cellClassName,
+  className = '',
 }: MonthCalendarProps) {
   return (
     <Calendar
@@ -46,7 +52,7 @@ export function MonthCalendar({
       // short of the card's right edge. Utilities outrank the component layer,
       // so this lets the 7-column grid stretch and the card's own padding
       // become the margin on all four sides.
-      className="w-full max-w-full"
+      className={`w-full max-w-full ${className}`}
       aria-label={ariaLabel}
       // Stated rather than inherited from the browser locale — see weekStart.ts
       // for what goes wrong when this and the range logic disagree.

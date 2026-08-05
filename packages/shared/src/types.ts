@@ -139,7 +139,13 @@ export interface TaskSummaryDto {
 
 export interface TaskBySectorDto {
   sector: SectorDto;
-  pendingCount: number;
+  /**
+   * Every task the sector has, whatever state it is in — to do, in progress,
+   * done, late. It used to be the open ones only, which made the donut a chart
+   * of what is left rather than of where the work is; a sector that finished
+   * everything then read as a sector with nothing in it.
+   */
+  totalCount: number;
 }
 
 export interface TaskCalendarEntryDto {

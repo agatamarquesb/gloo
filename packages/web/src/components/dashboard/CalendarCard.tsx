@@ -47,8 +47,12 @@ export function CalendarCard() {
   );
 
   return (
-    <DashboardCard title={strings.dashboard.calendar}>
+    // The month's own name is the card's heading — see `hideTitle`.
+    <DashboardCard hideTitle title={strings.dashboard.calendar}>
       <MonthCalendar
+        // Shorter rows and a rounded square on today, rather than HeroUI's
+        // square cell and its circle — see .gloo-dashboard-calendar.
+        className="gloo-dashboard-calendar"
         ariaLabel={strings.dashboard.calendar}
         focusedValue={focused}
         onFocusChange={setFocused}

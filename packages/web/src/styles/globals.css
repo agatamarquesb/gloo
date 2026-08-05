@@ -384,15 +384,31 @@ body {
  */
 .gloo-compact-calendar {
   .calendar__cell {
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
   }
 
   .calendar__header-cell {
-    font-size: 0.625rem;
+    font-size: 0.5625rem;
+    padding-bottom: 0.25rem;
   }
 
   .calendar__heading {
     font-size: 0.6875rem;
+  }
+
+  /*
+   * And the rows come down off the square.
+   *
+   * A HeroUI day cell is `aspect-ratio: 1` — as tall as the column is wide — so
+   * seven columns in a 171.5px panel gave 22px-wide cells 22px of height each,
+   * and the month was taller than it needed to be by a whole week. Released, the
+   * height is the number's own line plus the padding here, and the grid loses
+   * about 40px without a digit moving.
+   */
+  .calendar__cell {
+    aspect-ratio: auto;
+    height: 1.375rem;
+    border-radius: 0.4375rem;
   }
 
   /*
@@ -430,6 +446,84 @@ body {
   border-top-left-radius: 6px;
   border-top-right-radius: 6px;
 }
+
+/*
+ * The Dashboard's month, cut to the card it sits in.
+ *
+ * HeroUI draws a day as a square that is a seventh of the calendar's width —
+ * `aspect-ratio: 1` on a `width: 100%` cell — with a radius of three times the
+ * theme's own, which on a box that size is a circle. So the grid was as deep as
+ * it was wide, and today was a dot.
+ *
+ * Here a day is a fixed 28px square with a 10px radius: the rounded square the
+ * rest of the app is built from, big enough for two digits and no bigger. The
+ * columns still divide the card — `place-self: center`, which HeroUI already
+ * sets, centres each square in the column it belongs to, so the month keeps its
+ * full width while the marks in it come down to their own size.
+ */
+.gloo-dashboard-calendar {
+  .calendar__cell {
+    aspect-ratio: 1;
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    /*
+     * And centred in the column it belongs to. HeroUI's own `place-self: center`
+     * does nothing here: the grid is laid out on the cells' *parents* (the `td`s
+     * are the tracks, `display: block`), so the square is an ordinary block box
+     * inside one and sat against its left edge — which put every date about
+     * 10px left of the weekday named above it. At the width it used to be, 100%,
+     * there was nothing to centre.
+     */
+    margin-inline: auto;
+  }
+
+  .calendar__header-cell {
+    padding-bottom: 0.25rem;
+  }
+
+  /*
+   * And what a day is painted in, in three strengths of the one brand green.
+   *
+   * Today is the full --green: it is the fact the card is really about, and the
+   * pale accent HeroUI gives it read as a disabled day rather than as this one.
+   * A day you have picked is the same green let down — it is a choice you made,
+   * which should not shout over the date it actually is. And the hover is
+   * lighter still, because a pointer passing over a day is not a state at all.
+   *
+   * Colour-mixed rather than three hand-picked hex values, so all three follow
+   * --green if the brand ever moves, and so the ladder between them stays even.
+   * Black text throughout — every brand colour carries it at 9:1 or better.
+   */
+  .calendar__cell[data-today='true'] {
+    background-color: var(--green);
+    color: var(--black);
+  }
+
+  .calendar__cell[data-selected='true'] {
+    background-color: color-mix(in srgb, var(--green) 55%, white);
+    color: var(--black);
+  }
+
+  .calendar__cell:hover:not([data-selected='true'], [data-today='true']),
+  .calendar__cell[data-hovered='true']:not([data-selected='true'], [data-today='true']) {
+    background-color: color-mix(in srgb, var(--green) 28%, white);
+  }
+
+  /* Hovering today or the picked day lifts its own fill rather than replacing it
+     with the neutral HeroUI would otherwise drop in — the day would have
+     appeared to lose its meaning under the cursor. */
+  .calendar__cell[data-today='true']:hover:not([data-selected='true']),
+  .calendar__cell[data-today='true'][data-hovered='true']:not([data-selected='true']) {
+    background-color: var(--accent-hover);
+  }
+
+  .calendar__cell[data-selected='true']:hover,
+  .calendar__cell[data-selected='true'][data-hovered='true'] {
+    background-color: color-mix(in srgb, var(--green) 70%, white);
+  }
+}
+
 
 /*
  * Animation. Everything here is transform/opacity/color only — properties the
