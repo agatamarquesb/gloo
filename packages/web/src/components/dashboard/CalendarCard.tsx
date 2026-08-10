@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
 import { useNavigate } from 'react-router';
 
@@ -9,12 +9,12 @@ import { useSectors } from '@/hooks/queries/sectors';
 import { useTasks, useTasksCalendar } from '@/hooks/queries/tasks';
 import { useTileColors } from '@/hooks/ui/useTileColors';
 import { CALENDAR_DATE_PARAM } from '@/pages/CalendarPage';
-import { colorFill } from '@/theme/labelColors';
+import { colorFill, type ColorPaint } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
 import { DashboardCard } from './DashboardCard';
 import { DayAgendaPanel } from './DayAgendaPanel';
-import { buildDayAgenda, localDayKey } from './dayAgenda';
+import { buildDayAgenda, localDayKey, type DayItemAccent } from './dayAgenda';
 import { sortBySectorOrder } from './sectorOrder';
 
 const MAX_DOTS = 3;
@@ -22,10 +22,9 @@ const MAX_DOTS = 3;
 /**
  * A day's mark: 5px, which is where it stops being a speck.
  *
- * It used to be 4 and to sit *under* the cell, half-clipped by the row below —
- * so the one thing on the month that says "something happens here" was the
- * hardest thing on it to see. See .gloo-dashboard-calendar, which reserves the
- * bottom of the day's own fill for these.
+ * It sits under the day's box, in the room the rows were opened up to give it —
+ * see .gloo-dashboard-calendar. Inside the fill it had to be paid for out of the
+ * number's own space, which is what stopped the dates lining up.
  */
 const DOT = 'size-[5px] rounded-full';
 
@@ -119,6 +118,29 @@ export function CalendarCard() {
     return map;
   }, [events, agendasById]);
 
+  /**
+   * What an agenda or a sector paints with — a day's dot on the month, and the
+   * bar down the left of that day's items in the summary. One function for both,
+   * which is what makes the mark and the thing it stands for the same colour
+   * without either side having to remember to be.
+   *
+   * An agenda's colour goes through colorFill because it may be one the user
+   * mixed, which can only be an inline value; a sector's is a slot in the shared
+   * chart palette, resolved to a hex the same way the donut resolves it.
+   */
+  const paintAccent = useCallback(
+    (accent: DayItemAccent, className: string): ColorPaint =>
+      accent.kind === 'AGENDA'
+        ? colorFill(agendasById.get(accent.id)?.color ?? 'gray', className)
+        : {
+            className,
+            style: {
+              backgroundColor: tileColors[(slotBySector.get(accent.id) ?? 0) % tileColors.length],
+            },
+          },
+    [agendasById, slotBySector, tileColors],
+  );
+
   /** What the open summary is listing — nothing at all while it is closed. */
   const selectedDay = selected?.toString() ?? null;
   const dayItems = useMemo(
@@ -179,32 +201,24 @@ export function CalendarCard() {
 
           // Events lead: a meeting happens at an hour and a task is merely due
           // that day, so the first dot answers the more urgent question.
-          //
-          // An agenda's colour goes through colorFill because it may be one the
-          // user mixed, which can only be an inline value; a sector's is already
-          // a resolved value from the shared chart palette.
           const dots = [
             ...agendaIds.map((agendaId) => ({
               key: `agenda-${agendaId}`,
-              paint: colorFill(agendasById.get(agendaId)?.color ?? 'gray', DOT),
+              paint: paintAccent({ kind: 'AGENDA', id: agendaId }, DOT),
             })),
             ...sectorIds.map((sectorId) => ({
               key: `sector-${sectorId}`,
-              paint: {
-                className: DOT,
-                style: {
-                  backgroundColor:
-                    tileColors[(slotBySector.get(sectorId) ?? 0) % tileColors.length],
-                },
-              },
+              paint: paintAccent({ kind: 'SECTOR', id: sectorId }, DOT),
             })),
           ].slice(0, MAX_DOTS);
 
-          // Inside the cell rather than under it: the cell reserves its bottom
-          // 7px for exactly this (see .gloo-dashboard-calendar), so the dots sit
-          // below the number within the day's own fill.
+          // Under the day's fill rather than inside it: the box is the date and
+          // nothing else, so a day with something on it is the same box in the
+          // same place as an empty one, with the marks hanging below it. The
+          // room they hang in is the cell's bottom margin, which is what holds
+          // them off the row beneath — see .gloo-dashboard-calendar.
           return (
-            <span className="pointer-events-none absolute inset-x-0 bottom-[1.5px] flex justify-center gap-[2px]">
+            <span className="pointer-events-none absolute inset-x-0 top-full mt-[3px] flex justify-center gap-[2px]">
               {dots.map((dot) => (
                 <span key={dot.key} {...dot.paint} />
               ))}
@@ -216,6 +230,7 @@ export function CalendarCard() {
       {selected ? (
         <DayAgendaPanel
           items={dayItems}
+          paintAccent={paintAccent}
           onOpenCalendar={() =>
             navigate(`/calendar?${CALENDAR_DATE_PARAM}=${selected.toString()}`)
           }

@@ -32,10 +32,10 @@ import { Button as AriaButton, TextArea, TextField } from 'react-aria-components
 
 import {
   LabelScope,
+  TaskStatus,
   type AttachmentDto,
   type TaskDetailDto,
   type TaskPriority,
-  type TaskStatus,
   type UserDto,
 } from '@gloo/shared';
 
@@ -53,7 +53,7 @@ import { useLabels } from '@/hooks/queries/labels';
 import { useSectors } from '@/hooks/queries/sectors';
 import { useDeleteTask, useTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/queries/tasks';
 import { useUsers } from '@/hooks/queries/users';
-import { formatDay } from '@/lib/formatDate';
+import { formatDay, isDayPast } from '@/lib/formatDate';
 import { canMutateEntity } from '@/lib/permissions';
 import { playSound } from '@/lib/sounds';
 import { FIELD_PANEL, LISTBOX_FLUSH, TEXT_LISTBOX_ITEM, listboxPopover } from '@/theme/fieldStyles';
@@ -873,7 +873,13 @@ function TaskModalContent({
         <div className={VALUE_CELL}>
           <DeadlineValue
             isEditing={isEditing}
-            isOverdue={task.isOverdue}
+            // The day in the picker, not the one the task was loaded with: a
+            // deadline pushed into the future stops being late the moment it is
+            // chosen, so the red and its mark go with the old date rather than
+            // sitting under the new one until the dialog is saved. Done tasks
+            // are never late whatever the date says — the same two clauses the
+            // API's isOverdue is made of.
+            isOverdue={isDayPast(form.dueDate) && task.status !== TaskStatus.DONE}
             value={form.dueDate}
             onChange={(dueDate) => set('dueDate', dueDate)}
             triggerClass={trigger}

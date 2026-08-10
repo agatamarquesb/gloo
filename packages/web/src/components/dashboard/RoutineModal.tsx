@@ -44,6 +44,7 @@ import {
 import {
   LABEL_ICON,
   PROPERTY_LIST,
+  PROPERTY_ROW_PITCH,
   VALUE_CELL,
   propertyStyles,
 } from '@/theme/propertyRow';
@@ -110,30 +111,27 @@ const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => ({
 }));
 
 /**
- * The tags carry no padding of their own any more.
+ * The three distances at the head of this dialog — rule to title, title to tags,
+ * tags to the first property — taken from the task modal rather than tuned here.
  *
- * They used to hold the schedule off with 12px under them, on the reasoning that
- * they close the routine's identity and what follows is a new kind of thing. But
- * the pills already have height and a gap, and between the title above and the
- * first property below that came to a band of empty dialog wider than either of
- * the rows it separated. The row is now exactly as tall as the tags in it.
+ * They are the same object: a name, what kind of thing it is, and a column of
+ * properties under both. Opening one after the other with the header set tighter
+ * in this one made the routine read as a cramped version of the task, so the
+ * numbers now come from there — TAGS_ROW's 10px and TITLE_GAP's 8px in
+ * TaskModal, with the property rows on that dialog's PROPERTY_ROW_PITCH.
+ *
+ * Order is the one difference kept: a routine leads with its title and hangs the
+ * tags under it, where a task leads with its tags. So the 10px that sits above a
+ * task's tags sits above this title instead, and the 10px that separates them
+ * there separates them here — the same two gaps, read top to bottom either way.
+ *
+ * And they no longer answer the dialog's mode. The header used to open out to a
+ * 16px stack while editing, which moved the title and every property under it
+ * the moment the lock came off; the task modal holds still, and so does this.
  */
-const TAGS_ROW_VIEW = '';
-
-/**
- * Locked, the title, its tags and the properties read as one list with no gap
- * of its own — every row's spacing is its own padding, HEADER_ROW_VIEW or
- * ROW_PADDING_VIEW. Editing, they are separate controls and need the room the
- * rest of the dialog uses.
- */
-const HEADER_STACK_EDIT = 'gap-4';
-
-/**
- * The title's own padding, locked — a step above the property rows below it
- * rather than the same. It is what the routine *is*; the schedule under it is
- * detail, and reads better held closer together.
- */
-const HEADER_ROW_VIEW = 'py-1.5';
+const HEADER_ROW = 'pt-[10px]';
+const TAGS_ROW = 'pt-[10px]';
+const HEADER_STACK_GAP = 'pb-2';
 
 /**
  * The dialog's own inset, matching the task modal's exactly: 20px of dialog
@@ -288,7 +286,13 @@ export function RoutineModal({
     label: fieldLabel,
     trigger,
     undimmed,
-  } = propertyStyles(isEditing, { indicator: false, fluid: true });
+  } = propertyStyles(isEditing, {
+    indicator: false,
+    fluid: true,
+    // Air rather than a height, and the same air in both modes: the task
+    // modal's rows are on this pitch and these are the same rows.
+    height: PROPERTY_ROW_PITCH,
+  });
 
   const isWeekly = form.recurrence === RoutineRecurrence.WEEKLY;
   /** Whether the weekly schedule is one the plain list of seven can't express. */
@@ -615,16 +619,17 @@ export function RoutineModal({
             className={`mx-0 flex flex-col gap-4 overflow-x-hidden ${dialogSection} ${hiddenScrollbar} ${dialogBodyFade}`}
           >
             {/* Title, tags and properties are one group so their spacing can be
-                set together — see HEADER_STACK_EDIT. */}
-            <div className={`flex flex-col ${isEditing ? HEADER_STACK_EDIT : ''}`}>
+                set together — see HEADER_ROW. */}
+            <div className="flex flex-col">
+              {/* The title and its tags, held off the properties by the gap the
+                  task modal puts under its own title. */}
+              <div className={`flex flex-col ${HEADER_STACK_GAP}`}>
               {/* Underline, not a box: the title is the one thing you always
                   type, so it reads as a line to write on rather than another
                   form field. Green rule, the same marker the checklist title
                   uses — and it goes away when the dialog is locked, since there
                   is then nothing to write on. */}
-              <div
-                className={`flex items-center gap-2 ${isEditing ? '' : HEADER_ROW_VIEW}`}
-              >
+              <div className={`flex items-center gap-2 ${HEADER_ROW}`}>
                 {/* Locked, the routine's name is a heading, not a field switched
                     off: a read-only Input still draws its own edge under the
                     cursor, which put a rule under a title nobody was editing.
@@ -681,13 +686,13 @@ export function RoutineModal({
               {/* No indent: with the title's icon gone there is no column to
                   clear, and everything in the dialog now starts on the same edge
                   as the rule under the header. */}
-              <div className={`flex flex-col ${isEditing ? HEADER_STACK_EDIT : ''}`}>
                 <SelectedLabels
                   ids={form.labelIds}
                   isEditing={isEditing}
                   onChange={(labelIds) => set('labelIds', labelIds)}
-                  className={isEditing ? '' : TAGS_ROW_VIEW}
+                  className={TAGS_ROW}
                 />
+              </div>
 
               {/* One property per row — label on the left, value on the right —
                   rather than three columns: the values are short, and stacking
@@ -891,7 +896,6 @@ export function RoutineModal({
                   </ListBox>
                 </Select.Popover>
               </Select>
-              </div>
               </div>
             </div>
 

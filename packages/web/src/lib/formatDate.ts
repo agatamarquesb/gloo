@@ -30,6 +30,23 @@ export function formatDay(day: string | null | undefined): string | null {
 }
 
 /**
+ * Whether a bare day ("2026-07-30") has gone by — what makes a deadline late.
+ *
+ * The API says the same thing about a saved task (`isOverdue` on the DTO, see
+ * computeIsOverdue) and it is the same comparison here, midnight UTC on the day
+ * against now, so a date and the row it was saved from never disagree. What this
+ * adds is that it can be asked about a date nobody has saved yet: the deadline
+ * in the task modal answers to the day currently in the picker, so moving it
+ * forward drops the red and its mark as you choose, rather than at the next
+ * refetch.
+ */
+export function isDayPast(day: string | null | undefined): boolean {
+  if (!day) return false;
+  const date = new Date(`${day}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date < new Date();
+}
+
+/**
  * "31 de jul. 2026" — the abbreviated form, for rows that have to share their
  * line with a sector, a progress bar and a status. Same UTC reading as the long
  * one, and for the same reason.

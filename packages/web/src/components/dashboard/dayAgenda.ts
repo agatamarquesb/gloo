@@ -21,6 +21,22 @@ export const DayItemKind = {
 export type DayItemKind = (typeof DayItemKind)[keyof typeof DayItemKind];
 
 /**
+ * Where an item takes its colour from: the agenda an event is in, or the sector
+ * a task belongs to.
+ *
+ * The id and not the colour, because neither is a colour until somebody resolves
+ * it — an agenda's is a palette key or a hex the user mixed, a sector's is a
+ * slot in the tile palette that only the Dashboard knows how to number. So this
+ * says which thing to ask about and the card answers it (see paintAccent in
+ * CalendarCard), which is also what makes the bar down an item's left edge and
+ * the dot on its day in the month the same colour by construction.
+ */
+export interface DayItemAccent {
+  kind: 'AGENDA' | 'SECTOR';
+  id: string;
+}
+
+/**
  * One thing on a day, whatever it started life as.
  *
  * The panel reads only this: tasks and calendar events arrive as different
@@ -43,6 +59,8 @@ export interface DayItem {
   assignees: UserDto[];
   /** Rich text, as the note editors write it. Empty markup counts as none. */
   description: string | null;
+  /** What colours it — see DayItemAccent. */
+  accent: DayItemAccent;
   /** Sorts the day: timed things in clock order, dateless ones after them. */
   sortKey: number;
 }
@@ -92,6 +110,7 @@ export function taskToDayItem(task: TaskListItemDto): DayItem {
     isAllDay: false,
     assignees: task.assignees,
     description: task.description,
+    accent: { kind: 'SECTOR', id: task.sector.id },
     // After everything with a clock time: a task is due some time that day, and
     // putting it at 00:00 would file it before the 08:00 stand-up.
     sortKey: Number.MAX_SAFE_INTEGER,
@@ -114,6 +133,7 @@ export function eventToDayItem(event: CalendarEventDto): DayItem {
     isAllDay: event.isAllDay,
     assignees: event.assignees,
     description: event.description,
+    accent: { kind: 'AGENDA', id: event.agendaId },
     // All-day first, then the timed ones in clock order.
     sortKey: event.isAllDay ? -1 : new Date(event.startsAt).getTime(),
   };
