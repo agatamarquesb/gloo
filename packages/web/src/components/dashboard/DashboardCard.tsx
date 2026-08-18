@@ -12,12 +12,24 @@ export function DashboardCard({
   children,
   className = '',
   hideTitle = false,
+  bodyGap = 'gap-4',
   ref,
 }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
   children: ReactNode;
+  /**
+   * What separates the heading from the body. A prop rather than something the
+   * caller adds to `className`, because both would be a `gap-*` on the same
+   * element and which one won would come down to the order Tailwind happens to
+   * emit them in.
+   *
+   * The sector donut sets it to none: its ring is a circle in a rounded card and
+   * carries its own whitespace on every side, so the card's own 16px on top of
+   * that read as the chart having slipped down the card.
+   */
+  bodyGap?: string;
   className?: string;
   /**
    * Keep the card's name for screen readers but take the heading row off the
@@ -43,7 +55,7 @@ export function DashboardCard({
     <section
       ref={ref}
       className={`gloo-rise flex flex-col rounded-3xl bg-surface p-4 shadow-surface md:p-5 ${
-        hideTitle ? '' : 'gap-4'
+        hideTitle ? '' : bodyGap
       } ${className}`}
     >
       <header

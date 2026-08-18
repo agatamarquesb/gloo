@@ -4,14 +4,16 @@ import { useNavigate } from 'react-router';
 
 import { MonthCalendar } from '@/components/common/MonthCalendar';
 import { useMe } from '@/hooks/queries/auth';
-import { useAgendasById, useCalendarEvents } from '@/hooks/queries/calendar';
+import { useAgendasById, useCalendarAccounts, useCalendarEvents } from '@/hooks/queries/calendar';
 import { useSectors } from '@/hooks/queries/sectors';
 import { useTasks, useTasksCalendar } from '@/hooks/queries/tasks';
-import { useTileColors } from '@/hooks/ui/useTileColors';
+import { useSectorColors } from '@/hooks/ui/useSectorColors';
 import { CALENDAR_DATE_PARAM } from '@/pages/CalendarPage';
 import { colorFill, type ColorPaint } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
+import { CalendarAgendaMenu } from './CalendarAgendaMenu';
+import { readHiddenAgendas, writeHiddenAgendas } from './calendarAgendaView';
 import { DashboardCard } from './DashboardCard';
 import { DayAgendaPanel } from './DayAgendaPanel';
 import { buildDayAgenda, localDayKey, type DayItemAccent } from './dayAgenda';
@@ -58,15 +60,59 @@ export function CalendarCard() {
   const [focused, setFocused] = useState<CalendarDate>(() => today(getLocalTimeZone()));
   /** The day whose summary is open, or null while the card is just a month. */
   const [selected, setSelected] = useState<CalendarDate | null>(null);
-  const tileColors = useTileColors();
+  const sectorColors = useSectorColors();
   const cardRef = useRef<HTMLElement>(null);
 
   const { from, to } = monthRange(focused);
   const { fromIso, toIso } = monthInstants(focused);
   const { data: entries = [] } = useTasksCalendar(from, to);
   const { data: sectors = [] } = useSectors();
-  const { data: events = [] } = useCalendarEvents(fromIso, toIso);
+  const { data: allEvents = [] } = useCalendarEvents(fromIso, toIso);
+  // Two views of one query — the map for looking an event's agenda up, the tree
+  // for the menu, which lists agendas under the account they belong to.
+  const { data: accounts = [] } = useCalendarAccounts();
   const agendasById = useAgendasById();
+
+  /**
+   * The agendas this card leaves out, chosen from its own `···` and kept in the
+   * browser rather than on the agenda — see calendarAgendaView for why this is
+   * not the eye icon.
+   */
+  const [hiddenAgendaIds, setHiddenAgendaIds] = useState<string[]>(readHiddenAgendas);
+  const hiddenAgendas = useMemo(() => new Set(hiddenAgendaIds), [hiddenAgendaIds]);
+
+  function toggleAgenda(agendaId: string) {
+    setHiddenAgendaIds((current) => {
+      const next = current.includes(agendaId)
+        ? current.filter((id) => id !== agendaId)
+        : [...current, agendaId];
+      writeHiddenAgendas(next);
+      return next;
+    });
+  }
+
+  /**
+   * What the menu offers, in the shape it lists them in: by account, and without
+   * the agendas the Calendar page's eye has hidden — a box you can tick that
+   * changes nothing is worse than no box. An account whose agendas are all
+   * hidden drops out with them rather than leaving a heading over nothing.
+   */
+  const agendaGroups = accounts
+    .map((account) => ({
+      id: account.id,
+      displayName: account.displayName,
+      agendas: account.agendas.filter((agenda) => !agenda.isHidden),
+    }))
+    .filter((account) => account.agendas.length > 0);
+
+  /**
+   * The month's events, filtered once — so a day's dots, the summary under it and
+   * the ticks in the menu can never disagree.
+   */
+  const events = useMemo(
+    () => allEvents.filter((event) => !hiddenAgendas.has(event.agendaId)),
+    [allEvents, hiddenAgendas],
+  );
 
   /**
    * The month's tasks, but only once a day has actually been picked: the dots
@@ -103,8 +149,8 @@ export function CalendarCard() {
    *
    * By agenda rather than by event: three meetings in one agenda are one fact
    * about the day — "there is work calendar here" — and three identical dots
-   * would only have said it three times. Hidden agendas are left out, exactly as
-   * they are on the calendar page.
+   * would only have said it three times. Agendas hidden on the calendar page are
+   * left out, and so are the ones unticked in this card's own `···`.
    */
   const byAgenda = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -135,10 +181,10 @@ export function CalendarCard() {
         : {
             className,
             style: {
-              backgroundColor: tileColors[(slotBySector.get(accent.id) ?? 0) % tileColors.length],
+              backgroundColor: sectorColors[(slotBySector.get(accent.id) ?? 0) % sectorColors.length],
             },
           },
-    [agendasById, slotBySector, tileColors],
+    [agendasById, slotBySector, sectorColors],
   );
 
   /** What the open summary is listing — nothing at all while it is closed. */
@@ -184,6 +230,17 @@ export function CalendarCard() {
         // square cell and its circle — see .gloo-dashboard-calendar.
         className="gloo-dashboard-calendar"
         ariaLabel={strings.dashboard.calendar}
+        // The month is this card's heading, so it leads the row and the arrows
+        // follow it; the far end of that row is where the agenda filter goes,
+        // which is the corner every other card keeps its `···` in.
+        leadingHeading
+        headerAction={
+          <CalendarAgendaMenu
+            accounts={agendaGroups}
+            hiddenIds={hiddenAgendas}
+            onToggle={toggleAgenda}
+          />
+        }
         focusedValue={focused}
         onFocusChange={setFocused}
         // Picking a day opens the summary under the month instead of leaving the

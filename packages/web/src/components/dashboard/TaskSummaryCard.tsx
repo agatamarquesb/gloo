@@ -1,5 +1,4 @@
-import { CircleCheck, Clock, LayoutList, Plus, TrendingUp } from 'lucide-react';
-import { Button } from '@heroui/react';
+import { CircleCheck, Clock, LayoutList, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
 import { useTaskSummary } from '@/hooks/queries/tasks';
@@ -47,20 +46,12 @@ const TILES = [
   },
 ] as const;
 
-export function TaskSummaryCard({ onAddTask }: { onAddTask: () => void }) {
+export function TaskSummaryCard() {
   const navigate = useNavigate();
   const { data: summary } = useTaskSummary();
 
   return (
-    <DashboardCard
-      title={strings.dashboard.taskSummary}
-      action={
-        <Button className="rounded-full" onPress={onAddTask}>
-          <Plus className="size-4" />
-          {strings.task.addTask}
-        </Button>
-      }
-    >
+    <DashboardCard title={strings.dashboard.taskSummary}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {TILES.map(({ key, label, icon: Icon, status, tint }) => (
           <button
@@ -69,12 +60,13 @@ export function TaskSummaryCard({ onAddTask }: { onAddTask: () => void }) {
             onClick={() => navigate(`/tasks?status=${status}`)}
             className={`flex flex-col gap-3 rounded-2xl p-4 text-left text-tile-foreground transition-transform hover:scale-[1.02] ${tint}`}
           >
-            {/* Filled white disc in light mode, white outline in dark, via the
-                --tile-icon-* tokens. Same size and edge either way, so the icon
-                stays aligned with the count and label and the tiles don't change
-                height with the theme. The icon inherits --tile-foreground. */}
-            <span className="flex size-9 items-center justify-center rounded-full border border-tile-icon-border bg-tile-icon-backdrop">
-              <Icon className="size-5" />
+            {/* A ring and no fill, in both modes, via the --tile-icon-* tokens:
+                black on the light tiles, white on the dark ones, which is the
+                same pair the glyph itself takes from --tile-foreground. Same size
+                and edge either way, so the icon stays aligned with the count and
+                label and the tiles don't change height with the theme. */}
+            <span className="flex size-8 items-center justify-center rounded-full border border-tile-icon-border bg-tile-icon-backdrop">
+              <Icon className="size-4" />
             </span>
             <span className="text-3xl font-semibold">{summary?.[key] ?? '—'}</span>
             <span className="text-sm font-medium">{label}</span>

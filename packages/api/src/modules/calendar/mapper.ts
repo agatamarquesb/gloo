@@ -1,4 +1,5 @@
 import {
+  CalendarProvider,
   DEFAULT_LABEL_COLOR,
   isPaletteColor,
   type AgendaDto,
@@ -53,6 +54,15 @@ export function toAgendaDto(agenda: AgendaRow): AgendaDto {
   };
 }
 
+/**
+ * How Google's own calendar list reads: by name, and with runs of digits
+ * compared as numbers so "10." lands after "9." rather than after "1.".
+ *
+ * `sensitivity: 'base'` so case and accents don't split what a reader sees as
+ * one alphabet — "Ágata" belongs with the As.
+ */
+const AGENDA_COLLATOR = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
+
 export function toCalendarAccountDto(account: {
   id: string;
   provider: string;
@@ -69,7 +79,22 @@ export function toCalendarAccountDto(account: {
     googleEmail: account.googleEmail,
     isCollapsed: account.isCollapsed,
     needsReauth: account.needsReauth,
-    agendas: account.agendas.map(toAgendaDto),
+    // A Google account's agendas come out in name order, the order Google
+    // Calendar itself lists them in — not in the order the query returns them.
+    //
+    // Their `sortOrder` is the position they happened to occupy in the
+    // calendarList response on the day they were first imported, which is
+    // neither Google's display order nor stable across accounts, and it is never
+    // rewritten by a later sync. Sorting here rather than in the query fixes the
+    // agendas already in the table, and does it for every route that returns an
+    // account rather than only the one the list is read from.
+    //
+    // The Gloo account keeps its own order: there, sortOrder is deliberate —
+    // "Minha agenda" first, the shared inbox pinned last.
+    agendas: (account.provider === CalendarProvider.GOOGLE
+      ? account.agendas.toSorted((a, b) => AGENDA_COLLATOR.compare(a.name, b.name))
+      : account.agendas
+    ).map(toAgendaDto),
   };
 }
 

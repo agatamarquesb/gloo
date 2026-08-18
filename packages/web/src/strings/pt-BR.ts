@@ -201,6 +201,11 @@ export const strings = {
     myTasks: 'Minhas tarefas',
     bySector: 'Tarefas por setor',
     calendar: 'Calendário',
+    /** The `···` on that card: which agendas mark its days. */
+    calendarAgendas: {
+      title: 'Agendas no calendário',
+      empty: 'Nenhuma agenda por aqui.',
+    },
     summary: {
       upcoming: 'A fazer',
       inProgress: 'Em progresso',

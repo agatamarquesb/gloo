@@ -22,11 +22,15 @@ import { readLabelsCollapsed, writeLabelsCollapsed } from './routineLabelsView';
 import { groupRoutinesByMonth } from './routineSchedule';
 
 /**
- * Fixed, not a max: the card shows two routines plus a sliver of the third, so
- * the list always reads as scrollable and the card's height never depends on
+ * Fixed, not a max: the card shows three routines plus a sliver of the fourth,
+ * so the list always reads as scrollable and the card's height never depends on
  * how many routines happen to exist.
+ *
+ * It also sets the height of the row it sits in — the sector donut stretches to
+ * this card — which is the other reason it grew a routine: at 10rem the ring had
+ * to stay small to leave its legend room underneath.
  */
-const LIST_HEIGHT = 'h-40';
+const LIST_HEIGHT = 'h-56';
 
 /** Query param that reopens a routine from a shared link. */
 export const ROUTINE_PARAM = 'rotina';

@@ -24,7 +24,36 @@ interface MonthCalendarProps {
    * — the Dashboard's card, whose rows are shorter than the grid's own squares.
    */
   className?: string;
+  /**
+   * Puts the month's name first and its two arrows immediately after it, rather
+   * than the month centred between them.
+   *
+   * The Dashboard's card asks for this because the month is that card's heading
+   * — it has no other — and a heading belongs on the left edge with everything
+   * else in the column. The Calendar page's mini calendar keeps the centred
+   * arrangement: there the month is a control on a panel, not a title.
+   */
+  leadingHeading?: boolean;
+  /**
+   * A control for the far end of the header row — the Dashboard's agenda filter.
+   * Only reachable with `leadingHeading`, which is what frees that end.
+   */
+  headerAction?: ReactNode;
 }
+
+/**
+ * The paging arrows in the leading arrangement: the glyph and nothing else.
+ *
+ * No ground of its own at rest and none on hover either — a grey disc lighting
+ * up behind an arrow made the header's quietest control its loudest. What
+ * answers instead is the arrow itself, which darkens while it is held down, so
+ * the feedback arrives with the press that is already changing the month.
+ *
+ * `justify-self-center` is what centres the glyph on its column, since the
+ * button's own box is narrower than the seventh of the row it sits in.
+ */
+const NAV_BUTTON =
+  'justify-self-center bg-transparent text-muted shadow-none hover:bg-transparent data-[hovered=true]:bg-transparent data-[pressed=true]:text-foreground';
 
 /**
  * The month grid both calendars in the app are built from: the Dashboard's
@@ -45,6 +74,8 @@ export function MonthCalendar({
   renderCellExtra,
   cellClassName,
   className = '',
+  leadingHeading = false,
+  headerAction,
 }: MonthCalendarProps) {
   return (
     <Calendar
@@ -66,13 +97,34 @@ export function MonthCalendar({
       // without pushing the union onto every caller.
       onChange={onChange ? (value) => onChange(toCalendarDate(value)) : undefined}
     >
-      <Calendar.Header>
-        <Calendar.NavButton slot="previous" />
-        {/* flex-1 + text-center rather than letting the heading size to its
-            text: the month names have different widths, so without this the
-            title shifts sideways as you page through the year. */}
-        <Calendar.Heading className="flex-1 text-center" />
-        <Calendar.NavButton slot="next" />
+      <Calendar.Header className={leadingHeading ? 'grid grid-cols-7 items-center px-0' : ''}>
+        {leadingHeading ? (
+          <>
+            {/* The header is the grid's own seven columns, so every control in
+                it stands over a weekday rather than wherever the flow left it:
+                the arrows land on the first and fifth, the month spans the three
+                between them, and the caller's control ends the row over the
+                last. It is also what stops the arrows stepping sideways as the
+                month name changes length. */}
+            <Calendar.NavButton slot="previous" className={NAV_BUTTON} />
+            <Calendar.Heading className="col-span-3 text-center" />
+            <Calendar.NavButton slot="next" className={NAV_BUTTON} />
+            <span aria-hidden />
+            {/* Centred on the last column rather than flush with the card's
+                edge: everything else in this row stands on a weekday, and one
+                control 7px off that grid is the one you notice. */}
+            <span className="justify-self-center">{headerAction}</span>
+          </>
+        ) : (
+          <>
+            <Calendar.NavButton slot="previous" />
+            {/* flex-1 + text-center rather than letting the heading size to its
+                text: the month names have different widths, so without this the
+                title shifts sideways as you page through the year. */}
+            <Calendar.Heading className="flex-1 text-center" />
+            <Calendar.NavButton slot="next" />
+          </>
+        )}
       </Calendar.Header>
       <Calendar.Grid>
         <Calendar.GridHeader>

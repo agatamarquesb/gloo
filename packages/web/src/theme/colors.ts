@@ -22,18 +22,19 @@ export function getPalette(): Record<PaletteKey, string> {
 }
 
 /**
- * The task-summary tile colors, in the order the tiles appear on the Dashboard
- * (to do, in progress, done, overdue). Charts reuse these so a sector's slice
- * matches the tiles rather than introducing a second palette.
+ * The sector ramp — one green in four steps, lightest first — in the fixed
+ * display order of the sectors themselves (see sectorOrder). Every view that
+ * colors data by sector reads this one list, so a sector is the same green in
+ * the donut, on the calendar's day dots and in any legend beside them.
  *
- * Read live rather than duplicated as hex because --tile-* are the palette's
- * per-mode tokens: the same call returns the light pastels or the dark muted
- * steps depending on the active theme. Prefer the useTileColors hook over calling
- * this directly — it re-reads when the theme flips, which a bare call won't.
+ * Read live rather than duplicated as hex because --sector-* are per-mode
+ * tokens: the same call returns the light ramp or the dark one depending on the
+ * active theme. Prefer the useSectorColors hook over calling this directly — it
+ * re-reads when the theme flips, which a bare call won't.
  */
-const TILE_VARS = ['--tile-todo', '--tile-progress', '--tile-done', '--tile-overdue'] as const;
+const SECTOR_VARS = ['--sector-1', '--sector-2', '--sector-3', '--sector-4'] as const;
 
-export function getTileColors(): string[] {
+export function getSectorColors(): string[] {
   const styles = getComputedStyle(document.documentElement);
-  return TILE_VARS.map((varName) => styles.getPropertyValue(varName).trim());
+  return SECTOR_VARS.map((varName) => styles.getPropertyValue(varName).trim());
 }

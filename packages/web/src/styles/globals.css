@@ -17,10 +17,11 @@
  * side) instead of hardcoding colors.
  *
  * The five brand values are identical in light and dark mode, so a status color
- * never shifts meaning between themes. The one exception is the --tile-* set
- * below, which is scoped to the Dashboard's task-summary tiles: those get their
- * own darker steps in dark mode. Nothing else in the app changes with the theme —
- * in particular --green keeps its brand value in both modes, so buttons, focus
+ * never shifts meaning between themes. The two exceptions are below: the --tile-*
+ * set, scoped to the Dashboard's task-summary tiles, and the --sector-* ramp that
+ * colors data by sector. Both are large filled marks and both get their own steps
+ * for the dark surface. Nothing else in the app changes with the theme — in
+ * particular --green keeps its brand value in both modes, so buttons, focus
  * rings, chips and charts look the same either way.
  */
 :root {
@@ -62,25 +63,49 @@
   --tile-overdue: var(--red);
   --tile-foreground: var(--black);
 
-  /* The icon's backing disc: filled white here, reduced to a white outline in
-     dark mode. Either way the disc keeps its size and its edge, which is what
-     lines the icon up with the count and label below it. */
-  --tile-icon-backdrop: #ffffff;
-  --tile-icon-border: transparent;
+  /* The icon's ring: an outline in both modes now, black on the tile's own
+     colour here and white on the dark steps below. It used to be a filled white
+     disc in light mode, which put a second, brighter panel inside a panel; the
+     ring keeps the size and the edge that line the icon up with the count and
+     label under it, and lets the tile's colour run behind the glyph. */
+  --tile-icon-backdrop: transparent;
+  --tile-icon-border: var(--black);
+
+  /* Sectors — one hue in four steps, and the fourth exception to "five colours".
+   *
+   * Sector is not a status, and while the two shared the --tile-* set they were
+   * impossible to tell apart: a blue dot on the calendar meant "to do" three
+   * feet away on the summary tiles and "Gestão" here. One hue in four steps says
+   * "these four are the same kind of thing" — which is exactly what a set of
+   * sectors is — and leaves blue, yellow and red to mean status alone.
+   *
+   * The brand green anchors the light end and the ramp steps down from it, each
+   * step about 0.11 of OKLCH lightness below the last: far enough apart to hold
+   * up as a donut slice, a 5px calendar dot and a legend swatch. Every step
+   * clears 3:1 on white except the brand green itself at 1.65:1 — which is the
+   * brand value, not a choice available here, and is why every view that uses
+   * these writes the sector's name beside the colour rather than leaning on it.
+   *
+   * Per-mode like --tile-*: on a near-black card the two darkest steps close up
+   * against the surface, so dark mode runs the same ramp shifted up into the
+   * range that surface can hold. */
+  --sector-1: var(--green);
+  --sector-2: #9aa843;
+  --sector-3: #74822f;
+  --sector-4: #4f591d;
 
   /* Task status pills.
    *
    * A tint of each brand colour rather than the colour itself, because the
-   * --tile-* set is already spoken for twice over: the Dashboard's summary tiles
-   * *and* the sector donut's slices, which read those same tokens so a slice
-   * matches a tile. A status pill in the same value was a third meaning for one
-   * colour, and on a page showing all three at once there was no telling which
-   * a swatch belonged to.
+   * --tile-* set is already spoken for by the Dashboard's summary tiles. A
+   * status pill in the same value was a second meaning for one colour, and on a
+   * page showing both at once there was no telling which a swatch belonged to.
+   * (It was a third meaning until the sector donut moved off these tokens onto
+   * the --sector-* ramp above — which is the same problem solved the same way.)
    *
    * Lightened rather than shifted in hue: a status keeps the association — blue
    * is still to do, yellow still in progress — while sitting a clear step back
-   * from the fuller values the tiles and the chart use. Black text gains
-   * contrast on all four.
+   * from the fuller values the tiles use. Black text gains contrast on all four.
    *
    * Mode-invariant like the brand colours themselves. The tiles step down in
    * dark mode because they are large filled panels; a pill this small does not
@@ -221,6 +246,15 @@
      out of line with the text. The ring keeps the alignment without the mass. */
   --tile-icon-backdrop: transparent;
   --tile-icon-border: #ffffff;
+
+  /* The sector ramp for the dark surface — the same four steps lifted into the
+     range a near-black card can hold. The light mode's two darkest greens are
+     within a hair of this surface's own lightness and would have read as holes
+     in the ring rather than as slices of it. */
+  --sector-1: #cdd69c;
+  --sector-2: #adb96a;
+  --sector-3: #8d9a42;
+  --sector-4: #6e7a30;
 
   /* Desaturated and dimmed: still recognisably the brand hue, but reading as a
      quiet edge rather than a lit one. */

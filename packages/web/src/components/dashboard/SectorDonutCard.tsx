@@ -3,9 +3,9 @@ import { TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 
-import { useTileColors } from '@/hooks/ui/useTileColors';
+import { useSectorColors } from '@/hooks/ui/useSectorColors';
 import { useTasksBySector } from '@/hooks/queries/tasks';
-import { quietSurface, quietSurfaceHover } from '@/theme/styleConstants';
+import { quietSurface } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 import { DashboardCard } from './DashboardCard';
@@ -13,7 +13,7 @@ import { sortBySectorOrder } from './sectorOrder';
 
 export function SectorDonutCard() {
   const navigate = useNavigate();
-  const tileColors = useTileColors();
+  const sectorColors = useSectorColors();
   const { data: unordered = [] } = useTasksBySector();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -34,23 +34,20 @@ export function SectorDonutCard() {
   const slices = total > 0 ? bySector : bySector.map((entry) => ({ ...entry, totalCount: 1 }));
 
   return (
-    <DashboardCard title={strings.dashboard.bySector}>
-      {/* Container query, not a viewport breakpoint: this card sits in a narrow
-          column on wide screens and full-width on phones, so it has to lay out
-          against its own width or the long sector names get truncated.
+    <DashboardCard title={strings.dashboard.bySector} bodyGap="gap-0">
+      {/* Chart over legend, and the chart centred in what is left after the
+          legend has taken its two lines — the ring is the card's subject and it
+          sits in the middle of it, rather than off to one side of a list.
 
           flex-1: this card shares a grid row with Routines and stretches to that
           card's height. The content claims that height rather than sitting at the
           top and leaving the slack as a gap underneath. */}
-      <div className="@container flex flex-1">
-        {/* Chart left, sector list right. The row kicks in at a container width
-            this card always clears in its Dashboard slot; below that — a phone in
-            portrait — it still stacks rather than crushing the sector names. */}
-        <div className="flex w-full flex-1 flex-col items-center gap-4 @[16rem]:flex-row @[16rem]:items-stretch">
-        {/* Back to 8rem: measured, the sector list needs ~137px for "Marketing &
-            Aquisição" to stay on one line at this card's ~330px, and a 9rem chart
-            left only 105px. */}
-        <div className="relative size-32 shrink-0 self-center">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
+        {/* 12rem, up from the 8 it took beside the list: the ring no longer
+            shares the card's width with anything, and every other change to this
+            card — the taller row, the legend folded onto two lines, the gap under
+            the title closed — was spending its space on the chart. */}
+        <div className="relative size-48 shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -70,8 +67,11 @@ export function SectorDonutCard() {
                 stroke="none"
                 strokeWidth={0}
                 // Rounds each slice's four corners. Needs the padding angle above
-                // to have somewhere to round into, which is why it isn't larger.
-                cornerRadius={8}
+                // to have somewhere to round into, which is why it isn't larger —
+                // and 5 rather than 8 because at the ring's new size the fatter
+                // radius was rounding a slice's short edge away entirely, leaving
+                // lozenges rather than segments of a ring.
+                cornerRadius={5}
                 // Off, and not by preference: with recharts 3 the entrance
                 // animation leaves the sector groups empty — no `path` is ever
                 // drawn — as soon as the data changes shape under it, and the
@@ -81,7 +81,7 @@ export function SectorDonutCard() {
                 {slices.map((entry, index) => (
                   <Cell
                     key={entry.sector.id}
-                    fill={total > 0 ? tileColors[index % tileColors.length] : 'var(--color-default)'}
+                    fill={total > 0 ? sectorColors[index % sectorColors.length] : 'var(--color-default)'}
                     opacity={activeIndex === null || activeIndex === index ? 1 : 0.45}
                     className="cursor-pointer transition-opacity"
                     onMouseEnter={() => setActiveIndex(index)}
@@ -93,35 +93,65 @@ export function SectorDonutCard() {
             </PieChart>
           </ResponsiveContainer>
 
-          {/* Echoes the "Em progresso" summary tile's icon in the donut's hole, on
-              a neutral disc. Recessive ink rather than a tile color: the slices
-              already carry the palette, and a colored glyph here would read as a
-              fifth category. The disc takes a routine row's own light grey — the
-              app's one "raised off the card" surface — so the hole reads as part
-              of the page rather than as a hole cut in it. pointer-events-none so
-              it never steals a hover. */}
+          {/* The hole, which is where the numbers live now that the legend lists
+              names alone: hover a slice and its count is written in the middle of
+              the ring it belongs to, right where the eye already is.
+
+              Idle it echoes the "Em progresso" summary tile's icon, in recessive
+              ink rather than a sector colour — the slices already carry the
+              palette and a coloured glyph here would read as a fifth sector. The
+              disc takes a routine row's own light grey, the app's one "raised off
+              the card" surface, so the hole reads as part of the page rather than
+              as a hole cut in it. pointer-events-none so it never steals the
+              hover that is feeding it. */}
           <span
             aria-hidden
             className="pointer-events-none absolute inset-0 flex items-center justify-center"
           >
             <span
-              className={`flex size-14 items-center justify-center rounded-full text-muted ${quietSurface}`}
+              className={`flex size-20 flex-col items-center justify-center gap-0.5 rounded-full text-muted ${quietSurface}`}
             >
-              <TrendingUp className="size-6" />
+              {activeIndex === null ? (
+                <TrendingUp className="size-8" />
+              ) : (
+                <>
+                  <span className="text-lg leading-none font-semibold text-foreground">
+                    {bySector[activeIndex]?.totalCount}
+                  </span>
+                  <span className="text-[0.625rem] leading-none">
+                    {strings.dashboard.tasksSuffix}
+                  </span>
+                </>
+              )}
             </span>
           </span>
         </div>
 
-        {/* The pills are the legend and the direct labels: identity never rests
-            on color alone, which is also what relieves the palette's contrast
-            warning on the lighter slots. */}
-        {/* min-w-0 lets the pills shrink inside the flex row instead of
-            overflowing the card when a sector name is long. */}
-        {/* Grouped and centered rather than spread across the full height: the
-            even distribution left ~55px between pills, too airy to read as a list. */}
-        <ul className="flex w-full min-w-0 flex-1 flex-col justify-center gap-2">
+        {/* The legend, under the ring: a dot and a name, and nothing drawn around
+            them. The capsule the rows used to wear was what made this a column of
+            buttons the width of the card; without it the same four rows fold into
+            two lines and the whole block narrows to what the words actually need.
+
+            No counts here either — they moved into the hole, where only the
+            sector under the cursor writes one. Four numbers standing permanently
+            beside four names had turned the legend into the card's second table,
+            competing with the ring for the same fact.
+
+            Column-major, which is what puts Gestão over Comercial and Produto &
+            Serviço over Marketing & Aquisição — reading down each column follows
+            the fixed sector order, and the pairs that share a line are the ones
+            whose names balance.
+
+            `auto-cols-max` sizes each column to its own longest name and the
+            block is centred under the ring, rather than the two columns being
+            pinned to the card's left edge and its middle: the legend belongs to
+            the circle above it and sits on the same axis, and stretched to the
+            card's full width it read as a separate list that happened to be in
+            the same box. It is also what lets a fifth sector open a third column
+            instead of overflowing. */}
+        <ul className="grid auto-cols-max grid-flow-col grid-rows-2 justify-center gap-x-6 gap-y-1">
           {bySector.map((entry, index) => {
-            const color = tileColors[index % tileColors.length];
+            const color = sectorColors[index % sectorColors.length];
             const isActive = activeIndex === index;
 
             return (
@@ -130,28 +160,35 @@ export function SectorDonutCard() {
                 type="button"
                 onMouseEnter={() => setActiveIndex(index)}
                 onMouseLeave={() => setActiveIndex(null)}
+                onFocus={() => setActiveIndex(index)}
+                onBlur={() => setActiveIndex(null)}
                 onClick={() => navigate(`/tasks?sectorId=${entry.sector.id}`)}
-                // The row's edge takes the slice's own colour while either of
-                // them is hovered — which is what says *this* row is *that*
-                // slice, in both directions, without a tooltip.
-                style={isActive ? { borderColor: color } : undefined}
-                className={`flex w-full items-center gap-2 rounded-full border border-border px-2.5 py-2 text-left transition-colors ${quietSurfaceHover}`}
+                className="flex w-full cursor-pointer items-center gap-2 py-1 text-left"
               >
                 <span
                   aria-hidden
-                  className="size-2.5 shrink-0 rounded-full"
+                  className="size-3 shrink-0 rounded-full"
                   style={{ backgroundColor: color }}
                 />
-                <span className="flex-1 text-xs text-foreground">{entry.sector.name}</span>
-                <span className="shrink-0 text-xs font-semibold text-foreground">
-                  {entry.totalCount}
+                {/* The name comes up to full ink while its slice is under the
+                    cursor — which is what says *this* row is *that* slice, in
+                    both directions, now that there is no pill edge to take the
+                    slice's colour. Colour rather than weight: a heavier name is
+                    a wider one, and the row would nudge its neighbours every
+                    time you crossed the chart. */}
+                <span
+                  className={`flex-1 truncate text-xs transition-colors ${
+                    isActive ? 'text-foreground' : 'text-muted'
+                  }`}
+                  title={entry.sector.name}
+                >
+                  {entry.sector.name}
                 </span>
               </button>
             </li>
             );
           })}
         </ul>
-        </div>
       </div>
     </DashboardCard>
   );
