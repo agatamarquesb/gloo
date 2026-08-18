@@ -152,6 +152,22 @@ export type CalendarProvider = (typeof CalendarProvider)[keyof typeof CalendarPr
  * Google with anything else — a by-day list, a count instead of an until —
  * is stored as a single non-recurring event rather than silently mis-expanded.
  */
+/**
+ * What a row on the calendar is.
+ *
+ * EVENT is everything this app creates and everything the Google *Calendar* API
+ * sends. TASK is a Google task — a different product, mirrored onto the grid so
+ * a day reads as one day, and the only kind that can be ticked off. APPOINTMENT
+ * is a slot booked through an appointment schedule, which Google marks with its
+ * own `eventType`.
+ */
+export const CalendarItemKind = {
+  EVENT: 'EVENT',
+  TASK: 'TASK',
+  APPOINTMENT: 'APPOINTMENT',
+} as const;
+export type CalendarItemKind = (typeof CalendarItemKind)[keyof typeof CalendarItemKind];
+
 export const EventRecurrence = {
   DAILY: 'DAILY',
   WEEKLY: 'WEEKLY',

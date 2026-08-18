@@ -5,7 +5,7 @@ import { playSound } from '@/lib/sounds';
 import {
   blockBox,
   blockDivider,
-  blockLeadColumn,
+  blockHeadingLead,
   blockTitle,
   outlineControl,
   taskBlockBox,
@@ -107,7 +107,7 @@ export function NotesBlock({
                 it is what lets the note start level with the properties beside
                 it. */}
             {compact ? null : (
-              <span className={blockLeadColumn}>
+              <span className={blockHeadingLead}>
                 <Pencil className="size-4 text-foreground" aria-hidden />
               </span>
             )}

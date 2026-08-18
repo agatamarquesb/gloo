@@ -7,7 +7,8 @@ import type { ChecklistItemDto, RoutineChecklistDto } from '@gloo/shared';
 import { AppCheckbox } from '@/components/common/AppCheckbox';
 import { playSound } from '@/lib/sounds';
 import { FLAT_INPUT, GREEN_UNDERLINE } from '@/theme/fieldStyles';
-import { blockBox, blockDivider, blockLeadColumn, blockTitle } from '@/theme/styleConstants';
+import { blockBox, blockDivider, blockHeadingLead,
+  blockLeadColumn, blockTitle } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 /** How many blank rows a fresh checklist starts with. */
@@ -84,7 +85,7 @@ export function RoutineChecklist({
           difference is that this name is editable, which the green rule under it
           signals — the same marker the routine title uses. */}
       <div className="flex items-center gap-2">
-        <span className={blockLeadColumn}>
+        <span className={blockHeadingLead}>
           <ClipboardList className="size-4 text-foreground" aria-hidden />
         </span>
 
@@ -111,7 +112,10 @@ export function RoutineChecklist({
              the one heading in the dialog that is the user's own words read as
              though it had been labelled. */
           <span className={`min-w-0 flex-1 truncate text-foreground ${blockTitle(false)}`}>
-            {title}
+            {/* A checklist saved without a name is still a checklist, and a
+                heading that is simply missing left its items hanging under the
+                icon with nothing to belong to. */}
+            {title.trim() || strings.routine.checklistUntitled}
           </span>
         )}
 
@@ -133,6 +137,14 @@ export function RoutineChecklist({
       </div>
 
       <div className="flex flex-col gap-2">
+        {/* A rule where the rows would be: a checklist with no items is not the
+            same as no checklist, and an empty block under a heading read as one
+            that had failed to load. Short, grey and centred on the row it stands
+            in — a dash, in the sense of "nothing here yet". */}
+        {items.length === 0 ? (
+          <span aria-hidden className="my-1 h-px w-10 self-center rounded-full bg-border" />
+        ) : null}
+
         {items.map((item, index) => (
           // Index keys: rows have no id, and there is no reordering — only
           // append and remove, which React handles correctly by position.

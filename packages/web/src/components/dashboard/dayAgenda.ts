@@ -1,4 +1,10 @@
-import type { AgendaDto, CalendarEventDto, TaskListItemDto, UserDto } from '@gloo/shared';
+import {
+  CalendarItemKind,
+  type AgendaDto,
+  type CalendarEventDto,
+  type TaskListItemDto,
+  type UserDto,
+} from '@gloo/shared';
 
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
 
@@ -121,11 +127,16 @@ export function eventToDayItem(event: CalendarEventDto): DayItem {
   const others = event.assignees.filter(({ id }) => id !== event.createdById).length;
   return {
     id: `event-${event.id}-${event.startsAt}`,
-    // Somebody else on it makes it a meeting; on your own it is an event. The
-    // external guests count too — a call with a client is a meeting whether or
-    // not the client has a Gloo login.
+    // A Google task stays a task whoever is on it. Otherwise: somebody else on
+    // it makes it a meeting, on your own it is an event — and the external
+    // guests count too, since a call with a client is a meeting whether or not
+    // the client has a Gloo login.
     kind:
-      others + event.externalAttendees.length > 0 ? DayItemKind.MEETING : DayItemKind.EVENT,
+      event.kind === CalendarItemKind.TASK
+        ? DayItemKind.TASK
+        : others + event.externalAttendees.length > 0
+          ? DayItemKind.MEETING
+          : DayItemKind.EVENT,
     title: event.title,
     day: localDayKey(new Date(event.startsAt)),
     startsAt: event.startsAt,

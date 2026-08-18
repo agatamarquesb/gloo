@@ -17,6 +17,9 @@ const TOKENINFO_URL = 'https://oauth2.googleapis.com/tokeninfo';
 export const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 export const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 
+/** Tasks is its own service on its own host — see GOOGLE_TASKS_SCOPE. */
+export const TASKS_API = 'https://tasks.googleapis.com/tasks/v1';
+
 /**
  * What we ask the user for.
  *
@@ -35,7 +38,22 @@ export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.calendars',
+  // Google Tasks is a separate product with a separate API, and this is what
+  // lets a task appear on the grid beside the events of the same day — and be
+  // ticked off from there. Read *and* write: the tick has to reach Google, or
+  // the two would disagree the moment it was used.
+  'https://www.googleapis.com/auth/tasks',
 ];
+
+/**
+ * The scopes an account linked before Tasks existed will not have.
+ *
+ * Their absence is not an error — the calendar half works perfectly without
+ * them — so the task sync checks for this and skips rather than failing the
+ * whole run, and the account is only flagged for re-consent by the ordinary
+ * `needsReauth` path when Google actually rejects a call.
+ */
+export const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 
 /** Refresh this long before the token actually expires, to avoid a race. */
 const EXPIRY_SKEW_MS = 60_000;
@@ -194,9 +212,27 @@ export async function googleFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
+  return googleApiFetch(CALENDAR_API, account, path, init);
+}
+
+/** The same, against the Tasks service. */
+export async function googleTasksFetch(
+  account: AccountTokens,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  return googleApiFetch(TASKS_API, account, path, init);
+}
+
+async function googleApiFetch(
+  base: string,
+  account: AccountTokens,
+  path: string,
+  init: RequestInit,
+): Promise<Response> {
   const token = await accessTokenFor(account);
 
-  return fetch(`${CALENDAR_API}${path}`, {
+  return fetch(`${base}${path}`, {
     ...init,
     headers: {
       ...init.headers,

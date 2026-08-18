@@ -110,7 +110,7 @@ export const LABEL_OPTICAL_LIFT = '-translate-y-[0.08em]';
 export function OverdueMark({ className = '' }: { className?: string }) {
   return (
     <span
-      className={`shrink-0 text-sm font-bold text-status-overdue-text ${className}`}
+      className={`shrink-0 text-sm font-bold text-overdue-ink ${className}`}
       title={strings.task.filters.overdue}
     >
       <span aria-hidden>!!</span>

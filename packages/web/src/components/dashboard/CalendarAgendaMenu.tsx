@@ -3,9 +3,10 @@ import { Button, Popover } from '@heroui/react';
 
 import type { AgendaDto } from '@gloo/shared';
 
+import { CalendarAgendaGlyph } from '@/components/common/CalendarGlyph';
 import { FIELD_PANEL } from '@/theme/fieldStyles';
 import { colorFill } from '@/theme/labelColors';
-import { modalDivider } from '@/theme/styleConstants';
+import { dotsMenuButton, modalDivider } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 /**
@@ -46,7 +47,7 @@ export function CalendarAgendaMenu({
         // bare one throws before it can render. `null` is React Aria's own way
         // of saying this control is not one of the calendar's parts.
         slot={null}
-        className="shrink-0 text-muted"
+        className={dotsMenuButton}
         aria-label={strings.dashboard.calendarAgendas.title}
       >
         <MoreHorizontal className="size-4" />
@@ -55,7 +56,10 @@ export function CalendarAgendaMenu({
       <Popover.Content className={`w-60 ${FIELD_PANEL}`}>
         <Popover.Dialog className="p-1">
           <div className="flex flex-col gap-0.5">
-            <p className="px-2 pt-1 pb-1.5 text-xs font-medium text-muted">
+            {/* The same marked calendar the summary's Agenda row wears, so the
+                menu and the rows it governs are visibly about one thing. */}
+            <p className="flex items-center gap-1.5 px-2 pt-1 pb-1.5 text-xs font-medium text-muted">
+              <CalendarAgendaGlyph className="size-3.5 shrink-0" />
               {strings.dashboard.calendarAgendas.title}
             </p>
 

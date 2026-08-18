@@ -4,7 +4,7 @@
  * should never inline literal copy, always reference this file.
  */
 export const strings = {
-  appName: 'Gloo',
+  appName: 'Gloo Co.',
   nav: {
     // PT-BR like everything else in the app. "Dashboard" is the exception and
     // stays as it is: it is the word the product uses for that page, not a
@@ -12,6 +12,10 @@ export const strings = {
     dashboard: 'Dashboard',
     tasks: 'Tarefas',
     calendar: 'Calendário',
+    /** The rail's one entry that opens onto more entries rather than a page. */
+    projects: 'Projetos',
+    allProjects: 'Todos os projetos',
+    projectsCalendar: 'Calendário de projetos',
     signOut: 'Sair',
   },
   auth: {
@@ -69,11 +73,12 @@ export const strings = {
     lastUpdated: 'Última alteração',
     notesTitle: 'Visão geral',
     /**
-     * Phrased as an empty state rather than as an instruction, and set at the
-     * same size as "Nenhum anexo por aqui": the two blocks sit side by side in
-     * the modal and an empty one should read the same way on both sides.
+     * Phrased as an empty state rather than as an instruction, and word for word
+     * what Anexos says: the two blocks sit side by side in the modal, and two
+     * different sentences for "there is nothing here" made them look like two
+     * different kinds of nothing.
      */
-    notesPlaceholder: 'Nenhuma anotação por aqui :(',
+    notesPlaceholder: 'Não tem nada por aqui.',
     subtasksTitle: 'Subtarefas',
     addSubtask: 'Adicionar subtarefa',
     subtaskPlaceholder: 'Subtarefa',
@@ -103,15 +108,22 @@ export const strings = {
     assigneeLabel: 'Responsável',
     empty: 'Nenhuma rotina por aqui.',
     titleLabel: 'Título',
-    notesTitle: 'Notas',
-    notesPlaceholder: 'Notas sobre esta rotina',
+    /** "Notas" until it was the same block the task dialog calls Visão geral. */
+    notesTitle: 'Descrição',
+    /** The same empty sentence the rest of the dialogs use — see attachment.empty. */
+    notesPlaceholder: 'Não tem nada por aqui.',
     clearNotes: 'Limpar',
     bold: 'Negrito',
     italic: 'Itálico',
     underline: 'Sublinhado',
     strikethrough: 'Traçado',
     checklist: 'Checklist',
+    /** The two text actions under the property list, in edit mode. */
+    addChecklist: 'Criar checklist',
+    addAttachments: 'Adicionar anexos',
     checklistTitlePlaceholder: 'Título da checklist',
+    /** What a checklist is called before it is called anything. */
+    checklistUntitled: 'Checklist',
     deleteChecklist: 'Excluir',
     checklistItemPlaceholder: 'Item',
     addChecklistItem: 'Adicionar item',
@@ -120,6 +132,8 @@ export const strings = {
     attachments: 'Anexos',
     lastUpdated: 'Última alteração',
     duplicate: 'Duplicar rotina',
+    /** The `···` on a routine's own row, which opens those two actions. */
+    rowMenu: 'Ações da rotina',
     /** The tag row on a routine, which folds down to bars when clicked. */
     toggleLabels: 'Minimizar etiquetas',
     /** Replaces "Editar" in the header while the dialog is unlocked. */
@@ -194,7 +208,8 @@ export const strings = {
     remove: 'Excluir anexo',
     download: 'Baixar anexo',
     preview: 'Visualizar anexo',
-    empty: 'Nenhum anexo por aqui.',
+    /** Shared wording with the note beside it — see task.notesPlaceholder. */
+    empty: 'Não tem nada por aqui.',
   },
   dashboard: {
     taskSummary: 'Resumo de tarefas',
@@ -223,6 +238,10 @@ export const strings = {
       date: 'Data',
       time: 'Hora',
       assignee: 'Responsável',
+      /** Which calendar the item came from, and the two answers it has. */
+      source: 'Agenda',
+      sourceGloo: 'Gloo',
+      sourceGoogle: 'Google Agenda',
       /** No hour of its own — a task is due on a day, an event is all-day. */
       noTime: 'Dia todo',
       kind: {
@@ -230,6 +249,16 @@ export const strings = {
         EVENT: 'Evento',
         MEETING: 'Reunião',
         PROJECT: 'Projeto',
+      },
+      /**
+       * What a row on the calendar is, as Google's own "criar" menu names the
+       * three: an event, a task, or a slot booked through an appointment
+       * schedule. See CalendarItemKind.
+       */
+      itemKind: {
+        EVENT: 'Evento',
+        TASK: 'Tarefa',
+        APPOINTMENT: 'Agendamento de horários',
       },
     },
   },
@@ -297,7 +326,6 @@ export const strings = {
     },
     details: {
       title: 'Detalhes',
-      empty: 'Selecione um evento para ver os detalhes.',
       category: 'Agenda',
       date: 'Data',
       time: 'Horário',
@@ -311,6 +339,9 @@ export const strings = {
       shared: 'Compartilhados comigo',
       sharedHint: 'Eventos em que você foi incluído. Somente leitura.',
       newAgenda: 'Nova agenda',
+      createAgenda: 'Criar nova agenda',
+      addGoogle: 'Adicionar Google Agenda',
+      manage: 'Gerenciar agendas',
       addAccount: 'Adicionar conta de calendário',
       rename: 'Renomear',
       manageAccount: 'Gerenciar conta de calendário',

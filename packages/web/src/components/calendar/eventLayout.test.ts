@@ -9,10 +9,14 @@ function at(id: string, from: string, to: string): LayoutEvent {
   return { id, startsAt: `2026-09-16T${from}:00.000Z`, endsAt: `2026-09-16T${to}:00.000Z` };
 }
 
-/** id → "column/columns", which is all most of these assertions care about. */
+/**
+ * id → "column/columns@depth" — the three numbers the grid draws a block from.
+ * The first two split the width between events that start together; the third is
+ * how far the block is laid over the ones already running.
+ */
 function lanes(positioned: ReturnType<typeof layoutDay>) {
   return Object.fromEntries(
-    positioned.map((entry) => [entry.event.id, `${entry.column}/${entry.columns}`]),
+    positioned.map((entry) => [entry.event.id, `${entry.column}/${entry.columns}@${entry.depth}`]),
   );
 }
 
@@ -149,57 +153,75 @@ describe('all-day placement', () => {
 
 describe('layoutDay', () => {
   it('gives a lone event the full width', () => {
-    expect(lanes(layoutDay([at('a', '09:00', '10:00')], DAY))).toEqual({ a: '0/1' });
+    expect(lanes(layoutDay([at('a', '09:00', '10:00')], DAY))).toEqual({ a: '0/1@0' });
   });
 
-  it('splits two overlapping events into two lanes', () => {
+  it('lays a later event over the one it overlaps rather than halving both', () => {
     const result = layoutDay([at('a', '09:00', '11:00'), at('b', '10:00', '12:00')], DAY);
-    expect(lanes(result)).toEqual({ a: '0/2', b: '1/2' });
+    expect(lanes(result)).toEqual({ a: '0/1@0', b: '0/1@1' });
   });
 
-  it('keeps consecutive events full width', () => {
-    // b starts exactly when a ends: they never coexist, so neither should be
-    // narrowed. This is the case a naive "any event today" grouping gets wrong.
+  it('keeps consecutive events at full width and depth zero', () => {
+    // b starts exactly when a ends: they never coexist, so neither is narrowed
+    // and neither is laid over the other.
     const result = layoutDay([at('a', '09:00', '10:00'), at('b', '10:00', '11:00')], DAY);
-    expect(lanes(result)).toEqual({ a: '0/1', b: '0/1' });
+    expect(lanes(result)).toEqual({ a: '0/1@0', b: '0/1@0' });
   });
 
-  it('splits three mutually overlapping events three ways', () => {
+  it('steps each later start one further in', () => {
     const result = layoutDay(
       [at('a', '09:00', '12:00'), at('b', '09:30', '12:00'), at('c', '10:00', '12:00')],
       DAY,
     );
-    expect(lanes(result)).toEqual({ a: '0/3', b: '1/3', c: '2/3' });
+    expect(lanes(result)).toEqual({ a: '0/1@0', b: '0/1@1', c: '0/1@2' });
   });
 
-  it('reuses a freed lane later in the same cluster', () => {
-    // a runs all morning; b and c are short and sequential beside it, so both
-    // belong in lane 1 rather than c opening a third.
+  it('stops stepping in past the maximum depth', () => {
     const result = layoutDay(
-      [at('a', '09:00', '12:00'), at('b', '09:00', '10:00'), at('c', '10:00', '11:00')],
+      [
+        at('a', '09:00', '13:00'),
+        at('b', '09:30', '13:00'),
+        at('c', '10:00', '13:00'),
+        at('d', '10:30', '13:00'),
+        at('e', '11:00', '13:00'),
+      ],
       DAY,
     );
-    expect(lanes(result)).toEqual({ a: '0/2', b: '1/2', c: '1/2' });
+    expect(lanes(result)).toEqual({
+      a: '0/1@0',
+      b: '0/1@1',
+      c: '0/1@2',
+      d: '0/1@3',
+      e: '0/1@3',
+    });
   });
 
-  it('starts a fresh cluster once nothing is still running', () => {
-    // The morning pair must not narrow the unrelated afternoon event.
+  it('counts one step per start, not per event', () => {
+    // b and c begin together over a: they share a step and split its width.
+    const result = layoutDay(
+      [at('a', '09:00', '12:00'), at('b', '10:00', '11:00'), at('c', '10:00', '11:30')],
+      DAY,
+    );
+    expect(lanes(result)).toEqual({ a: '0/1@0', c: '0/2@1', b: '1/2@1' });
+  });
+
+  it('drops back to the left edge once nothing is still running', () => {
     const result = layoutDay(
       [at('a', '09:00', '11:00'), at('b', '10:00', '12:00'), at('c', '14:00', '15:00')],
       DAY,
     );
-    expect(lanes(result)).toEqual({ a: '0/2', b: '1/2', c: '0/1' });
+    expect(lanes(result)).toEqual({ a: '0/1@0', b: '0/1@1', c: '0/1@0' });
   });
 
-  it('puts the longer of two events starting together on the left', () => {
+  it('splits two events that start together, longer on the left', () => {
     const result = layoutDay([at('short', '09:00', '09:30'), at('long', '09:00', '11:00')], DAY);
-    expect(lanes(result)).toEqual({ long: '0/2', short: '1/2' });
+    expect(lanes(result)).toEqual({ long: '0/2@0', short: '1/2@0' });
   });
 
   it('gives two zero-length events at the same instant their own lanes', () => {
     // Strict overlap would say these miss each other entirely and stack them.
     const result = layoutDay([at('a', '09:00', '09:00'), at('b', '09:00', '09:00')], DAY);
-    expect(lanes(result)).toEqual({ a: '0/2', b: '1/2' });
+    expect(lanes(result)).toEqual({ a: '0/2@0', b: '1/2@0' });
   });
 
   it('drops events belonging to another day', () => {
@@ -222,8 +244,11 @@ describe('layoutDay', () => {
   });
 
   it('handles a long event spanning several short clusters', () => {
-    // The all-day-ish block stays in lane 0 the whole time and everything else
-    // fits beside it, in one cluster, two wide.
+    // The block that runs all afternoon keeps the full width and stays where it
+    // is; each of the three that begin while it is running is laid one step over
+    // it. They never overlap each other, so all three take the same step rather
+    // than walking further in — a day with an all-afternoon meeting on it is not
+    // three levels deep.
     const result = layoutDay(
       [
         at('all', '08:00', '18:00'),
@@ -233,6 +258,11 @@ describe('layoutDay', () => {
       ],
       DAY,
     );
-    expect(lanes(result)).toEqual({ all: '0/2', x: '1/2', y: '1/2', z: '1/2' });
+    expect(lanes(result)).toEqual({
+      all: '0/1@0',
+      x: '0/1@1',
+      y: '0/1@1',
+      z: '0/1@1',
+    });
   });
 });

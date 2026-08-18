@@ -17,48 +17,44 @@ describe('visibleRange', () => {
     expect(iso(visibleRange(wednesday, CalendarViewMode.DAY))).toEqual(['2026-09-16', '2026-09-16']);
   });
 
-  it('covers Sunday to Saturday in week view', () => {
+  it('covers Monday to Sunday in week view', () => {
     expect(iso(visibleRange(wednesday, CalendarViewMode.WEEK))).toEqual([
-      '2026-09-13',
-      '2026-09-19',
+      '2026-09-14',
+      '2026-09-20',
     ]);
   });
 
-  it('keeps a Sunday in its own week rather than the previous one', () => {
+  it('keeps a Monday in its own week rather than the previous one', () => {
     // The boundary case that a naive "subtract getDay()" gets wrong.
-    const sunday = new CalendarDate(2026, 9, 13);
-    expect(iso(visibleRange(sunday, CalendarViewMode.WEEK))).toEqual(['2026-09-13', '2026-09-19']);
+    const monday = new CalendarDate(2026, 9, 14);
+    expect(iso(visibleRange(monday, CalendarViewMode.WEEK))).toEqual(['2026-09-14', '2026-09-20']);
   });
 
-  it('keeps a Saturday in its own week', () => {
-    const saturday = new CalendarDate(2026, 9, 19);
-    expect(iso(visibleRange(saturday, CalendarViewMode.WEEK))).toEqual(['2026-09-13', '2026-09-19']);
+  it('keeps a Sunday in the week it ends', () => {
+    const sunday = new CalendarDate(2026, 9, 20);
+    expect(iso(visibleRange(sunday, CalendarViewMode.WEEK))).toEqual(['2026-09-14', '2026-09-20']);
   });
 
   it('pads month view out to whole weeks', () => {
-    // September 2026 starts on a Tuesday and ends on a Wednesday, so the grid
-    // shows 30 Aug and runs to 3 Oct.
+    // September 2026 starts on a Tuesday and ends on a Wednesday, so a
+    // Monday-first grid shows 31 Aug and runs to 4 Oct.
     expect(iso(visibleRange(wednesday, CalendarViewMode.MONTH))).toEqual([
-      '2026-08-30',
-      '2026-10-03',
+      '2026-08-31',
+      '2026-10-04',
     ]);
   });
 
-  it('does not pad a month that already begins and ends on week boundaries', () => {
-    // November 2026 begins on a Sunday and ends on a Monday, so only the tail
-    // needs completing.
-    const november = new CalendarDate(2026, 11, 15);
-    expect(iso(visibleRange(november, CalendarViewMode.MONTH))).toEqual([
-      '2026-11-01',
-      '2026-12-05',
-    ]);
+  it('does not pad a month that already begins on a week boundary', () => {
+    // June 2026 begins on a Monday, so only the tail needs completing.
+    const june = new CalendarDate(2026, 6, 15);
+    expect(iso(visibleRange(june, CalendarViewMode.MONTH))).toEqual(['2026-06-01', '2026-07-05']);
   });
 
   it('crosses a year boundary in month view', () => {
     const december = new CalendarDate(2026, 12, 15);
     expect(iso(visibleRange(december, CalendarViewMode.MONTH))).toEqual([
-      '2026-11-29',
-      '2027-01-02',
+      '2026-11-30',
+      '2027-01-03',
     ]);
   });
 });
@@ -67,8 +63,8 @@ describe('daysIn', () => {
   it('lists seven days for a week', () => {
     const days = daysIn(visibleRange(wednesday, CalendarViewMode.WEEK));
     expect(days).toHaveLength(7);
-    expect(days[0].toString()).toBe('2026-09-13');
-    expect(days[6].toString()).toBe('2026-09-19');
+    expect(days[0].toString()).toBe('2026-09-14');
+    expect(days[6].toString()).toBe('2026-09-20');
   });
 
   it('lists one day for a day view', () => {

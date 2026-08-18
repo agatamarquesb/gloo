@@ -1,5 +1,6 @@
 import type {
   AttachmentKind,
+  CalendarItemKind,
   CalendarProvider,
   EventRecurrence,
   LabelScope,
@@ -381,6 +382,13 @@ export interface CalendarEventDto {
   isReadOnly: boolean;
   /** True when the event mirrors a Google one, so the UI can mark its origin. */
   isFromGoogle: boolean;
+  /** What this row is — see CalendarItemKind. */
+  kind: CalendarItemKind;
+  /**
+   * Whether a task has been ticked off. Always false on the other two kinds: an
+   * event is not a thing you complete.
+   */
+  isDone: boolean;
 }
 
 /**

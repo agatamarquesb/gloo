@@ -11,12 +11,19 @@ export function DateField({
   value,
   onChange,
   isDisabled = false,
+  hideLabel = false,
 }: {
   label: string;
   /** ISO date string (YYYY-MM-DD), or '' for empty. */
   value: string;
   onChange: (value: string) => void;
   isDisabled?: boolean;
+  /**
+   * Keeps the name for screen readers and takes it off the screen — for a
+   * property row, where the label is already written in the column to the left
+   * and a second copy above the field read as two fields.
+   */
+  hideLabel?: boolean;
 }) {
   let parsed: CalendarDate | null = null;
   try {
@@ -31,7 +38,7 @@ export function DateField({
       value={parsed}
       onChange={(date) => onChange(date ? date.toString() : '')}
     >
-      <Label>{label}</Label>
+      <Label className={hideLabel ? "sr-only" : undefined}>{label}</Label>
       <HeroDateField.Group fullWidth>
         <HeroDateField.Input>
           {(segment) => <HeroDateField.Segment segment={segment} />}

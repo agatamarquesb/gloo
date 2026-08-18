@@ -8,7 +8,7 @@ import {
 
 import { CalendarViewMode } from '@gloo/shared';
 
-import { CALENDAR_LOCALE } from '@/lib/weekStart';
+import { CALENDAR_FIRST_DAY, CALENDAR_LOCALE } from '@/lib/weekStart';
 
 export interface DateRange {
   /** First day on the grid, inclusive. */
@@ -32,14 +32,14 @@ export function visibleRange(focused: CalendarDate, mode: CalendarViewMode): Dat
 
   if (mode === CalendarViewMode.WEEK) {
     return {
-      start: startOfWeek(focused, CALENDAR_LOCALE),
-      end: endOfWeek(focused, CALENDAR_LOCALE),
+      start: startOfWeek(focused, CALENDAR_LOCALE, CALENDAR_FIRST_DAY),
+      end: endOfWeek(focused, CALENDAR_LOCALE, CALENDAR_FIRST_DAY),
     };
   }
 
   return {
-    start: startOfWeek(startOfMonth(focused), CALENDAR_LOCALE),
-    end: endOfWeek(endOfMonth(focused), CALENDAR_LOCALE),
+    start: startOfWeek(startOfMonth(focused), CALENDAR_LOCALE, CALENDAR_FIRST_DAY),
+    end: endOfWeek(endOfMonth(focused), CALENDAR_LOCALE, CALENDAR_FIRST_DAY),
   };
 }
 

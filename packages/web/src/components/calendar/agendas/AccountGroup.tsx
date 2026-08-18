@@ -10,7 +10,7 @@ import {
   useUpdateCalendarAccount,
 } from '@/hooks/queries/calendar';
 import { FIELD_PANEL } from '@/theme/fieldStyles';
-import { menuRow, quietTextButton } from '@/theme/styleConstants';
+import { dotsMenuButton, menuRow, quietTextButton } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 import { AgendaRow } from './AgendaRow';
@@ -105,7 +105,7 @@ export function AccountGroup({
               isIconOnly
               size="sm"
               variant="ghost"
-              className="shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+              className={`${dotsMenuButton} opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100`}
               aria-label={strings.calendar.agendas.manageAccount}
             >
               <MoreHorizontal className="size-4" />

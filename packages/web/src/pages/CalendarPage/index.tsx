@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { getLocalTimeZone, parseDate, today, type CalendarDate } from '@internationalized/date';
 import { useSearchParams } from 'react-router';
 
@@ -25,6 +25,7 @@ import {
   useCalendarAccounts,
   useCalendarEvents,
   useConnectGoogle,
+  useToggleEventDone,
   useGoogleSync,
   useUpdateEvent,
 } from '@/hooks/queries/calendar';
@@ -70,6 +71,13 @@ export function CalendarPage() {
   const [viewMode, setViewMode] = useState<CalendarViewMode>(CalendarViewMode.WEEK);
   const [search, setSearch] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  /**
+   * The lean the grid gives when it is paged — see gloo-nudge in globals.css.
+   * `tick` exists only to restart the animation: it picks which of the two
+   * identical classes is on the grid, and re-applying the one already there
+   * would play nothing at all.
+   */
+  const [nudge, setNudge] = useState({ tick: 0, dx: 0 });
   /**
    * What the dialog is doing, or null when it is shut. `start` is what a click
    * on empty grid means — the slot the new event should open on.
@@ -138,6 +146,7 @@ export function CalendarPage() {
   );
 
   const connectGoogle = useConnectGoogle();
+  const toggleDone = useToggleEventDone();
   const updateEvent = useUpdateEvent();
   /**
    * A drag onto a new time that still has to ask "this occurrence or all of
@@ -176,7 +185,7 @@ export function CalendarPage() {
   }
 
   const drag = useEventDrag({
-    onCommit: (event, startsAt, endsAt) => {
+    onCommit: (event, startsAt, endsAt, options) => {
       // Two things can make a drag need a question first: a series has to say
       // which occurrences move, and an event with other people on it has to say
       // whether they should be told. Neither applies to most drags, which
@@ -185,7 +194,15 @@ export function CalendarPage() {
         setPendingDrag({ event, startsAt, endsAt });
         return;
       }
-      updateEvent.mutate({ id: event.id, startsAt, endsAt });
+      // `isAllDay` only arrives from a drag out of the all-day strip: the item
+      // has just been given an hour, and the flag saying it had none has to go
+      // with the same write or the grid would put it straight back.
+      updateEvent.mutate({
+        id: event.id,
+        startsAt,
+        endsAt,
+        ...(options?.isAllDay === undefined ? {} : { isAllDay: options.isAllDay }),
+      });
     },
   });
 
@@ -195,12 +212,34 @@ export function CalendarPage() {
     setSelectedKey(instanceKey(event));
   }
 
+  /** Paging: the week itself moves, and the grid leans the way it went. */
+  function step(direction: 1 | -1) {
+    setFocusedDate(stepFocused(focusedDate, viewMode, direction));
+    // Away from the arrow you pressed: forward leans left, as if the next week
+    // were being pulled in from the right.
+    setNudge((previous) => ({ tick: previous.tick + 1, dx: direction * -5 }));
+  }
+
   return (
     <div>
       <PageHeader title={strings.nav.calendar} />
 
-      <div className="grid grid-cols-1 gap-4 px-4 pb-6 md:gap-5 md:px-6 xl:grid-cols-3">
-        <div className="flex flex-col gap-4 md:gap-5 xl:col-span-2">
+      {/* Three quarters to the grid rather than two thirds: the right-hand
+          column holds a month, a detail panel and a list of names, none of which
+          gets better with more width, while the grid is the page.
+
+          One screen tall at xl and never taller, so the page itself has nothing
+          to scroll: what scrolls is whichever of the two columns the pointer is
+          over — the grid through its own hours, the right-hand column through
+          its cards. A page that scrolled as well made three scrollbars out of
+          one gesture, and the bottom of the card was somewhere you had to travel
+          to. The row is capped as well as the container, because a grid row
+          sizes to its content and would otherwise overflow the height set here.
+
+          Below xl the two columns stack, and a stacked page has to be as long as
+          what is in it. */}
+      <div className="grid grid-cols-1 gap-4 px-4 pb-6 md:gap-5 md:px-6 xl:h-[calc(100vh-9.5rem)] xl:grid-cols-4 xl:grid-rows-[minmax(0,1fr)]">
+        <div className="flex min-h-0 flex-col gap-4 md:gap-5 xl:col-span-3">
           {/* The outcome of a Google link, which arrives as a redirect rather
               than as a response to anything the page asked for. Dismissible,
               and cleared from the URL above. */}
@@ -229,66 +268,90 @@ export function CalendarPage() {
             </div>
           ) : null}
 
-          <section className="gloo-rise flex max-h-[calc(100vh-9rem)] flex-col gap-4 rounded-3xl bg-surface p-4 shadow-surface md:p-5">
+          {/* `flex-1` rather than a height of its own: the row is as tall as the
+              taller of the two columns, so the grid now ends exactly where the
+              agendas under the mini calendar end. It used to stop at its own
+              content and leave a strip of bare page below it. */}
+          <section className="gloo-rise flex min-h-0 flex-1 flex-col gap-4 rounded-3xl bg-surface p-4 shadow-surface md:p-5">
             <CalendarToolbar
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               range={range}
-              onStep={(direction) => setFocusedDate(stepFocused(focusedDate, viewMode, direction))}
+              onStep={step}
               onToday={() => setFocusedDate(today(getLocalTimeZone()))}
               search={search}
               onSearchChange={setSearch}
               onCreateEvent={() => setEditing({ event: null, start: defaultStart() })}
             />
 
-            {viewMode === CalendarViewMode.MONTH ? (
-              <CalendarMonthGrid
-                days={days}
-                events={visibleEvents}
-                agendasById={agendasById}
-                selectedEventId={selectedKey}
-                onSelectEvent={handleSelect}
-                onOpenDay={(day) => {
-                  setFocusedDate(day);
-                  setViewMode(CalendarViewMode.DAY);
-                }}
-                onCreateOnDay={(start) => setEditing({ event: null, start })}
-                focusedMonth={focusedDate.month}
-                todayIso={today(getLocalTimeZone()).toString()}
-              />
-            ) : (
-              <CalendarTimeGrid
-                days={days}
-                events={visibleEvents}
-                agendasById={agendasById}
-                selectedEventId={selectedKey}
-                onSelectEvent={handleSelect}
-                onEventPointerDown={drag.beginMove}
-                onEventResizeStart={drag.beginResize}
-                onPointerMove={drag.handlePointerMove}
-                onPointerUp={drag.handlePointerUp}
-                dragPreview={drag.preview}
-                onSlotClick={(start) => setEditing({ event: null, start })}
-                todayIso={today(getLocalTimeZone()).toString()}
-              />
-            )}
+            {/* The grid and nothing else leans: the toolbar above it is what did
+                the paging, and a heading that flinches when you press its own
+                arrow reads as a misclick. */}
+            <div
+              className={`flex min-h-0 flex-1 flex-col ${
+                nudge.tick === 0 ? '' : nudge.tick % 2 === 0 ? 'gloo-nudge-a' : 'gloo-nudge-b'
+              }`}
+              style={{ '--nudge': `${nudge.dx}px` } as CSSProperties}
+            >
+              {viewMode === CalendarViewMode.MONTH ? (
+                <CalendarMonthGrid
+                  days={days}
+                  events={visibleEvents}
+                  agendasById={agendasById}
+                  selectedEventId={selectedKey}
+                  onSelectEvent={handleSelect}
+                  onOpenDay={(day) => {
+                    setFocusedDate(day);
+                    setViewMode(CalendarViewMode.DAY);
+                  }}
+                  onCreateOnDay={(start) => setEditing({ event: null, start })}
+                  focusedMonth={focusedDate.month}
+                  todayIso={today(getLocalTimeZone()).toString()}
+                />
+              ) : (
+                <CalendarTimeGrid
+                  days={days}
+                  events={visibleEvents}
+                  agendasById={agendasById}
+                  selectedEventId={selectedKey}
+                  onSelectEvent={handleSelect}
+                  onToggleDone={(event, done) => toggleDone.mutate({ id: event.id, done })}
+                  onEventPointerDown={drag.beginMove}
+                  onEventResizeStart={drag.beginResize}
+                  onEventScheduleStart={drag.beginSchedule}
+                  onPointerMove={drag.handlePointerMove}
+                  onPointerUp={drag.handlePointerUp}
+                  dragPreview={drag.preview}
+                  onSlotClick={(start) => setEditing({ event: null, start })}
+                  todayIso={today(getLocalTimeZone()).toString()}
+                />
+              )}
+            </div>
           </section>
         </div>
 
-        <div className="flex flex-col gap-4 md:gap-5">
+        {/* The column is its own scroller: the month, the details of whatever is
+            selected and a long list of agendas do not always fit one screen, and
+            this is what the pointer scrolls when it is over them. */}
+        <div className="gloo-thin-scroll flex min-h-0 flex-col gap-4 overflow-y-auto md:gap-5">
           <MiniCalendarCard
             focusedDate={focusedDate}
             onFocusedDateChange={setFocusedDate}
             visibleRange={range}
           />
-          <EventDetailsCard
-            event={selectedEvent}
-            agenda={selectedEvent ? agendasById.get(selectedEvent.agendaId) : undefined}
-            onEdit={() =>
-              selectedEvent &&
-              setEditing({ event: selectedEvent, start: new Date(selectedEvent.startsAt) })
-            }
-          />
+          {/* Only when there is something to detail. An empty card telling you
+              to select an event was a permanent hole between the month and the
+              agendas — the agendas simply start here when nothing is selected,
+              and move down to make room when something is. */}
+          {selectedEvent ? (
+            <EventDetailsCard
+              event={selectedEvent}
+              agenda={agendasById.get(selectedEvent.agendaId)}
+              onEdit={() =>
+                setEditing({ event: selectedEvent, start: new Date(selectedEvent.startsAt) })
+              }
+            />
+          ) : null}
           <AgendasCard onLinkGoogle={() => connectGoogle.mutate()} />
         </div>
       </div>

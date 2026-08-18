@@ -17,6 +17,7 @@ import {
   blockActionCluster,
   blockBox,
   blockHeaderRow,
+  blockHeadingLead,
   blockLeadColumn,
   blockRow,
   blockRowList,
@@ -374,7 +375,7 @@ export function AttachmentsBlock({
         {/* The shared column, so this heading starts exactly where Notas' and a
             checklist's titles do. Dropped in the task modal — see `compact`. */}
         {compact ? null : (
-          <span className={blockLeadColumn}>
+          <span className={blockHeadingLead}>
             <Paperclip className="size-4 text-foreground" aria-hidden />
           </span>
         )}
@@ -385,7 +386,18 @@ export function AttachmentsBlock({
       </div>
 
       {attachments.length === 0 ? (
-        <p className="text-xs text-muted">{strings.attachment.empty}</p>
+        // Compact — the task dialog, where the block is a quadrant with a height
+        // of its own — the line takes that whole height and sits in the middle
+        // of it, level with the same sentence in the note beside it. In the
+        // routine modal the blocks are stacked and have no spare height, so it
+        // stays where it was.
+        <p
+          className={`text-xs text-muted ${
+            compact ? 'flex flex-1 items-center justify-center text-center' : ''
+          }`}
+        >
+          {strings.attachment.empty}
+        </p>
       ) : (
         // Compact, the list is the part of the block that moves: it takes the
         // height left under the heading and scrolls inside it, softening

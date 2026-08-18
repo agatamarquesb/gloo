@@ -494,6 +494,27 @@ export function endOfDayInZone(date: string, timeZone: string): string {
 }
 
 /**
+ * The calendar day an instant falls on in a given zone, as `YYYY-MM-DD`.
+ *
+ * What a Google task's `due` is made of: the Tasks API stores a date and
+ * truncates whatever time is sent with it, so the only question that matters
+ * about a task's instant is which day it lands on *where the user is* — read in
+ * UTC, a 21:00 task in São Paulo is due tomorrow.
+ *
+ * Here beside endOfDayInZone for the same reason that one is: it is the same
+ * instant-to-wall-clock conversion the expansion already does, and a second
+ * implementation of it is what this module exists to prevent.
+ */
+export function dateInZone(instant: Date | string | number, timeZone: string): string {
+  const wall = toWallClock(new Date(instant).getTime(), timeZone);
+  return `${wall.year}-${pad2(wall.month)}-${pad2(wall.day)}`;
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+/**
  * The slot a given instant belongs to in a series — used when the client edits
  * an occurrence it generated itself and has to tell the API which one it meant.
  *

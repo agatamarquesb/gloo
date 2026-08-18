@@ -9,7 +9,7 @@ import { useCreateRoutine, useRoutines } from '@/hooks/queries/routines';
 import { useMe } from '@/hooks/queries/auth';
 import { canMutateEntity } from '@/lib/permissions';
 import { FIELD_PANEL } from '@/theme/fieldStyles';
-import { menuRow } from '@/theme/styleConstants';
+import { dotsMenuButton, menuRow } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 import { AllRoutines } from './AllRoutines';
@@ -158,7 +158,7 @@ export function RoutinesCard() {
             isIconOnly
             size="sm"
             variant="ghost"
-            className="text-muted"
+            className={dotsMenuButton}
             aria-label={strings.routine.menu}
           >
             <MoreHorizontal className="size-4" />
@@ -223,7 +223,7 @@ export function RoutinesCard() {
           // exactly that padding, so the rows and the month heading start and
           // end on the card's own margins — the same edges as "Adicionar
           // rotina" below them — while the lift keeps its room.
-          className={`${LIST_HEIGHT} -mx-1.5 -mt-2 overflow-y-scroll px-1.5 py-1 [scrollbar-width:thin]`}
+          className={`${LIST_HEIGHT} gloo-thin-scroll -mx-1.5 -mt-2 overflow-y-scroll px-1.5 py-1`}
         >
           {groups.map((group) => (
             <section key={group.key} className="mb-3 last:mb-0">

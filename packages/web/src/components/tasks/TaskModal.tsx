@@ -16,7 +16,6 @@ import {
   Gauge,
   Link2,
   Pencil,
-  Plus,
   Tag,
   Trash2,
   UserRound,
@@ -32,6 +31,7 @@ import { Button as AriaButton, TextArea, TextField } from 'react-aria-components
 
 import {
   LabelScope,
+  Role,
   TaskStatus,
   type AttachmentDto,
   type TaskDetailDto,
@@ -43,6 +43,7 @@ import { AttachmentsBlock } from '@/components/common/AttachmentsBlock';
 import { NotesBlock } from '@/components/common/NotesBlock';
 import { isNotesEmpty } from '@/components/common/RichNotes';
 import { SecondaryButton } from '@/components/common/SecondaryButton';
+import { AssigneeValue } from '@/components/common/AssigneeValue';
 import { UserAvatar } from '@/components/common/UserAvatar';
 // The picker a routine's tags are chosen from — the same panel, the same
 // create/edit flow. Tags are one pool shared by both kinds of thing, so this is
@@ -51,12 +52,25 @@ import { LabelPicker } from '@/components/dashboard/LabelPicker';
 import { useMe } from '@/hooks/queries/auth';
 import { useLabels } from '@/hooks/queries/labels';
 import { useSectors } from '@/hooks/queries/sectors';
-import { useDeleteTask, useTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/queries/tasks';
+import {
+  useCreateTask,
+  useDeleteTask,
+  useTask,
+  useUpdateTask,
+  useUpdateTaskStatus,
+} from '@/hooks/queries/tasks';
 import { useUsers } from '@/hooks/queries/users';
 import { formatDay, isDayPast } from '@/lib/formatDate';
 import { canMutateEntity } from '@/lib/permissions';
 import { playSound } from '@/lib/sounds';
-import { FIELD_PANEL, LISTBOX_FLUSH, TEXT_LISTBOX_ITEM, listboxPopover } from '@/theme/fieldStyles';
+import {
+  FIELD_PANEL,
+  LISTBOX_FLUSH,
+  OPEN_FIELD_FILL,
+  OPEN_FIELD_FILL_LIGHT,
+  TEXT_LISTBOX_ITEM,
+  listboxPopover,
+} from '@/theme/fieldStyles';
 import { colorFill } from '@/theme/labelColors';
 import {
   EMPTY_VALUE,
@@ -64,6 +78,8 @@ import {
   PROPERTY_LIST,
   PROPERTY_ROW_PITCH,
   PROPERTY_ROW_SPLIT,
+  PROPERTY_VALUE,
+  PROPERTY_VALUE_LOWER,
   VALUE_CELL,
   propertyStyles,
 } from '@/theme/propertyRow';
@@ -72,7 +88,6 @@ import {
   dialogSection,
   modalDivider,
   modalDividerGap,
-  outlineControl,
   quietTextButton,
 } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
@@ -124,37 +139,11 @@ const DIALOG_PADDING = 'px-5 pt-5 pb-[15px]';
 const DIALOG_INSET = 'p-4';
 
 /**
- * The tags a task carries, above its title — and, in edit mode, the way to add
- * one.
- *
- * 10px of air above and below rather than a row height: the pills set how tall
- * this is, and the row only has to keep them off the header's rule and off the
- * title. That 10 is also what puts a tag's top edge level with "Visão geral"
- * across the gutter — the note's heading row is 40px with a 20px line centred in
- * it, so its text starts 10px down as well. `min-h` for the case where there are
- * none and the dialog is locked — without it the row collapses and the title
- * jumps the moment a first tag is added.
- */
-const TAGS_ROW = 'flex min-h-5 flex-wrap items-center gap-2 py-[10px]';
-
-/**
  * A tag on a task. The same cut as a routine's — see PILL_SHAPE — restated here
  * because the two are separate vocabularies now (see LabelScope) and only look
  * alike on purpose; one changing size should not drag the other with it.
  */
 const TASK_LABEL_PILL = 'rounded-md px-2 py-1 text-[13px] leading-4 text-black';
-
-/**
- * A property's value: the routine modal's own 14px, so the two dialogs read at
- * one size, in lower case so the column reads as one voice rather than as a chip
- * among sentences.
- *
- * `font-medium` — the same step up the subtasks and the attachment titles take.
- * The labels are medium too, so what tells a value from its label here is the
- * colour, not the weight: grey asks, full strength answers.
- */
-const PROPERTY_VALUE = 'text-sm font-medium text-foreground';
-const PROPERTY_VALUE_LOWER = `${PROPERTY_VALUE} lowercase`;
 
 /**
  * What every popover a property opens is set in: the size of the value it drops
@@ -223,12 +212,21 @@ const PROPERTY_PANEL = 'w-[171.5px]';
 const TITLE_TEXT = 'block w-full min-w-0 text-[1.375rem] break-words text-foreground';
 
 /**
- * The distance from the title to the two columns under it — half what the body's
- * own `gap-4` gave it, which read as a band of empty dialog rather than as
- * spacing. On the title's cell rather than as the grid's row gap, because the
- * row below it closes against its own rules and must keep none.
+ * The header stack: 10px from the header's rule down to the title, 10px from the
+ * title down to its tags, and 8px from the tags to the properties.
+ *
+ * The three numbers are the routine dialog's — see HEADER_ROW there — because
+ * the two dialogs are the same object seen twice and now stack it the same way:
+ * name, then tags, then a column of properties. They were this dialog's numbers
+ * first, back when the tags led; moving them under the title left the title
+ * against the rule and the tags against the properties, which is the look these
+ * put back.
+ *
+ * On the title's cell rather than as the grid's row gap, because the row below it
+ * closes against its own rules and must keep none.
  */
-const TITLE_GAP = 'pb-2';
+const TITLE_GAP = 'pt-[10px] pb-2';
+const TAGS_ROW = 'pt-[10px]';
 
 /**
  * The left column's own inset, matching the padding every section in the dialog
@@ -274,10 +272,11 @@ const COLUMN_RULE =
  * it is.
  */
 const PROPERTY_ORDER = [
-  'priority',
+  'labels',
   'deadline',
   'sector',
   'project',
+  'priority',
   'status',
   'assignee',
   'progress',
@@ -370,61 +369,6 @@ function toFormValue(task: TaskDetailDto): FormState {
 }
 
 /**
- * Who the task belongs to, as the property row shows it.
- *
- * One person reads as a name with their face beside it, the way a routine's
- * does. More than one drops the names and keeps the faces: three names in a
- * property cell wrap onto three lines, and the faces are what you recognise a
- * team by anyway.
- */
-function AssigneeValue({ users, canAdd }: { users: UserDto[]; canAdd: boolean }) {
-  if (users.length === 0) {
-    return <span className={`${PROPERTY_VALUE} text-muted!`}>{strings.task.noAssignees}</span>;
-  }
-
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      {users.length === 1 ? (
-        <span className={`flex min-w-0 items-center gap-2 ${PROPERTY_VALUE}`}>
-          <UserAvatar
-            name={users[0].name}
-            avatarUrl={users[0].avatarUrl}
-            size="sm"
-            className="size-5"
-          />
-          <span className="truncate">{users[0].name}</span>
-        </span>
-      ) : (
-        // Overlapped, each ringed in the dialog's own surface so the faces read
-        // as a stack rather than a smear. Sized to the row, not to the avatar
-        // group on a task card, which sits in a taller row.
-        <span className="flex items-center -space-x-1.5">
-          {users.map((user) => (
-            <span key={user.id} className="rounded-full ring-2 ring-surface" title={user.name}>
-              <UserAvatar name={user.name} avatarUrl={user.avatarUrl} size="sm" className="size-5" />
-            </span>
-          ))}
-        </span>
-      )}
-
-      {/* "Add someone else", in the avatar group's own shape and right where the
-          faces end — so the way to add the second person is beside the first
-          rather than at the far side of the row. It takes the chevron's place
-          once anyone is assigned: an empty property still needs the chevron to
-          say it can be opened at all, but a face plus a plus says it better. */}
-      {canAdd ? (
-        <span
-          aria-hidden
-          className="flex size-5 shrink-0 items-center justify-center rounded-full border border-dashed border-outline-control text-muted"
-        >
-          <Plus className="size-3" />
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
-/**
  * The deadline: a date written out in full ("30 de julho, 2026") that opens a
  * calendar when the dialog is unlocked.
  *
@@ -462,7 +406,7 @@ function DeadlineValue({
   }, [value]);
 
   const label = formatDay(value) ?? EMPTY_VALUE;
-  const tone = isOverdue ? 'text-status-overdue-text!' : '';
+  const tone = isOverdue ? 'text-overdue-ink!' : '';
   // The mark belongs to the date, not to the row: it says this *day* has passed,
   // so it follows the day itself and moves with it into and out of edit mode —
   // hence `gap-1` below as well as on the trigger it turns into (see
@@ -558,93 +502,28 @@ const SAMPLE_PROJECTS = ['Lançamento', 'ID Juliana', 'Ferramenta ABC'] as const
  * Editing only: a tag is part of what a task *is*, and everything else about
  * that is behind Editar too.
  */
-function TaskLabelsRow({
-  labelIds,
-  onChange,
-  isEditing,
-}: {
-  labelIds: string[];
-  onChange: (ids: string[]) => void;
-  isEditing: boolean;
-}) {
-  // The task pool, never the routines' — see LabelScope.
+/**
+ * The task's tags as pills and nothing else — under the title while the dialog
+ * is locked, and inside the Etiquetas row's trigger while it is not.
+ *
+ * Read-only in both places: reading, there is nothing to press; editing, the
+ * pills are *inside* the picker's own trigger, and a control within a control
+ * would swallow the press that opens it.
+ */
+function TaskLabelPills({ labelIds, className = '' }: { labelIds: string[]; className?: string }) {
   const { data: labels = [] } = useLabels(LabelScope.TASK);
   const selected = labels.filter((label) => labelIds.includes(label.id));
 
-  // Locked and empty there is nothing to show and nothing to add — but the row
-  // itself stays, so unlocking the dialog doesn't move the title.
-  if (!isEditing && selected.length === 0) return <div className={TAGS_ROW} />;
+  if (selected.length === 0) return null;
 
   return (
-    <div className={TAGS_ROW}>
-      {isEditing ? (
-        <LabelPicker
-          scope={LabelScope.TASK}
-          selectedIds={labelIds}
-          onChange={onChange}
-          trigger={
-            <Button
-              size="sm"
-              variant="outline"
-              isIconOnly={selected.length > 0}
-              aria-label={strings.label.add}
-              className={`shrink-0 rounded-full ${outlineControl} ${
-                selected.length === 0 ? 'h-6 min-h-0 gap-1 px-2 text-[13px]' : 'size-6'
-              }`}
-            >
-              {/* `title` on a wrapper, not the Button — HeroUI's Button doesn't
-                  forward it, the same reason the note's format buttons wrap
-                  theirs. With no tags yet the button carries the word too: an
-                  empty row and a lone glyph said nothing about what pressing it
-                  would produce. Once there are tags the row says it, and the
-                  button comes down to the "+" at the head of them. */}
-              {selected.length === 0 ? (
-                <span title={strings.label.add} className="flex items-center gap-1">
-                  <Tag className="size-3.5" />
-                  {strings.label.one}
-                </span>
-              ) : (
-                <span
-                  title={strings.label.add}
-                  className="flex size-full items-center justify-center"
-                >
-                  <Plus className="size-3.5" />
-                </span>
-              )}
-            </Button>
-          }
-        />
-      ) : null}
-
-      {selected.map((label) =>
-        isEditing ? (
-          // Editing, a tag is a way into its own editor: the same panel the "+"
-          // opens, on the label pressed. Reading, it is a pill and nothing else.
-          <LabelPicker
-            key={label.id}
-            scope={LabelScope.TASK}
-            selectedIds={labelIds}
-            onChange={onChange}
-            startOn={{ kind: 'edit', label }}
-            trigger={
-              // HeroUI's Button, not a bare one: the popover hands its trigger
-              // press handling that a plain DOM button never receives. Its own
-              // height and padding are cleared so what is left is the pill.
-              <Button
-                variant="ghost"
-                {...colorFill(label.color, `${TASK_LABEL_PILL} h-auto min-h-0`)}
-              >
-                {label.name}
-              </Button>
-            }
-          />
-        ) : (
-          <span key={label.id} {...colorFill(label.color, TASK_LABEL_PILL)}>
-            {label.name}
-          </span>
-        ),
-      )}
-    </div>
+    <span className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+      {selected.map((label) => (
+        <span key={label.id} {...colorFill(label.color, TASK_LABEL_PILL)}>
+          {label.name}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -652,6 +531,7 @@ function TaskModalContent({
   task,
   onClose,
   flushRef,
+  isDraft = false,
 }: {
   task: TaskDetailDto;
   onClose: () => void;
@@ -661,11 +541,23 @@ function TaskModalContent({
    * where the form is out of reach; this is how the two meet.
    */
   flushRef: RefObject<() => void>;
+  /**
+   * Whether `task` is a blank one that does not exist yet — see NewTaskModal.
+   *
+   * The dialog is the same dialog: same columns, same rules, same property list.
+   * What a draft changes is when it writes. An existing task autosaves as you
+   * type and keeps whatever is on screen when you leave; a draft is written once,
+   * by Salvar, and closing any other way leaves nothing behind. Everything that
+   * needs a row to already exist — the link to it, deleting it, moving its
+   * status, its subtasks — is out until it does.
+   */
+  isDraft?: boolean;
 }) {
   const { data: me } = useMe();
   const { data: sectors = [] } = useSectors();
   const { data: users = [] } = useUsers();
 
+  const createTask = useCreateTask();
   const updateTask = useUpdateTask(task.id);
   const updateStatus = useUpdateTaskStatus(task.id);
   const deleteTask = useDeleteTask();
@@ -678,9 +570,10 @@ function TaskModalContent({
   const [form, setForm] = useState<FormState>(() => toFormValue(task));
   /**
    * Opening a task shows it, it doesn't hand you a form — the same rule as a
-   * routine. "Editar" in the header unlocks it.
+   * routine. "Editar" in the header unlocks it. A draft skips that: it is a
+   * form and nothing else until it has been saved.
    */
-  const [isEditing, setEditing] = useState(false);
+  const [isEditing, setEditing] = useState(isDraft);
 
   /**
    * Whether the caret is in the title.
@@ -721,7 +614,7 @@ function TaskModalContent({
    */
   useEffect(() => {
     setForm(toFormValue(task));
-    setEditing(false);
+    setEditing(isDraft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.id]);
 
@@ -749,7 +642,10 @@ function TaskModalContent({
 
   const sectorName = sectors.find((sector) => sector.id === form.sectorId)?.name ?? EMPTY_VALUE;
 
-  const canSubmit = Boolean(form.title.trim());
+  // A sector as well as a name, but only for a draft: the API requires one to
+  // create a task, while an existing one always has it and the row can be
+  // cleared to blank on screen without the save being refused.
+  const canSubmit = Boolean(form.title.trim()) && (!isDraft || Boolean(form.sectorId));
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -774,13 +670,15 @@ function TaskModalContent({
   }, [task.id]);
 
   const saveIfDirty = useCallback(() => {
-    if (!canEdit || !canSubmit) return;
+    // A draft has nothing to save *to* — there is no row yet, and creating one
+    // behind the user's back is the opposite of what a blank dialog promises.
+    if (isDraft || !canEdit || !canSubmit) return;
     const serialised = JSON.stringify(payload);
     if (serialised === savedRef.current) return;
 
     savedRef.current = serialised;
     updateTask.mutate(payload);
-  }, [canEdit, canSubmit, payload, updateTask]);
+  }, [isDraft, canEdit, canSubmit, payload, updateTask]);
 
   useEffect(() => {
     flushRef.current = saveIfDirty;
@@ -794,6 +692,9 @@ function TaskModalContent({
    * Cancelar is the one route that does not, below.
    */
   function handleClose() {
+    // saveIfDirty is a no-op on a draft, so this is also the door that throws a
+    // half-written new task away — which is what a × on something never saved
+    // has to mean.
     saveIfDirty();
     onClose();
   }
@@ -826,6 +727,15 @@ function TaskModalContent({
   }
 
   function handleSubmit() {
+    // A draft's Salvar is what brings the task into existence, and the dialog
+    // has done its job the moment it does — there is nothing left on screen to
+    // drop back into reading. The list behind it picks the new task up from the
+    // mutation's own invalidation.
+    if (isDraft) {
+      createTask.mutate(payload, { onSuccess: onClose });
+      return;
+    }
+
     // Commits and drops back to reading it, like the routine modal's Salvar:
     // it is the counterpart of Editar, not of Cancelar.
     savedRef.current = JSON.stringify(payload);
@@ -843,6 +753,41 @@ function TaskModalContent({
    * heading, where what it measures is on screen beside it.
    */
   const propertyRows: Record<TaskPropertyKey, ReactNode> = {
+    // Etiquetas leads the list, and only while the dialog is unlocked: it is the
+    // one property whose value has somewhere else to live — under the title,
+    // where a reader looks for it. So this row is how you *set* the tags, not
+    // how you read them, and it is gone the moment there is nothing to set.
+    labels: isEditing ? (
+      <div className={row}>
+        <span className={fieldLabel}>
+          <Tag className={LABEL_ICON} aria-hidden />
+          {strings.label.title}
+        </span>
+        <div className={VALUE_CELL}>
+          <LabelPicker
+            scope={LabelScope.TASK}
+            selectedIds={form.labelIds}
+            onChange={(labelIds) => set('labelIds', labelIds)}
+            trigger={
+              // The same bare trigger the other rows use, with the chosen tags
+              // where their value would be — so the row answers the question it
+              // asks, and the panel drops from the same edge as every other
+              // property's. No ground under the pointer, unlike those: the pills
+              // *are* the value, and a grey band behind them read as a second,
+              // larger pill wrapped round the tags.
+              <Button variant="ghost" className={`${trigger.replace(OPEN_FIELD_FILL, OPEN_FIELD_FILL_LIGHT)} h-auto min-h-0 justify-start bg-transparent hover:bg-transparent data-[hovered=true]:bg-transparent`}>
+                {form.labelIds.length === 0 ? (
+                  <span className={PROPERTY_VALUE}>{EMPTY_VALUE}</span>
+                ) : (
+                  <TaskLabelPills labelIds={form.labelIds} />
+                )}
+              </Button>
+            }
+          />
+        </div>
+      </div>
+    ) : null,
+
     // The same control as the status row below, in the priority palette: the
     // chip is the field and the options are the same chip in the other two
     // colours. See TaskPriorityChipSelect, and ChipSelect under it, which the
@@ -922,7 +867,7 @@ function TaskModalContent({
                 //
                 // text-xs is the size every popover in this column speaks at —
                 // see LISTBOX_TEXT.
-                className={`${TEXT_LISTBOX_ITEM} ${LISTBOX_TEXT} lowercase`}
+                className={`${TEXT_LISTBOX_ITEM} ${LISTBOX_TEXT} lowercase first-letter:uppercase`}
               >
                 {sector.name}
               </ListBox.Item>
@@ -989,7 +934,10 @@ function TaskModalContent({
         <div className={VALUE_CELL}>
           <TaskStatusChipSelect
             status={task.status}
-            isDisabled={!canEdit}
+            // A task starts "A fazer" and cannot be moved along before it
+            // exists, so on a draft the chip is the label of a state rather
+            // than a control.
+            isDisabled={!canEdit || isDraft}
             panelWidth={PROPERTY_PANEL}
             onChange={(status: TaskStatus) => updateStatus.mutate(status)}
           />
@@ -1069,32 +1017,49 @@ function TaskModalContent({
       <Modal.Header className={`flex flex-col ${dialogSection} ${COLUMN_INSET}`}>
         {/* The dialog still needs a name for screen readers; the task's own
             title carries it visually, so this one is hidden. */}
-        <Modal.Heading className="sr-only">{task.title}</Modal.Heading>
+        <Modal.Heading className="sr-only">
+          {isDraft ? strings.task.addTask : task.title}
+        </Modal.Heading>
 
         <div className="flex flex-wrap items-center gap-4">
-          <button type="button" className={`${quietTextButton} text-sm font-medium`} onClick={copyLink}>
-            <Link2 className="size-4" />
-            {strings.task.copyLink}
-          </button>
+          {/* Both of these need a task on the server: there is no address to
+              copy before one exists, and nothing to delete. A draft's header is
+              therefore only "Editando" and the way out. */}
+          {isDraft ? null : (
+            <button
+              type="button"
+              className={`${quietTextButton} text-sm font-medium`}
+              onClick={copyLink}
+            >
+              <Link2 className="size-4" />
+              {strings.task.copyLink}
+            </button>
+          )}
 
           {canEdit ? (
             <>
-              <button
-                type="button"
-                className={`${quietTextButton} text-sm font-medium`}
-                disabled={deleteTask.isPending}
-                onClick={() => {
-                  playSound('delete');
-                  handleDelete();
-                }}
-              >
-                <Trash2 className="size-4" />
-                {strings.task.deleteTask}
-              </button>
+              {/* Nothing to delete on a draft — the row it would remove does not
+                  exist until Salvar makes it. */}
+              {isDraft ? null : (
+                <button
+                  type="button"
+                  className={`${quietTextButton} text-sm font-medium`}
+                  disabled={deleteTask.isPending}
+                  onClick={() => {
+                    playSound('delete');
+                    handleDelete();
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                  {strings.task.deleteTask}
+                </button>
+              )}
 
               {/* Unlocks the dialog, then reports that it is unlocked — Salvar
                   is in the footer, so once you are editing there is nothing left
-                  for this slot to do but say so. */}
+                  for this slot to do but say so. A draft is only ever the first
+                  of those two: it opens unlocked and there is no locked state to
+                  go back to. */}
               {isEditing ? (
                 <span className="flex items-center gap-1.5 text-sm font-medium text-muted">
                   <Pencil className="size-4" />
@@ -1162,21 +1127,15 @@ function TaskModalContent({
             scroll inside, and what keeps the footer on the dialog's own bottom
             edge however many subtasks there are. */}
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-x-6 md:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] md:grid-rows-[auto_minmax(0,1fr)]">
-          {/* Row 1, left: the tags, the name and the properties — one cell, so
-              the note beside it starts level with the tags and ends level with
+          {/* Row 1, left: the name, its tags and the properties — one cell, so
+              the note beside it starts level with the title and ends level with
               the last property. They end at the gutter, where the properties do,
               so a long title wraps onto a second line rather than running the
-              width of the dialog. The tags lead: they say what kind of thing
-              this is before you read what it is called. */}
+              width of the dialog. */}
           <div
             className={`flex min-w-0 flex-col ${COLUMN_INSET} md:col-start-1 md:row-start-1`}
           >
             <div className={TITLE_GAP}>
-            <TaskLabelsRow
-              labelIds={form.labelIds}
-              onChange={(labelIds) => set('labelIds', labelIds)}
-              isEditing={isEditing}
-            />
             {isEditing && isTitleFocused ? (
               <TextField
                 aria-label={strings.task.fields.title}
@@ -1236,6 +1195,14 @@ function TaskModalContent({
                   form.title
                 )}
               </h2>
+            )}
+
+            {/* The tags, under the name they belong to — the routine dialog's
+                arrangement, and the reason this one no longer opens with a row
+                of pills above its own title. Locked only: editing, they are in
+                the Etiquetas property row, which is where they are changed. */}
+            {isEditing ? null : (
+              <TaskLabelPills labelIds={form.labelIds} className={TAGS_ROW} />
             )}
             </div>
 
@@ -1301,11 +1268,15 @@ function TaskModalContent({
           <div
             className={`flex min-h-0 min-w-0 flex-col pt-4 ${COLUMN_INSET} md:col-start-1 md:row-start-2`}
           >
+            {/* Present but read-only on a draft — every one of its controls
+                posts to /tasks/:id/subtasks, which has no id to post to yet. The
+                block still holds its place, so the dialog you save is the dialog
+                you get back, with the list ready to fill in. */}
             <TaskSubtasks
               taskId={task.id}
               subtasks={task.subtasks}
-              isEditing={isEditing}
-              canEdit={canEdit}
+              isEditing={isEditing && !isDraft}
+              canEdit={canEdit && !isDraft}
             />
           </div>
 
@@ -1348,6 +1319,101 @@ function TaskModalContent({
         </Modal.Footer>
       </div>
     </Modal.Dialog>
+  );
+}
+
+/** See draftTask: a stand-in for a person the dialog never actually reads. */
+const BLANK_USER: UserDto = {
+  id: '',
+  email: '',
+  name: '',
+  role: Role.EMPLOYEE,
+  jobTitle: null,
+  avatarUrl: null,
+};
+
+/**
+ * The blank task the create dialog is opened on.
+ *
+ * A whole TaskDetailDto rather than a partial one, because the dialog reads a
+ * task and nothing else — giving it a real-shaped empty one is what lets the
+ * create flow *be* the task modal instead of a second dialog that resembles it.
+ *
+ * The sector is the one field left deliberately unusable: an empty id matches no
+ * sector, so the row shows its placeholder and Salvar stays disabled until a
+ * real one is picked. The API requires it.
+ */
+function draftTask(userId: string | undefined, assigneeId: string | undefined): TaskDetailDto {
+  const now = new Date().toISOString();
+
+  return {
+    id: '',
+    title: '',
+    description: null,
+    dueDate: null,
+    priority: 'MEDIUM',
+    status: TaskStatus.TODO,
+    isOverdue: false,
+    progress: 0,
+    sector: { id: '', name: '' },
+    // An id in a UserDto's clothes: the only thing the dialog takes from this
+    // list is the ids, which is what it seeds the form's assigneeIds with, and
+    // the row on screen looks the people themselves up in the users query. The
+    // alternative — waiting for that query so a whole record could be copied in
+    // — would mean seeding the form after the dialog was already on screen.
+    assignees: assigneeId ? [{ ...BLANK_USER, id: assigneeId }] : [],
+    // The draft belongs to whoever opened it, which is what puts the dialog in
+    // edit mode for them — see canMutateEntity.
+    createdById: userId ?? '',
+    subtaskCount: 0,
+    attachmentCount: 0,
+    workedMs: 0,
+    startedAt: null,
+    completedAt: null,
+    labels: [],
+    attachments: [],
+    subtasks: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * "+ Adicionar tarefa": the task dialog, empty and already unlocked.
+ *
+ * The same component as TaskModal below, on a task that does not exist yet —
+ * see `isDraft` in TaskModalContent. What it is *not* is a second dialog with
+ * the same fields: the small create form this replaced had drifted into its own
+ * layout, and a task you were about to make looked nothing like a task you had.
+ */
+export function NewTaskModal({
+  onClose,
+  defaultAssigneeId,
+}: {
+  onClose: () => void;
+  /** Who the task lands on — the Dashboard fills in the person adding it. */
+  defaultAssigneeId?: string;
+}) {
+  const { data: me } = useMe();
+  const flushEdits = useRef<() => void>(() => {});
+
+  // Seeded once: re-making it on a later render would hand the dialog a fresh
+  // task object and reset the form under whoever is typing in it.
+  const [task] = useState(() => draftTask(me?.id, defaultAssigneeId));
+
+  return (
+    <Modal.Backdrop
+      isOpen
+      onOpenChange={(open) => {
+        // Nothing to flush — a draft is only ever written by Salvar — so
+        // dismissing from outside simply drops it.
+        if (!open) onClose();
+      }}
+    >
+      <Modal.Container scroll="inside" className={DIALOG_INSET}>
+        <TaskModalContent isDraft task={task} onClose={onClose} flushRef={flushEdits} />
+      </Modal.Container>
+    </Modal.Backdrop>
   );
 }
 

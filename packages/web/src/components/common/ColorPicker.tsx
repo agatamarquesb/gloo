@@ -236,15 +236,19 @@ function ColorMixer({
           <Input fullWidth placeholder="#000000" className="text-sm" />
         </TextField>
 
-        {/* Secondary: the primary action in this panel is Salvar, at the foot of
-            the label being edited. This one only adds a colour to a row. */}
+        {/* A glyph rather than the word: the panel is 288px wide and "Adicionar"
+            took a third of the row the hex is typed into. What it does is the
+            same either way — the colour on the square joins the row above and
+            fills the dashed "+" it was mixed from. */}
         <SecondaryButton
           size="sm"
-          className="h-9 shrink-0"
+          isIconOnly
+          className="size-9 shrink-0"
+          aria-label={strings.common.add}
           isDisabled={!isHexColor(typed)}
           onPress={() => isHexColor(typed) && onPick(typed)}
         >
-          {strings.common.add}
+          <Plus className="size-4" />
         </SecondaryButton>
       </div>
     </div>

@@ -164,9 +164,11 @@ export function RichNotes({
             different sizes. */}
         {isNotesEmpty(value) ? (
           <span
-            className={`pointer-events-none absolute top-0 left-0 text-muted ${
-              compact ? 'text-xs' : 'text-sm'
-            }`}
+            // Centred in the body in both dialogs now: the sentence is the
+            // whole of what an empty note has to say, and pinned to the top-left
+            // corner it read as a caption for the toolbar above it.
+            className="pointer-events-none absolute inset-0 flex items-center justify-center text-center text-xs text-muted"
+
           >
             {placeholder}
           </span>

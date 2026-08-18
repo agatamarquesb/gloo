@@ -10,6 +10,19 @@ interface MonthCalendarProps {
   onFocusChange: (date: CalendarDate) => void;
   onChange?: (date: CalendarDate) => void;
   /**
+   * The selected day, when the caller wants to own it.
+   *
+   * `null` means "nothing is selected, ever" — which is how the Dashboard drives
+   * this: react-aria only reports a *change*, so pressing the day already picked
+   * fired nothing and its summary could be opened but not closed from the same
+   * cell. Held empty, every press is a change, and the caller paints the day it
+   * considers picked itself (see gloo-day-picked).
+   *
+   * Left off, the calendar keeps its own selection, which is what the Calendar
+   * page's mini month wants.
+   */
+  value?: CalendarDate | null;
+  /**
    * Extra content drawn inside a day cell, under its number — the Dashboard's
    * sector dots.
    */
@@ -48,12 +61,9 @@ interface MonthCalendarProps {
  * up behind an arrow made the header's quietest control its loudest. What
  * answers instead is the arrow itself, which darkens while it is held down, so
  * the feedback arrives with the press that is already changing the month.
- *
- * `justify-self-center` is what centres the glyph on its column, since the
- * button's own box is narrower than the seventh of the row it sits in.
  */
 const NAV_BUTTON =
-  'justify-self-center bg-transparent text-muted shadow-none hover:bg-transparent data-[hovered=true]:bg-transparent data-[pressed=true]:text-foreground';
+  'bg-transparent text-muted shadow-none hover:bg-transparent data-[hovered=true]:bg-transparent data-[pressed=true]:text-foreground';
 
 /**
  * The month grid both calendars in the app are built from: the Dashboard's
@@ -76,6 +86,7 @@ export function MonthCalendar({
   className = '',
   leadingHeading = false,
   headerAction,
+  value,
 }: MonthCalendarProps) {
   return (
     <Calendar
@@ -90,30 +101,34 @@ export function MonthCalendar({
       firstDayOfWeek={CALENDAR_FIRST_DAY}
       focusedValue={focusedValue}
       onFocusChange={onFocusChange}
+      {...(value === undefined ? {} : { value })}
       // HeroUI types the selected value as DateValue — the union that also
       // covers zoned and time-bearing dates — because a Calendar can be driven
       // by any of them. This one is driven by a CalendarDate, so it only ever
       // hands back a plain date; the conversion is what says so to the compiler
       // without pushing the union onto every caller.
-      onChange={onChange ? (value) => onChange(toCalendarDate(value)) : undefined}
+      onChange={onChange ? (picked) => onChange(toCalendarDate(picked)) : undefined}
     >
-      <Calendar.Header className={leadingHeading ? 'grid grid-cols-7 items-center px-0' : ''}>
+      <Calendar.Header className={leadingHeading ? 'items-center px-0' : ''}>
         {leadingHeading ? (
           <>
-            {/* The header is the grid's own seven columns, so every control in
-                it stands over a weekday rather than wherever the flow left it:
-                the arrows land on the first and fifth, the month spans the three
-                between them, and the caller's control ends the row over the
-                last. It is also what stops the arrows stepping sideways as the
-                month name changes length. */}
+            {/* `< mês >` as one group on the left of the row, and no margin of
+                its own: measured, the button's 4px inset plus the chevron's own
+                inset inside its 16px box put the arrow's tip within a pixel of
+                where "dom." begins — which is the line the whole header is read
+                against. Pulling the button left of the row, as this did at
+                first, overshoots that by the width of both insets. */}
             <Calendar.NavButton slot="previous" className={NAV_BUTTON} />
-            <Calendar.Heading className="col-span-3 text-center" />
+            {/* A minimum width rather than a natural one, for the same reason
+                the centred arrangement gives the heading `flex-1`: the month
+                names are not the same length, and left to itself the arrow after
+                it would step sideways every time you paged the year. Sized to
+                the longest of them — "setembro de 2026". */}
+            <Calendar.Heading className="min-w-[8.75rem] text-center" />
             <Calendar.NavButton slot="next" className={NAV_BUTTON} />
-            <span aria-hidden />
-            {/* Centred on the last column rather than flush with the card's
-                edge: everything else in this row stands on a weekday, and one
-                control 7px off that grid is the one you notice. */}
-            <span className="justify-self-center">{headerAction}</span>
+            {/* Pushes whatever the caller sent to the far end of the row. */}
+            <span className="flex-1" />
+            {headerAction}
           </>
         ) : (
           <>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
+import { getLocalTimeZone, startOfWeek, today, type CalendarDate } from '@internationalized/date';
 import { useNavigate } from 'react-router';
+
+import { CalendarProvider } from '@gloo/shared';
 
 import { MonthCalendar } from '@/components/common/MonthCalendar';
 import { useMe } from '@/hooks/queries/auth';
@@ -9,6 +11,7 @@ import { useSectors } from '@/hooks/queries/sectors';
 import { useTasks, useTasksCalendar } from '@/hooks/queries/tasks';
 import { useSectorColors } from '@/hooks/ui/useSectorColors';
 import { CALENDAR_DATE_PARAM } from '@/pages/CalendarPage';
+import { CALENDAR_FIRST_DAY, CALENDAR_LOCALE } from '@/lib/weekStart';
 import { colorFill, type ColorPaint } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
@@ -16,7 +19,7 @@ import { CalendarAgendaMenu } from './CalendarAgendaMenu';
 import { readHiddenAgendas, writeHiddenAgendas } from './calendarAgendaView';
 import { DashboardCard } from './DashboardCard';
 import { DayAgendaPanel } from './DayAgendaPanel';
-import { buildDayAgenda, localDayKey, type DayItemAccent } from './dayAgenda';
+import { buildDayAgenda, localDayKey, type DayItem, type DayItemAccent } from './dayAgenda';
 import { sortBySectorOrder } from './sectorOrder';
 
 const MAX_DOTS = 3;
@@ -30,10 +33,25 @@ const MAX_DOTS = 3;
  */
 const DOT = 'size-[5px] rounded-full';
 
+/**
+ * Everything on screen, not everything in the month.
+ *
+ * The grid draws six weeks, so the last days of the previous month and the first
+ * of the next are on it — and those days are pressable and carry dots like any
+ * other. Asking for the month alone left them permanently empty: no dots, and an
+ * empty summary under a day that plainly has something on it.
+ *
+ * Six weeks flat, whether or not the month needs the sixth row: a fixed window
+ * is a superset of what is drawn, and a query key that changes shape with the
+ * month would refetch on the way past.
+ */
+function gridStart(focused: CalendarDate): CalendarDate {
+  return startOfWeek(focused.set({ day: 1 }), CALENDAR_LOCALE, CALENDAR_FIRST_DAY);
+}
+
 function monthRange(focused: CalendarDate) {
-  const first = focused.set({ day: 1 });
-  const last = first.add({ months: 1 }).subtract({ days: 1 });
-  return { from: first.toString(), to: last.toString() };
+  const first = gridStart(focused);
+  return { from: first.toString(), to: first.add({ days: 41 }).toString() };
 }
 
 /**
@@ -47,10 +65,12 @@ function localMidnight(value: CalendarDate): Date {
 }
 
 function monthInstants(focused: CalendarDate) {
-  const first = focused.set({ day: 1 });
+  const first = gridStart(focused);
   return {
     fromIso: localMidnight(first).toISOString(),
-    toIso: localMidnight(first.add({ months: 1 })).toISOString(),
+    // Midnight *after* the last day drawn, so an event at 23:00 on it is still
+    // inside the window.
+    toIso: localMidnight(first.add({ days: 42 })).toISOString(),
   };
 }
 
@@ -187,6 +207,28 @@ export function CalendarCard() {
     [agendasById, slotBySector, sectorColors],
   );
 
+  /**
+   * Which calendar an item came from, for the summary's Agenda row: "Gloo" or
+   * "Google Agenda".
+   *
+   * The account rather than the agenda's own name, because that is the question
+   * the panel is answering — the month above mixes both and a reader wants to
+   * know which of the two they are looking at, not which of eight. A task has no
+   * agenda at all and is always the app's own.
+   */
+  const sourceOf = useCallback(
+    (item: DayItem) => {
+      if (item.accent.kind !== 'AGENDA') return strings.dashboard.day.sourceGloo;
+
+      const accountId = agendasById.get(item.accent.id)?.accountId;
+      const provider = accounts.find((account) => account.id === accountId)?.provider;
+      return provider === CalendarProvider.GOOGLE
+        ? strings.dashboard.day.sourceGoogle
+        : strings.dashboard.day.sourceGloo;
+    },
+    [accounts, agendasById],
+  );
+
   /** What the open summary is listing — nothing at all while it is closed. */
   const selectedDay = selected?.toString() ?? null;
   const dayItems = useMemo(
@@ -202,6 +244,15 @@ export function CalendarCard() {
         : [],
     [selectedDay, monthTasks, events, agendasById, me?.id],
   );
+
+  /**
+   * Picking a day opens its summary; pressing the day that is already open shuts
+   * it again — the cell is the panel's own switch, and having to click away to
+   * close something you opened by clicking is a rule with no reason.
+   */
+  function selectDay(date: CalendarDate) {
+    setSelected((current) => (current?.toString() === date.toString() ? null : date));
+  }
 
   /**
    * Pressing anywhere outside the card closes the summary again.
@@ -228,7 +279,7 @@ export function CalendarCard() {
       <MonthCalendar
         // Shorter rows and a rounded square on today, rather than HeroUI's
         // square cell and its circle — see .gloo-dashboard-calendar.
-        className="gloo-dashboard-calendar"
+        className="gloo-compact-month gloo-month-dots"
         ariaLabel={strings.dashboard.calendar}
         // The month is this card's heading, so it leads the row and the arrows
         // follow it; the far end of that row is where the agenda filter goes,
@@ -247,14 +298,40 @@ export function CalendarCard() {
         // Dashboard. Pressing the day that is already open closes it again —
         // the cell is the panel's own switch, and having to click away to shut
         // something you opened by clicking is a rule with no reason.
-        onChange={(date) =>
-          setSelected((current) => (current?.toString() === date.toString() ? null : date))
+        onChange={selectDay}
+        // Never selected as far as the calendar is concerned, so that pressing
+        // the day already open counts as a change and closes it — see `value`
+        // in MonthCalendar.
+        value={null}
+        // Which leaves the picked day for us to paint.
+        cellClassName={(date) =>
+          selected && date.compare(selected) === 0 ? 'gloo-day-picked' : ''
         }
         renderCellExtra={(date) => {
           const day = date.toString();
           const sectorIds = bySector.get(day) ?? [];
           const agendaIds = byAgenda.get(day) ?? [];
-          if (sectorIds.length === 0 && agendaIds.length === 0) return null;
+
+          // React Aria disables every cell outside the month on screen, and a
+          // disabled cell takes no press — so the end of one month and the start
+          // of the next were dead. This lays a target of our own over those:
+          // they stay grey, saying they belong to another month, and they answer
+          // like any other day.
+          //
+          // Only over those. On a live cell react-aria handles the press itself
+          // and stops the event before it can reach a child, so a button there
+          // would be a control that silently does nothing.
+          const isOutsideMonth = date.month !== focused.month || date.year !== focused.year;
+          const overlay = isOutsideMonth ? (
+            <button
+              type="button"
+              aria-label={day}
+              onClick={() => selectDay(date)}
+              className="pointer-events-auto absolute inset-0 cursor-pointer rounded-[inherit]"
+            />
+          ) : null;
+
+          if (sectorIds.length === 0 && agendaIds.length === 0) return overlay;
 
           // Events lead: a meeting happens at an hour and a task is merely due
           // that day, so the first dot answers the more urgent question.
@@ -275,11 +352,14 @@ export function CalendarCard() {
           // room they hang in is the cell's bottom margin, which is what holds
           // them off the row beneath — see .gloo-dashboard-calendar.
           return (
-            <span className="pointer-events-none absolute inset-x-0 top-full mt-[3px] flex justify-center gap-[2px]">
-              {dots.map((dot) => (
-                <span key={dot.key} {...dot.paint} />
-              ))}
-            </span>
+            <>
+              {overlay}
+              <span className="pointer-events-none absolute inset-x-0 top-full mt-[3px] flex justify-center gap-[2px]">
+                {dots.map((dot) => (
+                  <span key={dot.key} {...dot.paint} />
+                ))}
+              </span>
+            </>
           );
         }}
       />
@@ -288,6 +368,7 @@ export function CalendarCard() {
         <DayAgendaPanel
           items={dayItems}
           paintAccent={paintAccent}
+          sourceOf={sourceOf}
           onOpenCalendar={() =>
             navigate(`/calendar?${CALENDAR_DATE_PARAM}=${selected.toString()}`)
           }

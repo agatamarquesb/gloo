@@ -29,6 +29,12 @@ export interface GoogleEvent {
   iCalUID?: string;
   etag?: string;
   attendees?: { email?: string; self?: boolean }[];
+  /**
+   * What kind of thing Google thinks this is — "default", "focusTime",
+   * "outOfOffice", "workingLocation", "fromGmail", "birthday", and the
+   * "appointment" a booked slot arrives as. See kindFor in sync.ts.
+   */
+  eventType?: string;
 }
 
 /** RFC 5545 weekday tokens, in the 0=Sunday order the rest of the app uses. */

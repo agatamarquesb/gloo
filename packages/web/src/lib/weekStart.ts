@@ -8,10 +8,12 @@
  * with a Sunday-first range banded across it, and the band would appear to run
  * off the end of the row.
  *
- * PT-BR starts the week on Sunday, which is also what the mini calendar's own
- * header row shows.
+ * The week starts on Monday here — the working week the app is read against,
+ * and the order the grid and both month calendars now share. `startOfWeek` is
+ * given the same fact through `CALENDAR_FIRST_DAY`, so the band across the
+ * mini calendar's week can never sit off the row the grid is showing.
  */
 export const CALENDAR_LOCALE = 'pt-BR';
 
 /** The same fact in the shape react-aria's `firstDayOfWeek` wants. */
-export const CALENDAR_FIRST_DAY = 'sun' as const;
+export const CALENDAR_FIRST_DAY = 'mon' as const;

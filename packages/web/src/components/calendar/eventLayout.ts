@@ -15,14 +15,32 @@ export interface LayoutEvent {
 
 export interface PositionedEvent<T extends LayoutEvent> {
   event: T;
-  /** Which lane of its cluster, from 0. */
+  /** Which lane of its own start group, from 0. */
   column: number;
-  /** How many lanes that cluster ended up needing. */
+  /** How many events share that exact start, and so how many lanes to split. */
   columns: number;
+  /**
+   * How many earlier starts this event is laid over.
+   *
+   * 0 is a block that begins on its column's own left edge. 1 or more is a block
+   * inset by that many steps, drawn on top of the ones it overlaps — which is
+   * what leaves a strip of each earlier block showing down the left, still
+   * pressable, the way an overlapping day reads in Google Calendar.
+   */
+  depth: number;
   /** Minutes from midnight, clamped to the day being drawn. */
   startMinute: number;
   endMinute: number;
 }
+
+/**
+ * How far a block can be pushed in before the indent stops paying for itself.
+ *
+ * Five events in a chain, each starting after the last, would otherwise leave
+ * the fifth a sliver. Past this they stack on the same step: the ones underneath
+ * are already reachable, and the alternative is a block too narrow to read.
+ */
+const MAX_DEPTH = 3;
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -155,17 +173,23 @@ export function layoutAllDay<T extends LayoutEvent>(
 }
 
 /**
- * Pack a single day's events into lanes.
+ * Pack a single day's events.
  *
- * Two events that overlap in time are given adjacent lanes of equal width; a
- * run of events that overlap transitively forms one cluster and shares its
- * width. Closing the cluster only when nothing is still running is what stops a
- * single long event at 09:00–18:00 squeezing the entire day into half-width
- * columns — its cluster ends when it does, and the evening starts fresh.
+ * Two rules, which between them are how a day full of overlapping events stays
+ * readable:
  *
- * Greedy first-fit rather than anything cleverer: it matches what every
- * calendar does, and the pathological cases it loses on (a long event beside
- * many short ones) are the ones users read as correct anyway.
+ *   - Events that begin at the *same* minute stand side by side, splitting the
+ *     width between them. Neither is more important than the other and neither
+ *     can cover the other up.
+ *   - An event that begins *later* than one already running is drawn over it,
+ *     stepped in from the left. The earlier block keeps a strip of itself
+ *     showing — enough to read its colour and to press it — and the later block
+ *     stays as wide as it can be.
+ *
+ * The lanes-of-equal-width packing this replaced obeyed neither: a 09:00 event
+ * and a 09:30 event each lost half the column, so a morning with four things in
+ * it was four slivers, none of them readable and none of them obviously later
+ * than the next.
  */
 export function layoutDay<T extends LayoutEvent>(
   events: T[],
@@ -183,46 +207,38 @@ export function layoutDay<T extends LayoutEvent>(
   );
 
   const positioned: PositionedEvent<T>[] = [];
-  /** The end minute of the last event placed in each lane, for this cluster. */
-  let laneEnds: number[] = [];
-  /** Where the current cluster's entries begin in `positioned`. */
-  let clusterStart = 0;
 
-  function closeCluster() {
-    const width = laneEnds.length;
-    for (let index = clusterStart; index < positioned.length; index += 1) {
-      positioned[index].columns = width;
+  for (let index = 0; index < ordered.length; ) {
+    const startMinute = ordered[index].startMinute;
+
+    // Everything beginning on this exact minute, taken together: they are the
+    // ones that share a width rather than covering each other.
+    let groupEnd = index;
+    while (groupEnd < ordered.length && ordered[groupEnd].startMinute === startMinute) {
+      groupEnd += 1;
     }
-    laneEnds = [];
-    clusterStart = positioned.length;
-  }
+    const group = ordered.slice(index, groupEnd);
 
-  for (const entry of ordered) {
-    // Nothing from the previous cluster is still running, so its width is
-    // settled and this event starts a new one.
-    if (laneEnds.length > 0 && laneEnds.every((end) => end <= entry.startMinute)) {
-      closeCluster();
-    }
+    // How many *distinct earlier starts* are still running underneath. Distinct,
+    // so three events that began together at 09:00 are one step down, not three.
+    const openStarts = new Set(
+      positioned.filter((entry) => entry.endMinute > startMinute).map((entry) => entry.startMinute),
+    );
+    const depth = Math.min(openStarts.size, MAX_DEPTH);
 
-    let lane = laneEnds.findIndex((end) => end <= entry.startMinute);
-    if (lane === -1) {
-      lane = laneEnds.length;
-      laneEnds.push(entry.endMinute);
-    } else {
-      laneEnds[lane] = entry.endMinute;
-    }
-
-    positioned.push({
-      event: entry.event,
-      column: lane,
-      // Provisional: the cluster's final width isn't known until it closes.
-      columns: 1,
-      startMinute: entry.startMinute,
-      endMinute: entry.endMinute,
+    group.forEach((entry, lane) => {
+      positioned.push({
+        event: entry.event,
+        column: lane,
+        columns: group.length,
+        depth,
+        startMinute: entry.startMinute,
+        endMinute: entry.endMinute,
+      });
     });
-  }
 
-  if (positioned.length > clusterStart) closeCluster();
+    index = groupEnd;
+  }
 
   return positioned;
 }

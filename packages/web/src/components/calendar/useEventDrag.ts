@@ -4,6 +4,9 @@ import type { CalendarEventDto } from '@gloo/shared';
 
 import { HOUR_HEIGHT } from './gridMetrics';
 
+/** How long a task gets when it is dragged out of the all-day strip onto an hour. */
+const SCHEDULED_MINUTES = 30;
+
 /** Everything snaps to this, which is also the shortest an event can be dragged to. */
 const SNAP_MINUTES = 15;
 /**
@@ -13,10 +16,22 @@ const SNAP_MINUTES = 15;
  */
 const DRAG_THRESHOLD_PX = 4;
 
+/**
+ * The three things a drag can be.
+ *
+ * `move` and `resize` are relative — they work from how far the pointer has
+ * travelled since the press. `schedule` is absolute: it starts on an item in the
+ * all-day strip, which has no place in the hour grid to measure from, so what
+ * decides the time is simply where the pointer is. That is what gives a task an
+ * hour, and it is why a task can be put on the clock at all: Google only ever
+ * tells us the day.
+ */
+type DragMode = 'move' | 'resize' | 'schedule';
+
 interface DragState {
   key: string;
   event: CalendarEventDto;
-  mode: 'move' | 'resize';
+  mode: DragMode;
   startClientX: number;
   startClientY: number;
   /** Measured once at drag start — a day column's width, for sideways moves. */
@@ -27,12 +42,20 @@ interface DragState {
   /** The block, and the pointer on it — kept so capture can be taken later. */
   element: HTMLElement;
   pointerId: number;
+  /**
+   * The last hour a `schedule` drag was over. A pointer that wanders off the
+   * columns — onto the gutter, the strip it came from, the card's edge — should
+   * hold where it last was rather than snap the ghost back to midnight.
+   */
+  lastScheduled: { startsAt: number; endsAt: number } | null;
 }
 
 export interface DragPreview {
   key: string;
   startsAt: string;
   endsAt: string;
+  /** Which kind of drag drew it — the grid shows a scheduling ghost for one. */
+  mode: DragMode;
 }
 
 function snap(minutes: number): number {
@@ -76,7 +99,12 @@ function shift(instant: number, days: number, minutes: number): number {
 export function useEventDrag({
   onCommit,
 }: {
-  onCommit: (event: CalendarEventDto, startsAt: string, endsAt: string) => void;
+  onCommit: (
+    event: CalendarEventDto,
+    startsAt: string,
+    endsAt: string,
+    options?: { isAllDay?: boolean },
+  ) => void;
 }) {
   const dragRef = useRef<DragState | null>(null);
   const [preview, setPreview] = useState<DragPreview | null>(null);
@@ -87,12 +115,42 @@ export function useEventDrag({
    */
   const suppressClickRef = useRef(false);
 
+  /**
+   * Where in the grid the pointer is, as a day and a minute — the whole of a
+   * scheduling drag's arithmetic.
+   *
+   * Read off the DOM rather than from a measurement taken at drag start: the
+   * columns are a live grid that scrolls under the pointer, and their tops move
+   * while the drag is in progress. `elementFromPoint` still answers during a
+   * captured drag, because capture changes where events are *sent* and not what
+   * is under the cursor.
+   */
+  const scheduledAt = useCallback((clientX: number, clientY: number) => {
+    const under = document.elementFromPoint(clientX, clientY);
+    const column = under?.closest<HTMLElement>('[data-day-column]');
+    const iso = column?.dataset.day;
+    if (!column || !iso) return null;
+
+    const bounds = column.getBoundingClientRect();
+    const minute = snap(((clientY - bounds.top) / HOUR_HEIGHT) * 60);
+    const [year, month, day] = iso.split('-').map((part) => Number(part));
+    const start = new Date(year, month - 1, day, 0, minute, 0, 0).getTime();
+
+    return { startsAt: start, endsAt: start + SCHEDULED_MINUTES * 60_000 };
+  }, []);
+
   const computeTimes = useCallback((drag: DragState, clientX: number, clientY: number) => {
     const deltaMinutes = snap(((clientY - drag.startClientY) / HOUR_HEIGHT) * 60);
     const deltaDays =
       drag.mode === 'move' && drag.columnWidth > 0
         ? Math.round((clientX - drag.startClientX) / drag.columnWidth)
         : 0;
+
+    if (drag.mode === 'schedule') {
+      return (
+        drag.lastScheduled ?? { startsAt: drag.originalStart, endsAt: drag.originalEnd }
+      );
+    }
 
     if (drag.mode === 'resize') {
       const end = Math.max(
@@ -110,7 +168,7 @@ export function useEventDrag({
 
   const begin = useCallback(
     (
-      mode: 'move' | 'resize',
+      mode: DragMode,
       key: string,
       event: CalendarEventDto,
       pointer: React.PointerEvent,
@@ -143,6 +201,7 @@ export function useEventDrag({
         moved: false,
         element: pointer.currentTarget as HTMLElement,
         pointerId: pointer.pointerId,
+        lastScheduled: null,
       };
 
       // Capture is deliberately NOT taken here, only once the pointer has
@@ -176,14 +235,21 @@ export function useEventDrag({
         drag.element.setPointerCapture(drag.pointerId);
       }
 
+      // A scheduling drag has no delta to work from — where it is *now* is the
+      // answer, so the hour is resolved here and kept for the release.
+      if (drag.mode === 'schedule') {
+        drag.lastScheduled = scheduledAt(pointer.clientX, pointer.clientY) ?? drag.lastScheduled;
+      }
+
       const { startsAt, endsAt } = computeTimes(drag, pointer.clientX, pointer.clientY);
       setPreview({
         key: drag.key,
+        mode: drag.mode,
         startsAt: new Date(startsAt).toISOString(),
         endsAt: new Date(endsAt).toISOString(),
       });
     },
-    [computeTimes],
+    [computeTimes, scheduledAt],
   );
 
   const handlePointerUp = useCallback(
@@ -196,6 +262,24 @@ export function useEventDrag({
       if (!drag.moved) return;
 
       suppressClickRef.current = true;
+
+      if (drag.mode === 'schedule') {
+        const target = scheduledAt(pointer.clientX, pointer.clientY) ?? drag.lastScheduled;
+        // Released over nothing — the strip it came from, or off the grid
+        // entirely. An all-day item that is still all-day has not changed.
+        if (!target) return;
+
+        onCommit(
+          drag.event,
+          new Date(target.startsAt).toISOString(),
+          new Date(target.endsAt).toISOString(),
+          // The point of the whole gesture: it stops being a floating date and
+          // becomes an hour of a day.
+          { isAllDay: false },
+        );
+        return;
+      }
+
       const { startsAt, endsAt } = computeTimes(drag, pointer.clientX, pointer.clientY);
 
       // Nothing actually changed — a drag that came back to where it started.
@@ -203,7 +287,7 @@ export function useEventDrag({
 
       onCommit(drag.event, new Date(startsAt).toISOString(), new Date(endsAt).toISOString());
     },
-    [computeTimes, onCommit],
+    [computeTimes, onCommit, scheduledAt],
   );
 
   /** True once, immediately after a drag, so the trailing click is ignored. */
@@ -219,6 +303,9 @@ export function useEventDrag({
       begin('move', key, event, pointer),
     beginResize: (key: string, event: CalendarEventDto, pointer: React.PointerEvent) =>
       begin('resize', key, event, pointer),
+    /** Dragging an all-day item down onto an hour — see DragMode. */
+    beginSchedule: (key: string, event: CalendarEventDto, pointer: React.PointerEvent) =>
+      begin('schedule', key, event, pointer),
     handlePointerMove,
     handlePointerUp,
     consumeSuppressedClick,

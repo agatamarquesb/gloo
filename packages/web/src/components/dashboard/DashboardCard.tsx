@@ -11,6 +11,7 @@ export function DashboardCard({
   action,
   children,
   className = '',
+  titleClassName = 'text-lg font-semibold',
   hideTitle = false,
   bodyGap = 'gap-4',
   ref,
@@ -31,6 +32,12 @@ export function DashboardCard({
    */
   bodyGap?: string;
   className?: string;
+  /**
+   * The heading's own type, for a card whose name should not out-shout what is
+   * in it — the Calendar page's Agendas list, whose title is set to the size an
+   * item's name is written at inside the card above it.
+   */
+  titleClassName?: string;
   /**
    * Keep the card's name for screen readers but take the heading row off the
    * card — the Calendar, whose month is already written across the top of the
@@ -64,7 +71,7 @@ export function DashboardCard({
         }`}
       >
         <div>
-          <h2 className="text-lg font-semibold text-surface-foreground">{title}</h2>
+          <h2 className={`${titleClassName} text-surface-foreground`}>{title}</h2>
           {subtitle ? <p className="text-sm text-muted">{subtitle}</p> : null}
         </div>
         {action}

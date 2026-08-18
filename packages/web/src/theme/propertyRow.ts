@@ -161,10 +161,36 @@ export const VALUE_CELL = 'w-full';
 export const FIELD_LABEL = 'flex shrink-0 items-center gap-2 text-sm font-medium text-muted';
 
 /**
- * The icons read at full text colour while their labels stay grey: at 16px a
- * muted glyph is mostly gone, and these are what you scan the column by.
+ * The icon takes its label's own grey — the two are one thing, a name with a
+ * picture of itself in front of it, and drawing the picture in full ink made a
+ * column of six glyphs the loudest thing in a dialog whose content is beside
+ * them. `text-current` rather than the token, so anything that recolours a row
+ * carries its icon with it.
  */
-export const LABEL_ICON = 'size-4 shrink-0 text-foreground';
+export const LABEL_ICON = 'size-4 shrink-0 text-current';
+
+/**
+ * A property's value.
+ *
+ * `font-medium` — the same step up the subtasks and the attachment titles take.
+ * The labels are medium too, so what tells a value from its label is the colour,
+ * not the weight: grey asks, --value-ink replies. Not the page's full ink: a
+ * column of answers in black reads as a column of headings under a title that is
+ * also black.
+ *
+ * Here rather than in either dialog because the two were keeping identical
+ * copies with a comment on each saying so.
+ */
+export const PROPERTY_VALUE = 'text-sm font-medium text-value-ink';
+
+/**
+ * The same value for content that comes out of the database — a sector, a
+ * project. Lower case so the column reads as one voice rather than as a chip
+ * among sentences, and the first letter back up so it reads as a word rather
+ * than as a fragment. Both in CSS: the name belongs to whoever typed it, and
+ * neither rule should reach the data.
+ */
+export const PROPERTY_VALUE_LOWER = `${PROPERTY_VALUE} lowercase first-letter:uppercase`;
 
 /**
  * A value with nothing in it — no deadline set, no project chosen. An em dash

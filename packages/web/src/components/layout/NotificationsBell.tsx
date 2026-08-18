@@ -113,7 +113,7 @@ export function NotificationsBell() {
                   own surface so it stays legible over the icon. */}
               <span
                 aria-hidden
-                className="absolute top-1 right-1 size-2.5 rounded-full bg-danger ring-2 ring-surface"
+                className="absolute top-1 right-1 size-2.5 rounded-full bg-danger"
               />
               <span className="sr-only">{strings.notifications.title}</span>
             </>

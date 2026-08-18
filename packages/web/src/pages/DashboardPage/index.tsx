@@ -6,7 +6,7 @@ import { RoutinesCard } from '@/components/dashboard/RoutinesCard';
 import { SectorDonutCard } from '@/components/dashboard/SectorDonutCard';
 import { TaskSummaryCard } from '@/components/dashboard/TaskSummaryCard';
 import { TimeBlockingCard } from '@/components/dashboard/TimeBlockingCard';
-import { CreateTaskModal } from '@/components/tasks/CreateTaskModal';
+import { NewTaskModal } from '@/components/tasks/TaskModal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useMe } from '@/hooks/queries/auth';
 import { strings } from '@/strings/pt-BR';
@@ -41,11 +41,9 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <CreateTaskModal
-        isOpen={isCreateOpen}
-        onClose={() => setCreateOpen(false)}
-        defaultAssigneeId={me?.id}
-      />
+      {isCreateOpen ? (
+        <NewTaskModal onClose={() => setCreateOpen(false)} defaultAssigneeId={me?.id} />
+      ) : null}
     </div>
   );
 }

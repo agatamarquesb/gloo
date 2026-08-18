@@ -21,12 +21,12 @@ export function AssigneeAvatars({ assignees }: { assignees: UserDto[] }) {
   return (
     <div className="flex items-center -space-x-2">
       {visible.map((user) => (
-        <div key={user.id} className="rounded-full ring-2 ring-green">
+        <div key={user.id} className="rounded-full">
           <UserAvatar name={user.name} avatarUrl={user.avatarUrl} size="sm" />
         </div>
       ))}
       {overflow > 0 ? (
-        <div className="flex size-8 items-center justify-center rounded-full bg-default text-xs font-medium text-default-foreground ring-2 ring-green">
+        <div className="flex size-8 items-center justify-center rounded-full bg-default text-xs font-medium text-default-foreground">
           +{overflow}
         </div>
       ) : null}

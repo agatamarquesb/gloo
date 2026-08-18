@@ -18,7 +18,7 @@ interface MiniCalendarCardProps {
  * The band across the visible days is drawn per cell rather than as one
  * element: the calendar is a CSS grid of independent cells with no row
  * container to hang a single pill on, and a range can wrap onto two rows in
- * month view. Each cell paints its own background, and the two ends round
+ * month view. Each cell paints its own segment and the two ends round
  * themselves — which also gives the wrapped case the right shape for free,
  * since a row break simply falls between two square middles.
  */
@@ -33,27 +33,23 @@ export function MiniCalendarCard({
     const isStart = date.compare(visibleRange.start) === 0;
     const isEnd = date.compare(visibleRange.end) === 0;
 
-    // The middles have to say rounded-none explicitly: HeroUI's cell is already
-    // rounded-full, so leaving the radius alone clips each day's fill into its
-    // own circle and the band reads as seven separate dots rather than one run.
-    const shape =
-      isStart && isEnd
-        ? 'rounded-full'
-        : isStart
-          ? 'rounded-l-full rounded-r-none'
-          : isEnd
-            ? 'rounded-r-full rounded-l-none'
-            : 'rounded-none';
-
-    // The band sits behind the day number, so it must not take the cell's own
-    // text colour with it — bg only, and the accent at low strength so the
-    // number stays the thing being read.
-    return `bg-accent/25 ${shape}`;
+    // Names only — the fill and the radii live in globals.css beside the rest of
+    // the compact month. Written as Tailwind utilities here they lost to the
+    // stylesheet's own `.gloo-compact-month .calendar__cell`, and the run came
+    // out as seven rounded boxes instead of one pill.
+    return `gloo-band${isStart ? ' gloo-band-start' : ''}${isEnd ? ' gloo-band-end' : ''}`;
   }
 
   return (
-    <DashboardCard title={strings.dashboard.calendar}>
+    // The month is the whole card, so it needs no name above it — the same call
+    // the Dashboard's calendar makes, and for the same reason.
+    <DashboardCard hideTitle title={strings.dashboard.calendar}>
       <MonthCalendar
+        // The Dashboard's own scale and its three greens for today, the day you
+        // picked and the day under the pointer — one compact month, drawn twice.
+        // Without `gloo-month-dots`: nothing hangs under a day here, and the band
+        // across the week on screen is what this calendar has to say instead.
+        className="gloo-compact-month gloo-month-band"
         ariaLabel={strings.dashboard.calendar}
         focusedValue={focusedDate}
         onFocusChange={onFocusedDateChange}

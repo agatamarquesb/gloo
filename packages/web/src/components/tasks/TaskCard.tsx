@@ -83,7 +83,7 @@ export function TaskCard({
     // The hover fill is a fifth of the neutral rather than two fifths: the row
     // sits on the card's own white, and at the old strength the grey read as a
     // selected state rather than as the pointer passing over.
-    <div className="gloo-rise relative flex w-full flex-col gap-3 rounded-2xl border border-outline-green bg-transparent p-4 text-left transition-[background-color,transform] duration-200 hover:bg-default/20 motion-safe:hover:scale-[1.015] sm:flex-row sm:items-center sm:gap-4">
+    <div className="gloo-rise relative flex w-full flex-col gap-3 rounded-2xl border border-outline-green bg-transparent p-4 text-left transition-[background-color,transform] duration-200 hover:bg-row-hover motion-safe:hover:scale-[1.015] sm:flex-row sm:items-center sm:gap-4">
       <button
         type="button"
         onClick={open}
@@ -115,7 +115,7 @@ export function TaskCard({
         <p
           className={`flex items-center gap-1.5 ${
             task.isOverdue
-              ? 'font-semibold text-status-overdue-text'
+              ? 'font-semibold text-overdue-ink'
               : 'font-medium text-surface-foreground'
           } ${compact ? 'text-sm' : ''}`}
         >

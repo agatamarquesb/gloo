@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
+import { CalendarDays, CalendarRange, Clock, MapPin, Repeat, Shapes, UserRound } from 'lucide-react';
 import { Button, Input, Label, ListBox, Modal, Select } from '@heroui/react';
 import { TextField } from 'react-aria-components';
 
 import {
+  CalendarItemKind,
   countOtherAttendees,
   EventRecurrence,
   type AgendaDto,
@@ -11,15 +13,41 @@ import {
 } from '@gloo/shared';
 
 import { AppCheckbox } from '@/components/common/AppCheckbox';
+import { AssigneeValue } from '@/components/common/AssigneeValue';
+import { CalendarAgendaGlyph, CalendarDayGlyph } from '@/components/common/CalendarGlyph';
 import { DateField } from '@/components/common/DateField';
+import { UserAvatar } from '@/components/common/UserAvatar';
 import { RedButton } from '@/components/common/RedButton';
 import { SecondaryButton } from '@/components/common/SecondaryButton';
 import { NotesBlock } from '@/components/common/NotesBlock';
 import { useMe } from '@/hooks/queries/auth';
 import { useCreateEvent, useDeleteEvent, useUpdateEvent } from '@/hooks/queries/calendar';
 import { useUsers } from '@/hooks/queries/users';
-import { listboxPopover } from '@/theme/fieldStyles';
-import { dialogFooter, dialogPadding, dialogShape } from '@/theme/styleConstants';
+import {
+  FLAT_INPUT,
+  LISTBOX_FLUSH,
+  PANEL_MATCHES_TRIGGER,
+  TEXT_LISTBOX_ITEM,
+  listboxPopover,
+} from '@/theme/fieldStyles';
+// The property list is the one both entity dialogs open with — see
+// theme/propertyRow.ts, which is where every class in it comes from.
+import {
+  EMPTY_VALUE,
+  LABEL_ICON,
+  PROPERTY_LIST,
+  PROPERTY_ROW_PITCH,
+  PROPERTY_VALUE,
+  VALUE_CELL,
+  propertyStyles,
+} from '@/theme/propertyRow';
+import {
+  TITLE_FIELD,
+  dialogFooter,
+  dialogPadding,
+  dialogShape,
+  modalDivider,
+} from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 import { ConfirmEventChangeModal, type EventChangeChoice } from './ConfirmEventChangeModal';
@@ -203,6 +231,23 @@ export function EventModal({
     [agendas],
   );
 
+  const assignees = useMemo(
+    () => users.filter((user) => form.assigneeIds.includes(user.id)),
+    [users, form.assigneeIds],
+  );
+
+  /**
+   * The dialog is a form from the moment it opens — there is no locked state to
+   * unlock — so the property rows are asked for their editing shape. `fluid`
+   * because two of them hold a control that wraps: the weekday picker and the
+   * pair of time fields.
+   */
+  const { row, label: fieldLabel, trigger } = propertyStyles(true, {
+    height: PROPERTY_ROW_PITCH,
+    fluid: true,
+    indicator: false,
+  });
+
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
 
@@ -270,128 +315,186 @@ export function EventModal({
       <Modal.Backdrop isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
         <Modal.Container scroll="inside">
           <Modal.Dialog className={`sm:max-w-lg ${dialogShape} ${dialogPadding}`}>
+            {/* No heading of its own: the event's name is the heading, exactly
+                as a routine's title is in that dialog. "Novo evento" said what
+                the dialog was called rather than what was in it. */}
             <Modal.Header className="p-0">
-              <Modal.Heading className="text-lg font-semibold">
+              <Modal.Heading className="sr-only">
                 {event ? strings.common.edit : strings.calendar.newEvent}
               </Modal.Heading>
             </Modal.Header>
 
-            <Modal.Body className="flex flex-col gap-4 p-0 pt-3">
+            <Modal.Body className="flex flex-col gap-3 p-0 pt-1">
+              {/* The title, in the shape the other two dialogs give theirs: the
+                  words themselves at heading size, with the green rule under
+                  them that marks an editable line — see TITLE_FIELD. */}
               <TextField
                 aria-label={strings.calendar.event.titleLabel}
                 value={form.title}
                 onChange={(value) => set('title', value)}
-                className="flex flex-col gap-1.5"
+                className="w-full"
               >
-                <Label className="text-sm font-medium text-foreground">
-                  {strings.calendar.event.titleLabel}
-                </Label>
-                <Input fullWidth placeholder={strings.calendar.event.titlePlaceholder} />
+                <Input
+                  fullWidth
+                  placeholder={strings.calendar.event.titlePlaceholder}
+                  className={`${TITLE_FIELD} ${FLAT_INPUT} text-xl font-bold`}
+                />
               </TextField>
 
-              <Select
-                value={form.agendaId}
-                onChange={(key) => set('agendaId', String(key))}
-              >
-                <Label>{strings.calendar.event.agenda}</Label>
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover {...listboxPopover}>
-                  <ListBox>
-                    {writableAgendas.map((agenda) => (
-                      <ListBox.Item key={agenda.id} id={agenda.id} textValue={agenda.name}>
-                        {agenda.name}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-
-              <div className="grid grid-cols-2 gap-4">
-                <DateField
-                  label={strings.calendar.event.date}
-                  value={form.date}
-                  onChange={(value) => set('date', value)}
-                />
-                <div className="flex items-end">
-                  <AppCheckbox
-                    isSelected={form.isAllDay}
-                    onChange={(selected) => set('isAllDay', selected)}
-                  >
-                    {strings.calendar.event.allDay}
-                  </AppCheckbox>
-                </div>
-              </div>
-
-              {form.isAllDay ? null : (
-                <div className="grid grid-cols-2 gap-4">
-                  {/* A native time input rather than a hand-built picker: it is
-                      the one control this dialog needs that HeroUI has no part
-                      for, and the platform's own is keyboard- and
-                      locale-correct everywhere. Wrapped in the app's usual
-                      TextField + Label so it still sits on the same grid as the
-                      fields around it. */}
-                  <TextField
-                    aria-label={strings.calendar.event.startsAt}
-                    value={form.startTime}
-                    onChange={(value) => set('startTime', value)}
-                    className="flex flex-col gap-1.5"
-                  >
-                    <Label className="text-sm font-medium text-foreground">
-                      {strings.calendar.event.startsAt}
+              {/* One property per row — icon and label on the left, the value on
+                  the right — the list both entity dialogs open with. See
+                  theme/propertyRow.ts, which is where all of this comes from. */}
+              <div className={PROPERTY_LIST}>
+                <Select value={form.agendaId} onChange={(key) => set('agendaId', String(key))}>
+                  <div className={row}>
+                    <Label className={fieldLabel}>
+                      <CalendarAgendaGlyph className={LABEL_ICON} />
+                      {strings.calendar.event.agenda}
                     </Label>
-                    <Input fullWidth type="time" />
-                  </TextField>
+                    <div className={VALUE_CELL}>
+                      <Select.Trigger className={trigger}>
+                        <span className={PROPERTY_VALUE}>
+                          {writableAgendas.find((agenda) => agenda.id === form.agendaId)?.name ??
+                            EMPTY_VALUE}
+                        </span>
+                      </Select.Trigger>
+                    </div>
+                  </div>
+                  <Select.Popover {...listboxPopover} className={PANEL_MATCHES_TRIGGER}>
+                    <ListBox className={LISTBOX_FLUSH}>
+                      {writableAgendas.map((agenda) => (
+                        <ListBox.Item
+                          key={agenda.id}
+                          id={agenda.id}
+                          textValue={agenda.name}
+                          className={TEXT_LISTBOX_ITEM}
+                        >
+                          {agenda.name}
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
 
-                  <TextField
-                    aria-label={strings.calendar.event.endsAt}
-                    value={form.endTime}
-                    onChange={(value) => set('endTime', value)}
-                    className="flex flex-col gap-1.5"
-                  >
-                    <Label className="text-sm font-medium text-foreground">
-                      {strings.calendar.event.endsAt}
-                    </Label>
-                    <Input fullWidth type="time" />
-                    {endsBeforeStart ? (
-                      <span className="text-xs text-danger">
-                        {strings.calendar.event.endBeforeStart}
-                      </span>
-                    ) : null}
-                  </TextField>
+                {/* What kind of thing this is, read off the row rather than
+                    assumed: a Google task opens in this same dialog and calling
+                    it an event here while the card behind it says "Tarefa" is
+                    the dialog disagreeing with itself. Anything made *from* the
+                    dialog is an event, which is what the fallback says. */}
+                <div className={row}>
+                  <span className={fieldLabel}>
+                    <Shapes className={LABEL_ICON} aria-hidden />
+                    {strings.dashboard.day.type}
+                  </span>
+                  <div className={VALUE_CELL}>
+                    <span className={`${PROPERTY_VALUE} flex h-8 items-center`}>
+                      {strings.dashboard.day.itemKind[event?.kind ?? CalendarItemKind.EVENT]}
+                    </span>
+                  </div>
                 </div>
-              )}
 
-              <div className="grid grid-cols-2 gap-4">
+                <div className={row}>
+                  <span className={fieldLabel}>
+                    {form.date ? (
+                      <CalendarDayGlyph
+                        day={Number(form.date.slice(8, 10))}
+                        className={LABEL_ICON}
+                      />
+                    ) : (
+                      <CalendarDays className={LABEL_ICON} aria-hidden />
+                    )}
+                    {strings.calendar.event.date}
+                  </span>
+                  <div className={`${VALUE_CELL} flex flex-wrap items-center gap-3`}>
+                    <DateField
+                      hideLabel
+                      label={strings.calendar.event.date}
+                      value={form.date}
+                      onChange={(value) => set('date', value)}
+                    />
+                    <AppCheckbox
+                      quiet
+                      isSelected={form.isAllDay}
+                      onChange={(selected) => set('isAllDay', selected)}
+                    >
+                      <span className={PROPERTY_VALUE}>{strings.calendar.event.allDay}</span>
+                    </AppCheckbox>
+                  </div>
+                </div>
+
+                {form.isAllDay ? null : (
+                  <div className={row}>
+                    <span className={fieldLabel}>
+                      <Clock className={LABEL_ICON} aria-hidden />
+                      {strings.dashboard.day.time}
+                    </span>
+                    {/* Both ends on one row: an event's hours are one fact, and
+                        two labelled fields on two rows read as two. A native
+                        time input rather than a hand-built picker — it is the
+                        one control this dialog needs that HeroUI has no part
+                        for, and the platform's own is keyboard- and
+                        locale-correct everywhere. */}
+                    <div className={`${VALUE_CELL} flex flex-nowrap items-center gap-1`}>
+                      <TextField
+                        aria-label={strings.calendar.event.startsAt}
+                        value={form.startTime}
+                        onChange={(value) => set('startTime', value)}
+                      >
+                        <Input type="time" className={`${FLAT_INPUT} w-[5.5rem] px-0 ${PROPERTY_VALUE}`} />
+                      </TextField>
+                      <span className="shrink-0 text-muted">–</span>
+                      <TextField
+                        aria-label={strings.calendar.event.endsAt}
+                        value={form.endTime}
+                        onChange={(value) => set('endTime', value)}
+                      >
+                        <Input type="time" className={`${FLAT_INPUT} w-[5.5rem] px-0 ${PROPERTY_VALUE}`} />
+                      </TextField>
+                      {endsBeforeStart ? (
+                        <span className="text-xs text-danger">
+                          {strings.calendar.event.endBeforeStart}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+
                 <Select
                   value={form.recurrence}
                   onChange={(key) => set('recurrence', String(key) as FormState['recurrence'])}
                 >
-                  <Label>{strings.calendar.details.repeats}</Label>
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover {...listboxPopover}>
-                    <ListBox>
+                  <div className={row}>
+                    <Label className={fieldLabel}>
+                      <Repeat className={LABEL_ICON} aria-hidden />
+                      {strings.calendar.details.repeats}
+                    </Label>
+                    <div className={VALUE_CELL}>
+                      <Select.Trigger className={trigger}>
+                        <span className={PROPERTY_VALUE}>
+                          {form.recurrence === NO_RECURRENCE
+                            ? strings.calendar.recurrence.none
+                            : strings.calendar.recurrence[form.recurrence]}
+                        </span>
+                      </Select.Trigger>
+                    </div>
+                  </div>
+                  <Select.Popover {...listboxPopover} className={PANEL_MATCHES_TRIGGER}>
+                    <ListBox className={LISTBOX_FLUSH}>
                       <ListBox.Item
                         id={NO_RECURRENCE}
                         textValue={strings.calendar.recurrence.none}
+                        className={TEXT_LISTBOX_ITEM}
                       >
                         {strings.calendar.recurrence.none}
-                        <ListBox.ItemIndicator />
                       </ListBox.Item>
                       {RECURRENCES.map((recurrence) => (
                         <ListBox.Item
                           key={recurrence}
                           id={recurrence}
                           textValue={strings.calendar.recurrence[recurrence]}
+                          className={TEXT_LISTBOX_ITEM}
                         >
                           {strings.calendar.recurrence[recurrence]}
-                          <ListBox.ItemIndicator />
                         </ListBox.Item>
                       ))}
                     </ListBox>
@@ -401,109 +504,146 @@ export function EventModal({
                 {/* Optional: left blank the series simply never ends, which is
                     what Google's own default produces. */}
                 {form.recurrence === NO_RECURRENCE ? null : (
-                  <div className="flex flex-col gap-1">
-                    <DateField
-                      label={strings.calendar.recurrence.until}
-                      value={form.recurrenceUntil}
-                      onChange={(value) => set('recurrenceUntil', value)}
-                    />
-                    {form.recurrenceUntil ? (
-                      <button
-                        type="button"
-                        className="self-start text-xs text-muted underline"
-                        onClick={() => set('recurrenceUntil', '')}
-                      >
-                        {strings.calendar.recurrence.noEnd}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-muted">
-                        {strings.calendar.recurrence.noEnd}
-                      </span>
-                    )}
+                  <div className={row}>
+                    <span className={fieldLabel}>
+                      <CalendarDays className={LABEL_ICON} aria-hidden />
+                      {strings.calendar.recurrence.until}
+                    </span>
+                    <div className={`${VALUE_CELL} flex flex-wrap items-center gap-3`}>
+                      <DateField
+                        hideLabel
+                        label={strings.calendar.recurrence.until}
+                        value={form.recurrenceUntil}
+                        onChange={(value) => set('recurrenceUntil', value)}
+                      />
+                      {form.recurrenceUntil ? (
+                        <button
+                          type="button"
+                          className="cursor-pointer text-xs text-muted underline"
+                          onClick={() => set('recurrenceUntil', '')}
+                        >
+                          {strings.calendar.recurrence.noEnd}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted">
+                          {strings.calendar.recurrence.noEnd}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
-              </div>
 
-              {/* Which days a weekly series lands on. Blank means "the same day
-                  it starts on", so an untouched picker behaves exactly as the
-                  plain weekly rule did before this existed. */}
-              {isWeekly(form.recurrence) ? (
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">
-                    {strings.calendar.recurrence.onDays}
-                  </span>
-                  <div className="flex gap-1">
-                    {strings.calendar.recurrence.weekdayInitials.map((initial, weekday) => {
-                      const active = form.byWeekdays.includes(weekday);
-                      return (
-                        <button
-                          key={strings.calendar.recurrence.weekdayNames[weekday]}
-                          type="button"
-                          aria-pressed={active}
-                          aria-label={strings.calendar.recurrence.weekdayNames[weekday]}
-                          onClick={() =>
-                            set(
-                              'byWeekdays',
+                {/* Which days a weekly series lands on. Blank means "the same day
+                    it starts on", so an untouched picker behaves exactly as the
+                    plain weekly rule did before this existed. */}
+                {isWeekly(form.recurrence) ? (
+                  <div className={row}>
+                    <span className={fieldLabel}>
+                      <CalendarRange className={LABEL_ICON} aria-hidden />
+                      {strings.calendar.recurrence.onDays}
+                    </span>
+                    <div className={`${VALUE_CELL} flex flex-wrap gap-1`}>
+                      {strings.calendar.recurrence.weekdayInitials.map((initial, weekday) => {
+                        const active = form.byWeekdays.includes(weekday);
+                        return (
+                          <button
+                            key={strings.calendar.recurrence.weekdayNames[weekday]}
+                            type="button"
+                            aria-pressed={active}
+                            aria-label={strings.calendar.recurrence.weekdayNames[weekday]}
+                            onClick={() =>
+                              set(
+                                'byWeekdays',
+                                active
+                                  ? form.byWeekdays.filter((day) => day !== weekday)
+                                  : [...form.byWeekdays, weekday].toSorted((a, b) => a - b),
+                              )
+                            }
+                            className={`size-7 cursor-pointer rounded-full text-xs transition-colors ${
                               active
-                                ? form.byWeekdays.filter((day) => day !== weekday)
-                                : [...form.byWeekdays, weekday].toSorted((a, b) => a - b),
-                            )
-                          }
-                          className={`size-8 rounded-full text-xs transition-colors ${
-                            active
-                              ? 'bg-accent text-accent-foreground'
-                              : 'border border-outline-control text-muted hover:text-foreground'
-                          }`}
-                        >
-                          {initial}
-                        </button>
-                      );
-                    })}
+                                ? 'bg-accent text-accent-foreground'
+                                : 'border border-outline-control text-muted hover:text-foreground'
+                            }`}
+                          >
+                            {initial}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className={row}>
+                  <span className={fieldLabel}>
+                    <MapPin className={LABEL_ICON} aria-hidden />
+                    {strings.calendar.event.location}
+                  </span>
+                  <div className={VALUE_CELL}>
+                    <TextField
+                      aria-label={strings.calendar.event.location}
+                      value={form.location}
+                      onChange={(value) => set('location', value)}
+                      className="w-full"
+                    >
+                      <Input
+                        fullWidth
+                        placeholder={strings.calendar.event.locationPlaceholder}
+                        className={`${FLAT_INPUT} ${PROPERTY_VALUE}`}
+                      />
+                    </TextField>
                   </div>
                 </div>
-              ) : null}
 
-              <TextField
-                aria-label={strings.calendar.event.location}
-                value={form.location}
-                onChange={(value) => set('location', value)}
-                className="flex flex-col gap-1.5"
-              >
-                <Label className="text-sm font-medium text-foreground">
-                  {strings.calendar.event.location}
-                </Label>
-                <Input fullWidth placeholder={strings.calendar.event.locationPlaceholder} />
-              </TextField>
+                <Select
+                  selectionMode="multiple"
+                  value={form.assigneeIds}
+                  onChange={(keys) => set('assigneeIds', (keys as (string | number)[]).map(String))}
+                >
+                  <div className={row}>
+                    <Label className={fieldLabel}>
+                      <UserRound className={LABEL_ICON} aria-hidden />
+                      {strings.calendar.event.team}
+                    </Label>
+                    <div className={VALUE_CELL}>
+                      <Select.Trigger className={trigger}>
+                        <AssigneeValue users={assignees} canAdd={assignees.length > 0} />
+                      </Select.Trigger>
+                    </div>
+                  </div>
+                  <Select.Popover {...listboxPopover} className={PANEL_MATCHES_TRIGGER}>
+                    <ListBox selectionMode="multiple" className={LISTBOX_FLUSH}>
+                      {users.map((user) => (
+                        <ListBox.Item
+                          key={user.id}
+                          id={user.id}
+                          textValue={user.name}
+                          className={TEXT_LISTBOX_ITEM}
+                        >
+                          <span className="flex items-center gap-2">
+                            <UserAvatar
+                              name={user.name}
+                              avatarUrl={user.avatarUrl}
+                              size="sm"
+                              className="size-5"
+                            />
+                            {user.name}
+                          </span>
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
 
-              <Select
-                selectionMode="multiple"
-                value={form.assigneeIds}
-                onChange={(keys) =>
-                  set('assigneeIds', (keys as (string | number)[]).map(String))
-                }
-              >
-                <Label>{strings.calendar.event.team}</Label>
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover {...listboxPopover}>
-                  <ListBox selectionMode="multiple">
-                    {users.map((user) => (
-                      <ListBox.Item key={user.id} id={user.id} textValue={user.name}>
-                        {user.name}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+              <div className={modalDivider} />
 
+              {/* The same block the other two dialogs carry, under the same
+                  name — see NotesBlock. */}
               <NotesBlock
                 value={form.description}
                 onChange={(html) => set('description', html)}
-                placeholder={strings.calendar.event.description}
-                title={strings.calendar.event.description}
+                placeholder={strings.routine.notesPlaceholder}
+                title={strings.routine.notesTitle}
                 isEditing
                 compact
               />

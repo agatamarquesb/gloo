@@ -147,6 +147,17 @@ export const blockDivider = `${modalDivider} mt-2 mb-1`;
 export const blockLeadColumn = 'flex w-7 shrink-0 items-center justify-start';
 
 /**
+ * The same lead for a block's *heading* — Notas, a checklist's name, Anexos —
+ * where the column is the icon's own width and nothing more.
+ *
+ * The wide column above exists so the things a block *lists* line up: a
+ * checkbox, a file's 28px tile. A heading has no such neighbour underneath it,
+ * so all the slack did was set its icon 20px away from the word it belongs to,
+ * and the pair read as two items on a row rather than as one label.
+ */
+export const blockHeadingLead = 'flex w-4 shrink-0 items-center justify-start';
+
+/**
  * A block heading, one step up in size and weight, for the task modal.
  *
  * "Visão geral", "Subtarefas" and "Anexos" name the four quadrants of a dialog
@@ -272,6 +283,25 @@ export const actionPill =
  */
 export const quietTextButton =
   'flex cursor-pointer items-center gap-1.5 text-muted transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50';
+
+/**
+ * The app's `···`: the button that opens a menu, wherever one is opened from.
+ *
+ * The glyph and nothing else — no ground at rest and none on hover either. A
+ * grey disc lighting up behind three dots made the quietest control in a card's
+ * header the loudest thing in it; what answers the cursor instead is the dots
+ * themselves, which go from grey to full ink. Same idea as the calendar's paging
+ * arrows, and for the same reason.
+ *
+ * Written down once because it is a *kind* of button rather than one button:
+ * anything that opens a dropdown list from a corner wears this.
+ *
+ * Both spellings of hover on purpose: `hover:` for the plain CSS state and
+ * `data-[hovered=true]` for React Aria's, which is what HeroUI's own Button
+ * paints its fill with.
+ */
+export const dotsMenuButton =
+  'shrink-0 bg-transparent text-muted shadow-none hover:bg-transparent hover:text-foreground data-[hovered=true]:bg-transparent data-[hovered=true]:text-foreground';
 
 /** Outline for controls defined by their edge, brighter in dark mode. */
 export const outlineControl = 'border-outline-control';

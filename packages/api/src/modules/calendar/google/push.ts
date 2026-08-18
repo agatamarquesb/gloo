@@ -1,7 +1,7 @@
 import { countOtherAttendees } from '@gloo/shared';
 
 import { prisma } from '../../../lib/prisma';
-import { googleFetch } from './client';
+import { googleFetch, googleTasksFetch } from './client';
 import { toRRule } from './mapper';
 
 /**
@@ -219,5 +219,42 @@ export async function createRemoteCalendar(
   } catch (caught) {
     log(caught);
     return null;
+  }
+}
+
+/**
+ * Tick a Google task off, or put it back — the one write this app makes against
+ * the Tasks API.
+ *
+ * Unlike every other push in this file, this one is *not* best-effort: its
+ * caller reports the failure and leaves our own row untouched. A tick is a fact
+ * about the task rather than about our copy of it, and the two disagreeing is
+ * worse than the tick not taking.
+ */
+export async function setRemoteTaskStatus(
+  accountId: string,
+  taskListId: string,
+  taskId: string,
+  done: boolean,
+): Promise<void> {
+  const account = await prisma.calendarAccount.findUnique({ where: { id: accountId } });
+  if (!account) throw new Error('Conta do Google não encontrada');
+
+  const response = await googleTasksFetch(
+    account,
+    `/lists/${encodeURIComponent(taskListId)}/tasks/${encodeURIComponent(taskId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status: done ? 'completed' : 'needsAction',
+        // Google keeps a completion instant beside the status and rejects a
+        // "needsAction" that still carries one.
+        completed: done ? new Date().toISOString() : null,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`task patch failed: ${response.status} ${await response.text()}`);
   }
 }

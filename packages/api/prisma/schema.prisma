@@ -39,6 +39,20 @@ enum CalendarProvider {
   GOOGLE
 }
 
+/// What a row on the calendar actually is.
+///
+/// EVENT is everything the app itself creates and everything Google sends
+/// through the Calendar API. TASK is a Google *task* — a different product with
+/// a different API, mirrored onto the grid so a day reads as one day rather than
+/// as two lists side by side; it is the only kind that can be ticked off.
+/// APPOINTMENT is a slot booked through an appointment schedule, which Google
+/// marks with its own `eventType`.
+enum CalendarItemKind {
+  EVENT
+  TASK
+  APPOINTMENT
+}
+
 /// How a recurring event repeats. Four fixed rules rather than a general RRULE
 /// — see EventRecurrence in the shared package for why, and for what happens
 /// to a Google event whose rule is something else.
@@ -361,6 +375,14 @@ model Agenda {
 
   /// The calendar's id on Google's side. Null for a Gloo-local agenda.
   googleCalendarId String?
+
+  /// The *task list's* id on Google's side, for the agenda that mirrors one.
+  ///
+  /// A task list is not a calendar — different API, different ids — but it is
+  /// the same thing to a reader: a named bucket of dated items with a colour.
+  /// Modelling it as an agenda is what lets the grid, the day summary, the
+  /// dot colours and the visibility filter all work on it unchanged.
+  googleTaskListId String?
   /// Google's incremental sync cursor for this calendar. Null until the first
   /// full sync completes; the token preserves that first request's time bounds.
   googleSyncToken  String?
@@ -379,6 +401,7 @@ model Agenda {
   events CalendarEvent[]
 
   @@unique([accountId, googleCalendarId])
+  @@unique([accountId, googleTaskListId])
   @@index([userId])
   @@map("agendas")
 }
@@ -441,6 +464,31 @@ model CalendarEvent {
   /// True when the user deleted this one occurrence. The row stays so expansion
   /// keeps skipping the slot, and so the deletion can be pushed to Google.
   isCancelled      Boolean         @default(false)
+
+  /// What this row is — see CalendarItemKind. Everything the app creates is an
+  /// EVENT; the other two only ever arrive from Google.
+  kind CalendarItemKind @default(EVENT)
+
+  /// Whether a TASK has been ticked off. Meaningless on the other two kinds,
+  /// which is why it is a plain flag rather than a status: an event is not a
+  /// thing you complete.
+  isDone Boolean @default(false)
+
+  /// The mirror on Google's *Tasks* side, for a row whose kind is TASK. The list
+  /// id is needed to write back: the Tasks API addresses a task as
+  /// list + task, and there is no lookup by task id alone.
+  googleTaskId     String?
+  googleTaskListId String?
+
+  /// The `due` date this task last arrived from Google with.
+  ///
+  /// What tells a task the user moved here from a task Google moved. The Tasks
+  /// API has no field for an hour — its `due` is a date, and the time is
+  /// discarded — so the hour on the grid is ours and only ours, and a plain
+  /// comparison against `due` would drag every scheduled task back to midnight
+  /// on the next sync. Kept, so an unchanged `due` means "Google has nothing new
+  /// to say about when this is" and the local time stands.
+  googleTaskDue DateTime?
 
   /// The mirror on Google's side. `googleEtag` is what the conflict check sends
   /// as If-Match; `googleICalUid` is what identifies the same event across

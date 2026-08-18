@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
   Link2,
-  Paperclip,
   Pencil,
+  Plus,
   Repeat,
-  ClipboardList,
+  Tag,
   Trash2,
   UserRound,
   X,
@@ -22,6 +22,7 @@ import {
   type RoutineDto,
 } from '@gloo/shared';
 
+import { AssigneeValue } from '@/components/common/AssigneeValue';
 import { UserAvatar } from '@/components/common/UserAvatar';
 import {
   useCreateRoutine,
@@ -36,12 +37,15 @@ import { useUsers } from '@/hooks/queries/users';
 import {
   FLAT_INPUT,
   LISTBOX_FLUSH,
+  OPEN_FIELD_FILL,
+  OPEN_FIELD_FILL_LIGHT,
   PANEL_MATCHES_TRIGGER,
   TEXT_LISTBOX_ITEM,
   listboxPopover,
 } from '@/theme/fieldStyles';
 // The property list is shared with the task modal — see theme/propertyRow.ts.
 import {
+  EMPTY_VALUE,
   LABEL_ICON,
   PROPERTY_LIST,
   PROPERTY_ROW_PITCH,
@@ -53,7 +57,6 @@ import { playSound } from '@/lib/sounds';
 import { colorFill, LABEL_PILL } from '@/theme/labelColors';
 import {
   TITLE_FIELD,
-  actionPill,
   dialogBodyFade,
   dialogClose,
   dialogFooter,
@@ -85,11 +88,25 @@ import { WeekdayPickerModal } from './WeekdayPickerModal';
 const CUSTOM_WEEKDAY = 'custom';
 
 /**
+ * "Criar checklist" and "Adicionar anexos" — the two things the dialog can grow.
+ *
+ * Set exactly as a property label is (see FIELD_LABEL): same size, same weight,
+ * same grey, so the pair reads as the end of the list above them rather than as
+ * a toolbar under it. The press is the only feedback: a slight shrink and a step
+ * into full ink, both released as soon as the pointer is.
+ */
+const ADD_ACTION = [
+  'flex cursor-pointer items-center gap-2 text-sm font-medium text-muted transition-[color,transform]',
+  'hover:text-foreground active:scale-[0.97] active:text-foreground',
+  'disabled:pointer-events-none disabled:opacity-50',
+].join(' ');
+
+/**
  * A property's value in this dialog, matching the task modal's exactly — see
  * PROPERTY_VALUE there. Same size, same weight, so the two dialogs read at one
  * scale rather than at two that happen to be close.
  */
-const PROPERTY_VALUE = 'text-sm font-medium text-foreground';
+const PROPERTY_VALUE = 'text-sm font-medium text-value-ink';
 
 /**
  * An option in one of the property lists, again the task modal's: the flush
@@ -686,19 +703,68 @@ export function RoutineModal({
               {/* No indent: with the title's icon gone there is no column to
                   clear, and everything in the dialog now starts on the same edge
                   as the rule under the header. */}
-                <SelectedLabels
-                  ids={form.labelIds}
-                  isEditing={isEditing}
-                  onChange={(labelIds) => set('labelIds', labelIds)}
-                  className={TAGS_ROW}
-                />
+                {/* Reading, the tags live here, under the name they belong to.
+                    Editing, they move into a property row of their own (see
+                    below) and this row empties — one place to see them, one
+                    place to change them, never both at once. */}
+                {isEditing ? null : (
+                  <SelectedLabels
+                    ids={form.labelIds}
+                    isEditing={false}
+                    onChange={(labelIds) => set('labelIds', labelIds)}
+                    className={TAGS_ROW}
+                  />
+                )}
               </div>
 
               {/* One property per row — label on the left, value on the right —
                   rather than three columns: the values are short, and stacking
                   them keeps the whole set scannable at a glance. */}
               <div className={PROPERTY_LIST}>
-                
+                {/* Etiquetas leads the list, and only while the dialog is
+                    unlocked: it is the one property whose value has somewhere
+                    else to live: under the title, where a reader looks for it.
+                    So the row is how you *set* them, not how you read them, and
+                    it is gone the moment there is nothing to set. */}
+                {isEditing ? (
+                  <div className={propertyRow}>
+                    <span className={fieldLabel}>
+                      <Tag className={LABEL_ICON} aria-hidden />
+                      {strings.label.title}
+                    </span>
+                    <div className={VALUE_CELL}>
+                      <LabelPicker
+                        scope={LabelScope.ROUTINE}
+                        selectedIds={form.labelIds}
+                        onChange={(labelIds) => set('labelIds', labelIds)}
+                        trigger={
+                          // The same bare trigger the other rows use, with the
+                          // chosen tags where their value would be — so the row
+                          // answers the question it asks, and the panel drops
+                          // from the same edge as every other property's.
+                          <Button
+                            variant="ghost"
+                            // No ground under the pointer: the pills inside are
+                            // the value, and a grey band appearing behind them
+                            // read as a second, larger pill wrapped round the
+                            // tags. The panel it opens is the affordance.
+                            className={`${trigger.replace(OPEN_FIELD_FILL, OPEN_FIELD_FILL_LIGHT)} h-auto min-h-0 justify-start bg-transparent hover:bg-transparent data-[hovered=true]:bg-transparent`}
+                          >
+                            {form.labelIds.length === 0 ? (
+                              <span className={PROPERTY_VALUE}>{EMPTY_VALUE}</span>
+                            ) : (
+                              <SelectedLabels
+                                ids={form.labelIds}
+                                isEditing={false}
+                                onChange={(labelIds) => set('labelIds', labelIds)}
+                              />
+                            )}
+                          </Button>
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : null}
 
               <Select
                 isDisabled={!isEditing}
@@ -849,32 +915,15 @@ export function RoutineModal({
                   </Label>
                   <div className={VALUE_CELL}>
                     <Select.Trigger className={trigger}>
-                      {/* The faces and their names, written here rather than
-                          left to Select.Value — which prints a comma-separated
-                          list of keys and cannot show an avatar. The task
-                          modal's Responsável row reads exactly this way. */}
-                      <span className="flex min-w-0 flex-wrap items-center gap-2">
-                        {assignees.length === 0 ? (
-                          <span className={`${PROPERTY_VALUE} text-muted!`}>
-                            {strings.task.noAssignees}
-                          </span>
-                        ) : (
-                          assignees.map((user) => (
-                            <span
-                              key={user.id}
-                              className={`flex min-w-0 items-center gap-2 ${PROPERTY_VALUE}`}
-                            >
-                              <UserAvatar
-                                name={user.name}
-                                avatarUrl={user.avatarUrl}
-                                size="sm"
-                                className="size-5"
-                              />
-                              <span className="truncate">{user.name}</span>
-                            </span>
-                          ))
-                        )}
-                      </span>
+                      {/* The very component the task dialog's Responsável row
+                          uses — a face and a name for one person, overlapped
+                          faces for several, and the dashed "+" where the faces
+                          end. Written out here before, which is how the two rows
+                          came to differ. */}
+                      <AssigneeValue
+                        users={assignees}
+                        canAdd={isEditing && assignees.length > 0}
+                      />
                     </Select.Trigger>
                   </div>
                 </div>
@@ -909,38 +958,27 @@ export function RoutineModal({
                 Checklist/Etiquetas/Anexos pills and read as their frame. */}
             {isEditing ? null : <div className={modalDivider} />}
 
-            {/* The three ways to enrich a routine, as one pill row above the
-                notes — same shape and grid as the Time blocking presets. Adding
-                anything is an edit, so the whole row goes with edit mode. */}
-            <div className={`grid grid-cols-3 gap-2 ${isEditing ? '' : 'hidden'}`}>
-              <Button
-                variant="outline"
-                size="sm"
-                fullWidth
-                className={actionPill}
-                isDisabled={!canAddChecklist}
-                onPress={addChecklist}
+            {/* The two ways to enrich a routine, side by side on the property
+                list's own line and set in the property list's own type: they are
+                not buttons on a form, they are two more things this dialog can
+                say about a routine. No ground, no edge, no hover fill — a "+"
+                and a word, which press by shrinking a little and darkening.
+                Adding anything is an edit, so the pair goes with edit mode. */}
+            <div className={`flex flex-wrap items-center gap-6 ${isEditing ? '' : 'hidden'}`}>
+              <button
+                type="button"
+                className={ADD_ACTION}
+                disabled={!canAddChecklist}
+                onClick={addChecklist}
               >
-                <ClipboardList className="size-4" />
-                {strings.routine.checklist}
-              </Button>
+                <Plus className="size-4" />
+                {strings.routine.addChecklist}
+              </button>
 
-              <LabelPicker
-                scope={LabelScope.ROUTINE}
-                selectedIds={form.labelIds}
-                onChange={(labelIds) => set('labelIds', labelIds)}
-              />
-
-              <Button
-                variant="outline"
-                size="sm"
-                fullWidth
-                className={actionPill}
-                onPress={openAttachments}
-              >
-                <Paperclip className="size-4" />
-                {strings.routine.attachments}
-              </Button>
+              <button type="button" className={ADD_ACTION} onClick={openAttachments}>
+                <Plus className="size-4" />
+                {strings.routine.addAttachments}
+              </button>
             </div>
 
             {/* Notes wear the same box and the same header row as the checklist

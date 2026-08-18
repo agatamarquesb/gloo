@@ -163,7 +163,7 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
           variant="fade"
           orientation="vertical"
           size={10}
-          className={`${LIST_HEIGHT} -mx-1.5 overflow-y-auto px-1.5 py-1 [scrollbar-width:thin]`}
+          className={`${LIST_HEIGHT} gloo-thin-scroll -mx-1.5 overflow-y-auto px-1.5 py-1`}
         >
           {/* The flex column is inside the scroller, not the scroller itself:
               rows are flex items either way, and as children of a fixed-height

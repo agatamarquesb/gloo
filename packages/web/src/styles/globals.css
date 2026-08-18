@@ -4,6 +4,48 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
+ * A scrollbar that stays out of the way — the Dashboard's routine list, its day
+ * summary, and both lists of tasks.
+ *
+ * `scrollbar-width: thin` is as narrow as the standard property goes, and at
+ * ~11px it still ran over the right-hand end of a row: a task's avatar and a
+ * routine's `···` both sit on that edge. WebKit's own pseudo-elements go
+ * narrower, so the bar is 4px of thumb on no track at all, and the 6px of
+ * padding these lists already carry is enough to keep it off the content.
+ *
+ * The thumb takes --border rather than a grey of its own, so it is the same
+ * hairline as every rule in the app, and it only appears while the list is
+ * hovered — a permanent mark down the side of a card reads as an edge of the
+ * card.
+ */
+.gloo-thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.gloo-thin-scroll:hover {
+  scrollbar-color: var(--border) transparent;
+}
+
+.gloo-thin-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.gloo-thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gloo-thin-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+.gloo-thin-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+/*
  * Gloo brand palette — the ONLY place these hex values are defined.
  *
  * Five official colors: blue, yellow, green, red, black. GREEN IS PRIMARY and
@@ -47,6 +89,12 @@
      themes, like every other brand colour. */
   --accent-hover: #d6e179;
   --accent-foreground: var(--black);
+  /* The week the calendar page is showing, drawn as one pill across the mini
+     month — and the rounded mark laid on it for today or the day you picked.
+     Per-theme because they are large, flat areas of colour: a wash mixed towards
+     white is a highlight on a white card and a lit panel on a near-black one. */
+  --week-band: color-mix(in srgb, var(--green) 18%, white);
+  --week-band-mark: color-mix(in srgb, var(--green) 55%, white);
   --success: var(--green);
   --success-foreground: var(--black);
   --warning: var(--yellow);
@@ -123,6 +171,40 @@
   --status-progress-text: #7a6410;
   --status-done-text: #56621b;
   --status-overdue-text: #a3502f;
+
+  /**
+   * A task row's ground while the pointer is on it.
+   *
+   * The palest step of the brand green — a shade above #eef2cf, which is the
+   * tint the row's own edge is drawn in: the fill has to read as the row lighting
+   * up, not as a second green block appearing inside its outline.
+   */
+  --row-hover: #f3f6dd;
+
+  /**
+   * Overdue red where it lands on the card itself — a late task's title, the
+   * `!!` before it, the deadline row in the dialog.
+   *
+   * Its own token rather than --status-overdue-text, which is the ink *on the
+   * pale overdue pill*: the pill gives that colour a light ground to sit on and
+   * the card does not, so on the dark surface the two want opposite things. Same
+   * value as the pill's here; a step into full chroma in dark mode.
+   */
+  --overdue-ink: #a3502f;
+
+  /**
+   * What a property answers in — the value beside "Setor", "Deadline",
+   * "Recorrência".
+   *
+   * A step off black rather than black: a column of six answers set in the page's
+   * full ink read as six headings, each as loud as the task's own name a few
+   * pixels above them. Grey asks and this replies — near enough to full strength
+   * to be the content, far enough to sit under the title.
+   *
+   * Chips are the exception and keep their own ink: a status or a priority is a
+   * coloured object, not a line of text.
+   */
+  --value-ink: #3f3f46;
 
   /* Task priority pills — the third and last exception to "five colours", for
    * the same reason as --status-*: priority is a scale, and a scale needs its
@@ -225,6 +307,14 @@
   --accent: var(--green);
   --accent-hover: #d6e179;
   --accent-foreground: var(--black);
+
+  /* Mixed towards black instead: the same two steps of the same green, read
+     against the dark card. The digits keep the theme's own ink, which is why
+     these stop where they do — a lighter band and white numbers on it were
+     unreadable, which is exactly the failure the light mode's values avoid by
+     going the other way. */
+  --week-band: color-mix(in srgb, var(--green) 20%, black);
+  --week-band-mark: color-mix(in srgb, var(--green) 42%, black);
   --success: var(--green);
   --success-foreground: var(--black);
   --warning: var(--yellow);
@@ -236,10 +326,32 @@
      Note these do NOT feed --green: the primary green is unchanged in dark
      mode. */
   --tile-todo: #6da1b6;
-  --tile-progress: #b69b4d;
+  /* Yellow and red a step further into chroma than the first pass gave them:
+     desaturated to sit quietly on the dark card, the two read as beige and
+     clay rather than as "em progresso" and "atrasadas". Lightness is unchanged,
+     so white text still lands where the note above says it does. */
+  --tile-progress: #c9a54a;
   --tile-done: #939e3f;
-  --tile-overdue: #b6988e;
+  --tile-overdue: #c99887;
   --tile-foreground: #ffffff;
+
+  /* HeroUI's own dark danger steps *down* in both lightness and chroma, which on
+     a near-black surface turns every red in the app — the bell's dot, the
+     delete rows, an error line — into a dull brick. Ours goes the other way:
+     red has to be the one colour that still reads as an alarm here. */
+  --danger: oklch(68% 0.235 25.7);
+
+  /* Overdue ink on the dark card, for the same reason: #a3502f is a colour that
+     needs a pale ground under it, and there is none here. The overdue *pill*
+     keeps that ink, since it brings its own. */
+  --overdue-ink: #ff7a5c;
+
+  /* The same step, taken from the other end: off white rather than off black. */
+  --value-ink: #d4d4d8;
+
+  /* A green-tinted step off the surface rather than the light mode's pale green
+     wash, which on a dark card would be a lit panel rather than a hovered row. */
+  --row-hover: color-mix(in oklab, var(--green) 14%, #1b1b1e);
 
   /* Outline only: a filled white disc glared and a dark one read as a heavy hole
      punched in the tile, but dropping the disc entirely left the icon floating
@@ -282,6 +394,9 @@
   --color-status-progress: var(--status-progress);
   --color-status-done: var(--status-done);
   --color-status-overdue: var(--status-overdue);
+  --color-row-hover: var(--row-hover);
+  --color-overdue-ink: var(--overdue-ink);
+  --color-value-ink: var(--value-ink);
   --color-status-todo-text: var(--status-todo-text);
   --color-status-progress-text: var(--status-progress-text);
   --color-status-done-text: var(--status-done-text);
@@ -506,7 +621,16 @@ body {
  * depends on what the day holds, so the 10th, the 17th and the 31st are the same
  * box in the same place whether or not anything is happening in them.
  */
-.gloo-dashboard-calendar {
+/*
+ * The compact month — the Dashboard's card and the Calendar page's mini
+ * calendar, which are the same object at the same size and were drifting apart
+ * as two.
+ *
+ * `.gloo-month-dots` is the only difference: the Dashboard hangs a row of marks
+ * under each day and needs the room, while the mini calendar draws a band across
+ * the week on screen instead and would only be spaced out by it.
+ */
+.gloo-compact-month {
   .calendar__cell {
     box-sizing: border-box;
     /* Explicitly off: HeroUI squares the cell, and a 28×26 box is not one. */
@@ -530,7 +654,7 @@ body {
      * as before, so a filled Wednesday and the filled Wednesday under it stay
      * two marks with a gap rather than one green column.
      */
-    margin: 2px auto 9px;
+    margin: 2px auto;
   }
 
   .calendar__header-cell {
@@ -555,28 +679,137 @@ body {
     color: var(--black);
   }
 
-  .calendar__cell[data-selected='true'] {
+  /*
+   * `.gloo-day-picked` beside react-aria's own attribute: the Dashboard drives
+   * its selection itself — see the overlay in CalendarCard, which exists so that
+   * pressing the day already open closes it — so on that card the attribute
+   * never arrives and the class is what paints. The mini calendar still uses the
+   * attribute. Same fill either way.
+   */
+  .calendar__cell[data-selected='true'],
+  .calendar__cell.gloo-day-picked {
     background-color: color-mix(in srgb, var(--green) 55%, white);
     color: var(--black);
   }
 
-  .calendar__cell:hover:not([data-selected='true'], [data-today='true']),
-  .calendar__cell[data-hovered='true']:not([data-selected='true'], [data-today='true']) {
+  .calendar__cell:hover:not([data-selected='true'], [data-today='true'], .gloo-day-picked),
+  .calendar__cell[data-hovered='true']:not([data-selected='true'], [data-today='true'], .gloo-day-picked) {
     background-color: color-mix(in srgb, var(--green) 28%, white);
   }
 
   /* Hovering today or the picked day lifts its own fill rather than replacing it
      with the neutral HeroUI would otherwise drop in — the day would have
      appeared to lose its meaning under the cursor. */
-  .calendar__cell[data-today='true']:hover:not([data-selected='true']),
-  .calendar__cell[data-today='true'][data-hovered='true']:not([data-selected='true']) {
+  .calendar__cell[data-today='true']:hover:not([data-selected='true'], .gloo-day-picked),
+  .calendar__cell[data-today='true'][data-hovered='true']:not([data-selected='true'], .gloo-day-picked) {
     background-color: var(--accent-hover);
   }
 
   .calendar__cell[data-selected='true']:hover,
-  .calendar__cell[data-selected='true'][data-hovered='true'] {
+  .calendar__cell[data-selected='true'][data-hovered='true'],
+  .calendar__cell.gloo-day-picked:hover {
     background-color: color-mix(in srgb, var(--green) 70%, white);
   }
+}
+
+/*
+ * The dots' room, and the reason the Dashboard's rows stand further apart: 3px
+ * of air, the 5px mark itself, and 1px so it clears the box under it — a week's
+ * marks belong to the week above them, and one sitting midway between two rows
+ * would be read against either.
+ */
+.gloo-month-dots .calendar__cell {
+  margin-bottom: 9px;
+}
+
+/*
+ * The other variant: a month whose week is banded rather than dotted.
+ *
+ * The cell fills its column instead of standing 28px wide in the middle of it,
+ * which is the whole point — the band is seven cells in a row, and centred cells
+ * left a gap of bare card between each of them, so the week read as seven marks
+ * rather than as one run.
+ */
+.gloo-month-band .calendar__cell {
+  width: 100%;
+  /*
+   * So that today's marker can be drawn *over* the band and under the date —
+   * see the pseudo-element below, which needs this cell to be the stacking
+   * context it is measured against.
+   */
+  isolation: isolate;
+}
+
+/*
+ * The week on screen: one flat pill across the seven days, rounded at the two
+ * ends and square everywhere between them.
+ *
+ * The shape has to be decided here rather than by a class the calendar hands
+ * each cell, because `.gloo-compact-month .calendar__cell` above already sets a
+ * radius and this stylesheet is not in Tailwind's layers — an inline
+ * `rounded-none` lost to it, which is what made the run read as seven separate
+ * boxes with the card showing through between them.
+ *
+ * One colour throughout, deliberately: the ends are not a second, stronger fill.
+ * They say where the week starts and stops by their shape alone, which is all a
+ * range needs, and darkening them made two of the seven days look chosen.
+ */
+.gloo-month-band .calendar__cell.gloo-band {
+  border-radius: 0;
+  background-color: var(--week-band);
+}
+
+.gloo-month-band .calendar__cell.gloo-band-start {
+  border-top-left-radius: 999px;
+  border-bottom-left-radius: 999px;
+}
+
+.gloo-month-band .calendar__cell.gloo-band-end {
+  border-top-right-radius: 999px;
+  border-bottom-right-radius: 999px;
+}
+
+/*
+ * Today and the day you picked, when they fall inside the band: a rounded box
+ * laid on the pill rather than a break in it.
+ *
+ * As the cell's own background they had to be either square — a hard-edged block
+ * in the middle of a rounded pill — or rounded, which cut two notches of bare
+ * card out of the run. Drawn as a layer inside the cell they can be rounded and
+ * still sit on the pill's colour, so the week stays one unbroken shape with a
+ * mark on it. `z-index: -1` keeps the date itself on top; the isolation above is
+ * what stops that -1 from sliding behind the card.
+ */
+.gloo-month-band .calendar__cell.gloo-band[data-today='true'],
+.gloo-month-band .calendar__cell.gloo-band[data-selected='true'],
+.gloo-month-band .calendar__cell.gloo-band[data-selected='true']:hover,
+.gloo-month-band .calendar__cell.gloo-band[data-today='true']:hover {
+  background-color: var(--week-band);
+}
+
+/* The picked day keeps the page's own ink on its mark. Only today's mark is
+   light enough in both themes to carry black, which is what the compact month
+   sets for every filled day and what would otherwise put black digits on a dark
+   olive square. */
+.gloo-month-band .calendar__cell.gloo-band[data-selected='true']:not([data-today='true']) {
+  color: var(--foreground);
+}
+
+.gloo-month-band .calendar__cell.gloo-band[data-today='true']::before,
+.gloo-month-band .calendar__cell.gloo-band[data-selected='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* Barely rounded — a chip with square shoulders sitting on the week's pill,
+     rather than a second pill inside it. */
+  border-radius: 2%;
+  background-color: var(--week-band-mark);
+}
+
+/* Today keeps the full brand green it has on every other month in the app. */
+.gloo-month-band .calendar__cell.gloo-band[data-today='true']::before {
+  background-color: var(--green);
 }
 
 
@@ -611,6 +844,34 @@ body {
   .gloo-rise {
     animation: gloo-rise 260ms var(--ease-out-fluid, cubic-bezier(0.32, 0.72, 0, 1)) both;
     will-change: transform, opacity;
+  }
+
+  /*
+   * Paging the calendar: the grid leans a few pixels the way it is going and
+   * comes back.
+   *
+   * A fifth of a second and 5px — not an animation you watch, one you feel. A
+   * week replaced by another week with no motion at all left nothing to say
+   * whether anything had happened, and a full slide of a grid this size is a
+   * page turn, which is far more ceremony than an arrow press deserves.
+   *
+   * Two class names for one animation because that is the only way to restart a
+   * CSS animation: re-applying the same class to an element that already has it
+   * does nothing, so the page alternates between them on every press. The
+   * direction rides in on --nudge, set inline.
+   */
+  @keyframes gloo-nudge {
+    35% {
+      transform: translateX(var(--nudge, -5px));
+    }
+    100% {
+      transform: none;
+    }
+  }
+
+  .gloo-nudge-a,
+  .gloo-nudge-b {
+    animation: gloo-nudge 200ms var(--ease-out-fluid, cubic-bezier(0.32, 0.72, 0, 1));
   }
 }
 

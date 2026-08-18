@@ -8,7 +8,7 @@ import { useShowOnlyAgenda, useUpdateAgenda } from '@/hooks/queries/calendar';
 import { ColorPicker } from '@/components/common/ColorPicker';
 import { colorFill } from '@/theme/labelColors';
 import { FIELD_PANEL } from '@/theme/fieldStyles';
-import { menuRow } from '@/theme/styleConstants';
+import { dotsMenuButton, menuRow } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 /** The panel is either the menu or the colour list — never both, as in Notion. */
@@ -50,7 +50,7 @@ export function AgendaMenu({
         isIconOnly
         size="sm"
         variant="ghost"
-        className="text-muted"
+        className={dotsMenuButton}
         aria-label={strings.calendar.agendas.title}
       >
         <MoreHorizontal className="size-4" />

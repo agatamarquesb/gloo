@@ -117,14 +117,18 @@ export const PILL_LISTBOX_ITEM = `cursor-pointer rounded-full border-0 ${LISTBOX
  * A list option that is a line of text — recurrence, the day of the week, a
  * sector.
  *
- * Three things it takes from HeroUI's own: no vertical padding and no minimum
- * height, so the hover is the height of the line rather than a 36px band around
- * it; a small radius instead of a 16px capsule, matching the panel it sits in;
- * and a fill half as strong, since a solid grey behind one option of four made
- * the list look like it had already been chosen from.
+ * Three things it takes from HeroUI's own: no minimum height, so the hover is
+ * the height of the line and a little air rather than a 36px band around it; a
+ * small radius instead of a 16px capsule, matching the panel it sits in; and a
+ * fill half as strong, since a solid grey behind one option of four made the
+ * list look like it had already been chosen from.
  */
 export const TEXT_LISTBOX_ITEM = [
-  `min-h-0 rounded-md ${LISTBOX_ITEM_INSET} py-0`,
+  // The 4px of block padding is what separates one option from the next: at
+  // `py-0` the hover was exactly the height of the line and four options read as
+  // one block of text with a band moving through it. It grows the panel rather
+  // than the row — the options are further apart, the type has not moved.
+  `min-h-0 rounded-md ${LISTBOX_ITEM_INSET} py-1`,
   'hover:bg-default/50 data-[hovered=true]:bg-default/50',
 ].join(' ');
 
@@ -171,8 +175,20 @@ export const FIELD_PANEL = [
  * grows the fill 8px to the left and the padding gives that 8px back to the
  * text, so the ground gets its inset and nothing moves as the list opens.
  */
+/**
+ * The fill itself, named so a caller can trade it for the lighter one.
+ *
+ * Two strengths because two kinds of value sit in these rows. A line of text
+ * needs the darker band to read as a field at all; a row that already holds
+ * something coloured — a chip, a tag — only needs the faintest ground, and the
+ * darker one closed round the pills like a second, larger pill. The light step
+ * is the one a chip's own panel uses for its field strip (see PANEL_FIELD).
+ */
+export const OPEN_FIELD_FILL = 'aria-expanded:bg-default/60';
+export const OPEN_FIELD_FILL_LIGHT = 'aria-expanded:bg-default/25';
+
 export const OPEN_FIELD_GROUND = [
-  'aria-expanded:rounded-t-md aria-expanded:rounded-b-none aria-expanded:bg-default/60',
+  `aria-expanded:rounded-t-md aria-expanded:rounded-b-none ${OPEN_FIELD_FILL}`,
   'aria-expanded:-ml-2 aria-expanded:pl-2',
 ].join(' ');
 

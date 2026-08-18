@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeft, Pencil, Tag } from 'lucide-react';
-import { Button, Input, Label, Popover } from '@heroui/react';
-import { TextField } from 'react-aria-components';
+import { Button, Popover } from '@heroui/react';
 
 import { DEFAULT_LABEL_COLOR, type LabelDto, type LabelScope, type PaletteColor } from '@gloo/shared';
 
@@ -9,6 +8,7 @@ import { AppCheckbox } from '@/components/common/AppCheckbox';
 import { ColorPicker } from '@/components/common/ColorPicker';
 import { SearchField } from '@/components/common/SearchField';
 import { useCreateLabel, useDeleteLabel, useLabels, useUpdateLabel } from '@/hooks/queries/labels';
+import { FIELD_PANEL } from '@/theme/fieldStyles';
 import { colorFill } from '@/theme/labelColors';
 import { actionPill } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
@@ -46,8 +46,13 @@ function LabelEditor({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <header className="flex items-center gap-2">
+    // A fixed shape with one scrolling part in the middle: the colour section
+    // grows by 200px the moment the mixer opens, and with the panel sizing
+    // itself to its content that growth went straight out of the bottom of the
+    // window — Salvar and Excluir with it. Now the panel stops at 70vh and the
+    // colours scroll inside it, so the two buttons are always where they were.
+    <div className="flex max-h-[70vh] flex-col gap-3">
+      <header className="flex shrink-0 items-center gap-2">
         <Button isIconOnly size="sm" variant="ghost" aria-label={strings.label.back} onPress={onBack}>
           <ChevronLeft className="size-4" />
         </Button>
@@ -58,27 +63,43 @@ function LabelEditor({
         <span className="size-8" aria-hidden />
       </header>
 
-      {/* Live preview of what the pill will look like. */}
-      <div className="flex justify-center rounded-xl bg-default p-3">
-        <span {...colorFill(color, 'rounded-lg px-3 py-1.5 text-sm text-black')}>
-          {trimmed || strings.label.namePlaceholder}
-        </span>
+      {/* The preview *is* the field: what the pill will look like, typed into
+          directly. A separate "Título" input under it was a second copy of the
+          same words, and the panel had no height to spend on saying anything
+          twice.
+
+          A bare input rather than HeroUI's: this one has to be the pill — the
+          fill, the ink and the shape all come from the colour chosen below it —
+          and every one of those is chrome the component brings with it.
+          `field-sizing-content` makes it as wide as what is typed, so it reads as
+          a tag rather than as a box across the panel. */}
+      <div className="flex shrink-0 justify-center rounded-xl bg-default p-3">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          aria-label={strings.label.nameLabel}
+          placeholder={strings.label.namePlaceholder}
+          // The field is why this panel opened, so the caret belongs in it.
+          // eslint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus
+          {...colorFill(
+            color,
+            'field-sizing-content min-w-24 max-w-full rounded-lg border-0 px-3 py-1.5 text-center text-sm outline-none placeholder:text-current placeholder:opacity-50',
+          )}
+        />
       </div>
 
-      <TextField value={name} onChange={setName} className="flex flex-col gap-1.5">
-        <Label className="text-sm font-medium text-foreground">{strings.label.nameLabel}</Label>
-        <Input fullWidth placeholder={strings.label.namePlaceholder} />
-      </TextField>
-
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium text-foreground">{strings.label.colorLabel}</span>
+      {/* The colours, and the mixer when it is open — the one part of the panel
+          whose height is not knowable. No "Selecionar uma cor" over it: the two
+          sections inside name themselves. */}
+      <div className="gloo-thin-scroll min-h-0 flex-1 overflow-y-auto pr-1">
         <ColorPicker value={color} onChange={setColor} />
       </div>
 
       {/* Salvar ends the row, where the button that commits a dialog always is;
           destroying the label is the other thing you can do from here and sits
           to its left, named in full so it cannot be mistaken for "discard". */}
-      <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border pt-3">
         {label ? (
           <Button
             variant="danger-soft"
@@ -162,8 +183,17 @@ export function LabelPicker({
         </Button>
       )}
 
-      <Popover.Content className="w-72">
-        <Popover.Dialog>
+      {/* From the trigger's left edge rather than centred on it: the trigger is
+          a property row that starts on the value column's own line, and a panel
+          centred under it stood half a panel to the left of everything else the
+          column opens. */}
+      <Popover.Content placement="bottom start" className={`w-72 ${FIELD_PANEL}`}>
+        {/* The panel's height belongs to the dialog inside it, not to the
+            popover: the mixer adds 200px when it opens, and with the height
+            living out here the growth was clipped instead of scrolled — the hex
+            row was cut in half. `overflow-visible` hands that job to the flex
+            column below, which has a max of its own and a scrolling middle. */}
+        <Popover.Dialog className="overflow-visible">
           {view.kind === 'edit' ? (
             <LabelEditor
               scope={scope}

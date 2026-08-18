@@ -12,7 +12,7 @@ import {
 
 import { prisma } from '../../lib/prisma';
 import { sanitizeNotes } from '../../lib/sanitizeHtml';
-import { deleteRemoteEvent, pushEvent } from './google/push';
+import { deleteRemoteEvent, pushEvent, setRemoteTaskStatus } from './google/push';
 import { eventInclude, toCalendarEventDto } from './mapper';
 import { defaultAgendaFor, ensureCalendarProvisioned } from './provision';
 
@@ -400,14 +400,67 @@ export async function calendarEventRoutes(app: FastifyInstance) {
       include: eventInclude,
     });
 
-    await pushEvent(
-      updated.id,
-      (error) => request.log.warn({ err: error }, 'Google push failed'),
-      wantsNotify(request.query),
-    );
+    // Tasks are a one-way street: they arrive from Google Tasks and nothing
+    // about them is written back except the tick — see POST /:id/done. Editing
+    // one here changes the Gloo copy alone, which is deliberate, because the
+    // hour a task is given is a thing Google has no field for (its `due` is a
+    // date; the API discards the time) and a half-mirrored task would be worse
+    // than an unmirrored one. pushEvent already ignores them — a task list has
+    // no googleCalendarId — so this only has to not add a second write.
+    if (!updated.googleTaskId) {
+      await pushEvent(
+        updated.id,
+        (error) => request.log.warn({ err: error }, 'Google push failed'),
+        wantsNotify(request.query),
+      );
+    }
 
     return toCalendarEventDto(await reread(updated.id));
   });
+
+  /**
+   * Tick a Google task off, or put it back.
+   *
+   * Its own route rather than a field on PATCH /:id, because a task is not an
+   * event being edited: nothing about it moves, and the write that matters
+   * happens in Google Tasks — a different API, addressed by list + task id.
+   *
+   * Google first. If that write fails the row is left alone, so the tick a user
+   * sees is never one that only exists here: the two would then disagree for as
+   * long as the task lived.
+   */
+  app.post<{ Params: { id: string }; Body: { done?: boolean } }>(
+    '/:id/done',
+    async (request, reply) => {
+      const { ownIds } = await visibleAgendas(request.authUser.id);
+
+      const event = await prisma.calendarEvent.findFirst({
+        where: { id: request.params.id, agendaId: { in: ownIds } },
+        include: { agenda: { select: { account: { select: { id: true } } } } },
+      });
+
+      if (!event) return reply.code(404).send({ error: 'Item não encontrado' });
+      if (event.kind !== 'TASK' || !event.googleTaskId || !event.googleTaskListId) {
+        return reply.code(400).send({ error: 'Só uma tarefa pode ser concluída' });
+      }
+
+      const done = request.body?.done ?? true;
+
+      try {
+        await setRemoteTaskStatus(event.agenda.account.id, event.googleTaskListId, event.googleTaskId, done);
+      } catch (caught) {
+        request.log.warn({ err: caught }, 'Google task update failed');
+        return reply.code(502).send({ error: 'Não foi possível atualizar no Google' });
+      }
+
+      const updated = await prisma.calendarEvent.update({
+        where: { id: event.id },
+        data: { isDone: done },
+      });
+
+      return toCalendarEventDto(await reread(updated.id));
+    },
+  );
 
   app.delete<{
     Params: { id: string };

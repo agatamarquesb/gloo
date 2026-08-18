@@ -1,7 +1,16 @@
-import type { ComponentType } from 'react';
-import { CalendarDays, ChevronRight, Clock, Tag, UserRound } from 'lucide-react';
+import { Clock, Shapes } from 'lucide-react';
+import { ScrollShadow } from '@heroui/react';
 
-import { UserAvatar } from '@/components/common/UserAvatar';
+import { CalendarAgendaGlyph, CalendarDayGlyph } from '@/components/common/CalendarGlyph';
+import {
+  OVERVIEW_BAR,
+  OVERVIEW_BOX,
+  OVERVIEW_ICON,
+  OVERVIEW_TITLE,
+  OverviewChevron,
+  OverviewRow,
+} from '@/components/common/OverviewCard';
+
 import type { ColorPaint } from '@/theme/labelColors';
 import { modalDivider } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
@@ -9,65 +18,18 @@ import { strings } from '@/strings/pt-BR';
 import { formatSummaryDate, formatSummaryTime, type DayItem, type DayItemAccent } from './dayAgenda';
 
 /**
- * An item's own heading: 14px, medium — a step under the card titles around it,
- * because this names one thing *inside* a card rather than the card.
- */
-const ITEM_TITLE = 'text-sm font-medium text-surface-foreground';
-
-/**
- * One thing on the day, as its own box.
+ * How much of the day the panel shows before it starts scrolling: two items and
+ * the top of a third.
  *
- * The items used to be blocks of rows with a hairline between them, which read
- * as one long table broken up rather than as two or three separate things. A
- * border round each says what the rule was trying to: this is where the meeting
- * ends and the task begins.
- */
-const ITEM_BOX = 'flex gap-3 rounded-2xl border border-border p-3';
-
-/**
- * The bar down an item's left edge, in the colour of the agenda or sector it
- * belongs to — the same colour as that day's dot on the month above.
+ * A day with eight things on it used to push the Timer below halfway down the
+ * page and turn the Dashboard's right-hand column into a list of one day. Two is
+ * what the month above can afford to give up — and the sliver of the third is
+ * what says there is more, which a clean cut at two would not.
  *
- * `self-stretch` rather than a height: it is as tall as the item beside it,
- * whatever that item turns out to hold. Inside the box's padding rather than on
- * its edge, so the rounded ends read as a mark on the card instead of as a
- * thickened border.
+ * A maximum rather than a height: one meeting should not leave two thirds of the
+ * panel empty under it.
  */
-const ITEM_BAR = 'w-1 shrink-0 self-stretch rounded-full';
-
-/**
- * A label/value pair, on the property rows' own grid.
- *
- * The label column is fixed rather than sized to its text, so Data, Hora, Tipo
- * and Responsável all answer on one vertical line — the thing that makes four
- * short rows read as a table instead of as four sentences. Wide enough for
- * "Responsável" with its icon, which is the longest of the four.
- *
- * `py-1` and not the half it was: the rows carry an avatar and icons now, and at
- * 2px of air they were four lines of text touching each other.
- */
-function Row({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: ComponentType<{ className?: string }>;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2 py-1">
-      {/* The icon at full strength while the word stays grey, as in the two
-          entity modals — see LABEL_ICON. At this size a muted glyph is mostly
-          gone, and these are what the column is scanned by. */}
-      <span className="flex items-center gap-1.5 text-xs text-muted">
-        <Icon className="size-3.5 shrink-0 text-foreground" />
-        {label}
-      </span>
-      <span className="min-w-0 text-xs text-foreground">{children}</span>
-    </div>
-  );
-}
+const LIST_HEIGHT = 'max-h-[17.5rem]';
 
 /**
  * One thing on the day: its name and the four facts about it.
@@ -79,98 +41,70 @@ function Row({
 function DayItemBlock({
   item,
   paintAccent,
+  sourceOf,
   onOpenCalendar,
 }: {
   item: DayItem;
   paintAccent: (accent: DayItemAccent, className: string) => ColorPaint;
+  sourceOf: (item: DayItem) => string;
   onOpenCalendar: () => void;
 }) {
   const time = formatSummaryTime(item);
 
   return (
-    <li className={ITEM_BOX}>
-      <span aria-hidden {...paintAccent(item.accent, ITEM_BAR)} />
+    <li className={OVERVIEW_BOX}>
+      <span aria-hidden {...paintAccent(item.accent, OVERVIEW_BAR)} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Name on the left, the way through on the right. The chevron is the
             only thing in the panel that leaves it: everything here is a summary,
             and the calendar is where you act on it. */}
         <div className="flex items-start justify-between gap-2 pb-1">
-          <span className={`${ITEM_TITLE} min-w-0 break-words`}>{item.title}</span>
-          <button
-            type="button"
-            className="flex shrink-0 cursor-pointer items-center text-muted transition-colors hover:text-surface-foreground"
-            aria-label={strings.dashboard.day.openCalendar}
-            title={strings.dashboard.day.openCalendar}
+          <span className={`${OVERVIEW_TITLE} min-w-0 break-words`}>{item.title}</span>
+          <OverviewChevron
+            label={strings.dashboard.day.openCalendar}
             onClick={onOpenCalendar}
-          >
-            <ChevronRight className="size-4" />
-          </button>
+          />
         </div>
 
         {/* When before what: a day is read as a sequence, so the two rows that
             place the item in it come first and the rows that describe it
             follow. */}
-        <Row icon={CalendarDays} label={strings.dashboard.day.date}>
+        {/* The calendar in this row shows the very day it is reporting — see
+            CalendarDayGlyph. `item.day` is YYYY-MM-DD, so the day of the month
+            is its last two characters. */}
+        <OverviewRow
+          icon={<CalendarDayGlyph day={Number(item.day.slice(8, 10))} className={OVERVIEW_ICON} />}
+          label={strings.dashboard.day.date}
+        >
           {formatSummaryDate(item.day)}
-        </Row>
-        <Row icon={Clock} label={strings.dashboard.day.time}>
+        </OverviewRow>
+        <OverviewRow icon={<Clock className={OVERVIEW_ICON} />} label={strings.dashboard.day.time}>
           {time ?? strings.dashboard.day.noTime}
-        </Row>
-        {/* The tag turned flat: lucide's own points down and to the right, and a
-            label on a row of labels reads as one lying on its side. */}
-        <Row icon={TagHorizontal} label={strings.dashboard.day.type}>
+        </OverviewRow>
+        {/* Shapes rather than a tag: a tag is a thing you *attach*, and the row
+            is not about labels — it says what kind of thing this is, which is
+            what three different shapes side by side say at a glance. */}
+        <OverviewRow icon={<Shapes className={OVERVIEW_ICON} />} label={strings.dashboard.day.type}>
           {strings.dashboard.day.kind[item.kind]}
-        </Row>
+        </OverviewRow>
 
-        {item.assignees.length > 0 ? (
-          <Row icon={UserRound} label={strings.dashboard.day.assignee}>
-            {/* One person is a face and a name — the same pair the two entity
-                modals show, and a lone unlabelled avatar was a riddle. Several
-                are faces alone: three names in a column this narrow wrap onto
-                three lines, and recognising a team without reading it is what an
-                avatar row is for. Overlapped and ringed in the card's own
-                surface, so a stack reads as several people rather than as one
-                smear.
+        {/* Where it came from, in place of who it is for. The same calendar as
+            the Data row, marked with an A: the two rows are about the same
+            object seen from two sides — when it is, and which calendar it is in
+            — and the pair reads as one family. On this panel the
+            question a reader has is which calendar they are looking at — the
+            summary is opened from a month whose dots mix both — and the day's
+            own tasks are all theirs anyway, so the name added nothing. */}
+        <OverviewRow icon={<CalendarAgendaGlyph className={OVERVIEW_ICON} />} label={strings.dashboard.day.source}>
+          {sourceOf(item)}
+        </OverviewRow>
 
-                16px, down from 20: the avatars are inside a row of 12px text
-                now, and at 20 they set the height of every row they appeared in
-                — one line of the four standing taller than the other three. */}
-            {item.assignees.length === 1 ? (
-              <span className="flex min-w-0 items-center gap-1.5">
-                <UserAvatar
-                  name={item.assignees[0].name}
-                  avatarUrl={item.assignees[0].avatarUrl}
-                  size="sm"
-                  className="size-4 shrink-0"
-                />
-                <span className="truncate">{item.assignees[0].name}</span>
-              </span>
-            ) : (
-              <span className="flex items-center -space-x-1">
-                {item.assignees.map((user) => (
-                  <span key={user.id} className="rounded-full ring-2 ring-surface" title={user.name}>
-                    <UserAvatar
-                      name={user.name}
-                      avatarUrl={user.avatarUrl}
-                      size="sm"
-                      className="size-4"
-                    />
-                  </span>
-                ))}
-              </span>
-            )}
-          </Row>
-        ) : null}
       </div>
     </li>
   );
 }
 
-/** lucide's Tag, lying flat: its point runs down-right at 45°, so -45° levels it. */
-function TagHorizontal({ className = '' }: { className?: string }) {
-  return <Tag className={`${className} -rotate-45`} />;
-}
 
 /**
  * What is on the day you picked, opened underneath the month inside the same
@@ -185,11 +119,14 @@ function TagHorizontal({ className = '' }: { className?: string }) {
 export function DayAgendaPanel({
   items,
   paintAccent,
+  sourceOf,
   onOpenCalendar,
 }: {
   items: DayItem[];
   /** An item's colour, resolved by the card — see DayItemAccent. */
   paintAccent: (accent: DayItemAccent, className: string) => ColorPaint;
+  /** Which calendar an item belongs to, resolved by the card. */
+  sourceOf: (item: DayItem) => string;
   /** The chevron on each item — through to that day on the calendar page. */
   onOpenCalendar: () => void;
 }) {
@@ -199,21 +136,29 @@ export function DayAgendaPanel({
       <div className={modalDivider} />
 
       {items.length === 0 ? (
-        // Pale, and the panel's own smallest type: nothing to report is not
-        // news, and saying so any louder would give an empty day the weight of a
-        // full one.
-        <p className="py-1 text-xs text-muted/70">{strings.dashboard.day.empty}</p>
+        // Centred, because it is the whole of what the panel has to say and a
+        // single short line pinned to the left edge read as a label for the rule
+        // above it. Pale, and the panel's own smallest type: nothing to report is
+        // not news, and saying so any louder would give an empty day the weight
+        // of a full one.
+        <p className="py-2 text-center text-xs text-muted/70">{strings.dashboard.day.empty}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {items.map((item) => (
-            <DayItemBlock
-              key={item.id}
-              item={item}
-              paintAccent={paintAccent}
-              onOpenCalendar={onOpenCalendar}
-            />
-          ))}
-        </ul>
+        // The negative margin lets the scrollbar sit in the card's own padding
+        // rather than over the items' right edge, and the padding puts the items
+        // back where they were. Same arrangement the Routines list uses.
+        <ScrollShadow className={`${LIST_HEIGHT} gloo-thin-scroll -mr-1.5 overflow-y-auto pr-1.5`}>
+          <ul className="flex flex-col gap-2">
+            {items.map((item) => (
+              <DayItemBlock
+                key={item.id}
+                item={item}
+                paintAccent={paintAccent}
+                sourceOf={sourceOf}
+                onOpenCalendar={onOpenCalendar}
+              />
+            ))}
+          </ul>
+        </ScrollShadow>
       )}
     </div>
   );

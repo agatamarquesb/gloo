@@ -5,10 +5,9 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 
 import type { TaskFilters, TaskSortBy, TaskStatusFilter } from '@gloo/shared';
 
-import { CreateTaskModal } from '@/components/tasks/CreateTaskModal';
 import { TaskCard } from '@/components/tasks/TaskCard';
 import { TaskFiltersBar } from '@/components/tasks/TaskFiltersBar';
-import { TaskModal } from '@/components/tasks/TaskModal';
+import { NewTaskModal, TaskModal } from '@/components/tasks/TaskModal';
 import { TaskStatusPills } from '@/components/tasks/TaskStatusPills';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useDebouncedValue } from '@/hooks/ui/useDebouncedValue';
@@ -136,7 +135,7 @@ export function TasksPage() {
       </div>
 
       {taskId ? <TaskModal taskId={taskId} onClose={() => navigate(closeTo)} /> : null}
-      <CreateTaskModal isOpen={isCreateOpen} onClose={() => setCreateOpen(false)} />
+      {isCreateOpen ? <NewTaskModal onClose={() => setCreateOpen(false)} /> : null}
     </div>
   );
 }

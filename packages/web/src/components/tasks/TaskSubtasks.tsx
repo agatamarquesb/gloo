@@ -152,6 +152,16 @@ export function TaskSubtasks({
         ) : null}
       </div>
 
+      {/* The same sentence Anexos and the note say, in the same place: centred in
+          what is left of the block. Only while the dialog is locked — editing,
+          the block is a list you are adding to and "there is nothing here" is
+          the state you are busy leaving. */}
+      {subtasks.length === 0 && !isEditing ? (
+        <p className="flex flex-1 items-center justify-center text-center text-xs text-muted">
+          {strings.attachment.empty}
+        </p>
+      ) : null}
+
       <SectionScroll className={blockRowList}>
         {subtasks.map((subtask) => (
           // Checkbox, then the text, then the × on the row's right edge — the

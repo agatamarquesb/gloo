@@ -162,6 +162,22 @@ export function useCreateEvent() {
   });
 }
 
+/**
+ * Ticking a Google task off, from the grid.
+ *
+ * Its own mutation rather than a field on useUpdateEvent: the write lands in
+ * Google Tasks, and the route refuses anything that is not a task — see
+ * POST /calendar/events/:id/done.
+ */
+export function useToggleEventDone() {
+  const invalidate = useInvalidateCalendar();
+  return useMutation({
+    mutationFn: ({ id, done }: { id: string; done: boolean }) =>
+      apiClient.post<CalendarEventDto>(`/calendar/events/${id}/done`, { done }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useUpdateEvent() {
   const invalidate = useInvalidateCalendar();
   return useMutation({

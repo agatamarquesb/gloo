@@ -60,7 +60,7 @@ export function RoutineLabels({
           key={label.id}
           {...colorFill(
             label.color,
-            `${isCollapsed ? COLLAPSED_PILL : LABEL_PILL} transition-[font-weight] group-hover:font-medium`,
+            `${isCollapsed ? COLLAPSED_PILL : LABEL_PILL}`,
           )}
         >
           {isCollapsed ? null : label.name}

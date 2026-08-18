@@ -1,9 +1,9 @@
-import type { CalendarSyncResultDto } from '@gloo/shared';
+import { CalendarItemKind, dateInZone, type CalendarSyncResultDto } from '@gloo/shared';
 
 import { prisma } from '../../../lib/prisma';
 import { nextAgendaColor } from '../provision';
 import { sanitizeNotes } from '../../../lib/sanitizeHtml';
-import { googleFetch, GoogleAuthError } from './client';
+import { googleFetch, googleTasksFetch, GoogleAuthError } from './client';
 import {
   attendeeEmails,
   isAllDay,
@@ -42,6 +42,23 @@ interface AccountRow {
   tokenExpiresAt: Date | null;
 }
 
+/**
+ * What Google's own `eventType` says this is.
+ *
+ * Only two of its values change anything here. `appointment` is a slot booked
+ * through an appointment schedule — the third thing the "criar" menu offers, and
+ * the one a reader wants told apart from an ordinary meeting. Everything else —
+ * `default`, `focusTime`, `outOfOffice`, `workingLocation`, `fromGmail`,
+ * `birthday` — is an event: they differ in what they *mean* to Google, not in
+ * what they are to a calendar.
+ *
+ * Tasks are not here at all: they come from a different API entirely, and are
+ * marked TASK where they are imported — see importTasks.
+ */
+function kindFor(eventType: string | undefined): CalendarItemKind {
+  return eventType === 'appointment' ? CalendarItemKind.APPOINTMENT : CalendarItemKind.EVENT;
+}
+
 interface CalendarListEntry {
   id: string;
   summary?: string;
@@ -49,15 +66,26 @@ interface CalendarListEntry {
   accessRole?: string;
   primary?: boolean;
   deleted?: boolean;
+  /**
+   * The calendar's colour as Google shows it, `#rrggbb` — the one the user
+   * actually picked over there, not the id of a swatch we would have to map.
+   */
+  backgroundColor?: string;
 }
 
 /**
  * Import the account's calendar list as agendas.
  *
- * Colours come from our palette rather than Google's — theirs are a fixed set
- * of 24 that have nothing to do with this design system. Assigned once, on
- * first import, and never touched again so a user's own recolouring survives
- * every later sync.
+ * Colours are Google's own, taken from `backgroundColor` and kept in step on
+ * every sync: a calendar the user recognises by its colour over there has to be
+ * the same colour here, and ours — a palette of ten assigned by order of import
+ * — made "Feriados" a different colour in each place.
+ *
+ * The cost is that recolouring a Google agenda inside Gloo no longer sticks: the
+ * next sync writes Google's value back over it. That is the same trade the name
+ * already makes, and it is what "exactly the colour it is in Google" means.
+ * Agendas in the Gloo account are untouched by any of this — they have no
+ * calendar upstream and keep the palette.
  */
 async function importAgendas(account: AccountRow): Promise<number> {
   const response = await googleFetch(account, '/users/me/calendarList?minAccessRole=reader');
@@ -103,18 +131,20 @@ async function importAgendas(account: AccountRow): Promise<number> {
         where: {
           accountId_googleCalendarId: { accountId: account.id, googleCalendarId: entry.id },
         },
-        // Name and access can change on Google's side; colour and visibility
-        // are the user's and are left alone.
-        data: { name, isReadOnly },
+        // Name, access and colour all belong to Google; visibility is the user's
+        // and is left alone. A calendar with no colour in the response keeps
+        // whatever it has rather than being reset to grey.
+        data: { name, isReadOnly, ...(entry.backgroundColor ? { color: entry.backgroundColor } : {}) },
       });
       continue;
     }
 
-    // nextAgendaColor rather than a find-or-grey: past ten agendas the palette
-    // is exhausted and falling back to a fixed colour gave two calendars the
-    // same grey, which is exactly what colouring them was for. Cycling at least
-    // keeps neighbours apart.
-    const color = nextAgendaColor(usedColors);
+    // Google's colour when it sent one. The fallback is the old behaviour, for
+    // the calendar that arrives without one: nextAgendaColor rather than a
+    // find-or-grey, because past ten agendas the palette is exhausted and a
+    // fixed fallback gave two calendars the same grey — which is exactly what
+    // colouring them was for.
+    const color = entry.backgroundColor ?? nextAgendaColor(usedColors);
     usedColors.push(color);
 
     await prisma.agenda.create({
@@ -132,6 +162,275 @@ async function importAgendas(account: AccountRow): Promise<number> {
   }
 
   return imported;
+}
+
+interface GoogleTaskList {
+  id: string;
+  title?: string;
+}
+
+interface GoogleTask {
+  id: string;
+  title?: string;
+  notes?: string;
+  status?: string;
+  /** RFC 3339, and always midnight UTC: a Google task is due on a *day*. */
+  due?: string;
+  deleted?: boolean;
+  hidden?: boolean;
+  updated?: string;
+}
+
+/**
+ * Google's task lists, as agendas.
+ *
+ * A task list is not a calendar — different API, different ids — but it is the
+ * same thing to a reader: a named bucket of dated items with a colour. Modelling
+ * it as an agenda is what lets the grid, the day summary, the dot colours and
+ * the `···` filter all work on tasks without knowing they are tasks.
+ *
+ * Read-only, because everything a calendar lets you do to an event — drag it,
+ * resize it, change its hours — is meaningless for a task. The one thing a task
+ * *can* do is be ticked off, which goes through its own route.
+ */
+async function importTaskLists(
+  account: AccountRow,
+  log: (error: unknown, context: string) => void,
+): Promise<GoogleTaskList[]> {
+  const response = await googleTasksFetch(account, '/users/@me/lists?maxResults=100');
+
+  // A refusal here is not a failed sync: an account linked before this app asked
+  // for the Tasks scope answers 403, and the calendar half is untouched by that.
+  // But it is *reported* — Google says which of the several reasons it is
+  // ("insufficient authentication scopes", "Tasks API has not been used in
+  // project N"), and swallowing that left no way to tell a missing consent from
+  // a disabled API.
+  if (response.status === 403 || response.status === 401) {
+    log(
+      new Error(`tasklists refused: ${response.status} ${await response.text()}`),
+      `tasks for account ${account.id}`,
+    );
+    return [];
+  }
+  if (!response.ok) {
+    throw new GoogleAuthError(`tasklists failed: ${response.status} ${await response.text()}`);
+  }
+
+  const { items = [] } = (await response.json()) as { items?: GoogleTaskList[] };
+  const used = await prisma.agenda.findMany({
+    where: { userId: account.userId },
+    select: { color: true },
+  });
+  const usedColors = used.map((agenda) => agenda.color);
+
+  for (const list of items) {
+    const existing = await prisma.agenda.findFirst({
+      where: { accountId: account.id, googleTaskListId: list.id },
+      select: { id: true },
+    });
+    const name = list.title ?? 'Tasks';
+
+    if (existing) {
+      // `isReadOnly: false` on the way past as well as on creation: the lists
+      // imported before this app could write to Tasks were stored read-only,
+      // and one sync is what turns them writable rather than a migration.
+      await prisma.agenda.update({
+        where: { id: existing.id },
+        data: { name, isReadOnly: false },
+      });
+      continue;
+    }
+
+    const color = nextAgendaColor(usedColors);
+    usedColors.push(color);
+    await prisma.agenda.create({
+      data: {
+        accountId: account.id,
+        userId: account.userId,
+        name,
+        color,
+        // Writable, in the sense the app means it: a task can be opened,
+        // renamed and given an hour *here*. None of that is sent back — see the
+        // PATCH route — but read-only is what stops the dialog opening at all,
+        // and a task you cannot place on your own day is the thing this whole
+        // integration was for.
+        isReadOnly: false,
+        googleTaskListId: list.id,
+      },
+    });
+  }
+
+  return items;
+}
+
+/**
+ * One task list's tasks, as calendar rows.
+ *
+ * Stored as all-day items on the day they are due — which is the only placement
+ * a Google task has: its `due` is a date, not an hour. A task with no due date
+ * is not on any day and is skipped; it lives in Google's own list, which is
+ * where it belongs until it is scheduled.
+ *
+ * Completed tasks are imported too, ticked: a day's list reading "three things,
+ * two done" is the point of showing them at all.
+ */
+async function importTasks(
+  account: AccountRow,
+  agenda: { id: string; googleTaskListId: string | null },
+): Promise<{ imported: number; removed: number }> {
+  if (!agenda.googleTaskListId) return { imported: 0, removed: 0 };
+
+  const listId = encodeURIComponent(agenda.googleTaskListId);
+  const params = new URLSearchParams({
+    maxResults: '100',
+    showCompleted: 'true',
+    showHidden: 'true',
+    dueMin: new Date(Date.now() - INITIAL_WINDOW_DAYS * 86_400_000).toISOString(),
+  });
+
+  const response = await googleTasksFetch(account, `/lists/${listId}/tasks?${params}`);
+  if (response.status === 403) return { imported: 0, removed: 0 };
+  if (!response.ok) {
+    throw new GoogleAuthError(`tasks failed: ${response.status} ${await response.text()}`);
+  }
+
+  const { items = [] } = (await response.json()) as { items?: GoogleTask[] };
+  let imported = 0;
+  let removed = 0;
+
+  for (const task of items) {
+    if (task.deleted) {
+      const { count } = await prisma.calendarEvent.deleteMany({
+        where: { agendaId: agenda.id, googleTaskId: task.id },
+      });
+      removed += count;
+      continue;
+    }
+
+    if (!task.due) continue;
+
+    const startsAt = new Date(task.due);
+    if (Number.isNaN(startsAt.getTime())) continue;
+
+    const data = {
+      title: task.title?.trim() || '(sem título)',
+      description: sanitizeNotes(task.notes ?? null),
+      startsAt,
+      // A day, as the rest of the app stores all-day items: midnight to
+      // midnight, end exclusive.
+      endsAt: new Date(startsAt.getTime() + 86_400_000),
+      isAllDay: true,
+      timeZone: 'UTC',
+      kind: CalendarItemKind.TASK,
+      isDone: task.status === 'completed',
+      googleTaskId: task.id,
+      googleTaskListId: agenda.googleTaskListId,
+      // What Google said this time, so the next sync can tell whether it has
+      // changed its mind about the day — see the update below.
+      googleTaskDue: startsAt,
+      lastSyncedAt: new Date(),
+    };
+
+    const existing = await prisma.calendarEvent.findFirst({
+      where: { agendaId: agenda.id, googleTaskId: task.id },
+      select: {
+        id: true,
+        startsAt: true,
+        endsAt: true,
+        isAllDay: true,
+        timeZone: true,
+        googleTaskDue: true,
+      },
+    });
+
+    if (existing) {
+      /*
+       * When a task is scheduled here, it stays scheduled here.
+       *
+       * Google's `due` is a date — the Tasks API discards the time of day, which
+       * is why a task Google Calendar itself draws at 11:00 arrives at this
+       * endpoint as midnight UTC. Taking that at face value would undo a drag
+       * onto 11:00 on the very next sync: the task would jump back into the
+       * all-day strip, every few minutes, for as long as the page was open.
+       *
+       * So the two sides own different halves of the answer. Google owns the
+       * *day*, and when it changes the day it wins — the task moves, keeping
+       * whatever hour it had here. Gloo owns the hour, always. `googleTaskDue`
+       * is what tells those apart: it is the date Google last said, so a `due`
+       * that still matches it means Google has said nothing new and every local
+       * placement stands.
+       */
+      const googleMovedIt =
+        existing.googleTaskDue === null ||
+        existing.googleTaskDue.getTime() !== startsAt.getTime();
+
+      const schedule = googleMovedIt
+        ? movedTo(startsAt, existing)
+        : {
+            startsAt: existing.startsAt,
+            endsAt: existing.endsAt,
+            isAllDay: existing.isAllDay,
+            timeZone: existing.timeZone,
+          };
+
+      await prisma.calendarEvent.update({
+        where: { id: existing.id },
+        data: { ...data, ...schedule },
+      });
+    } else {
+      await prisma.calendarEvent.create({
+        data: { ...data, agendaId: agenda.id, createdById: account.userId },
+      });
+      imported += 1;
+    }
+  }
+
+  return { imported, removed };
+}
+
+/**
+ * The same task, on the day Google has just moved it to.
+ *
+ * A task that had been given an hour here keeps it: only the date changes, and
+ * the block simply moves across the grid. One that was still all-day stays
+ * all-day. Either way the length it had is the length it keeps.
+ */
+function movedTo(
+  due: Date,
+  existing: { startsAt: Date; endsAt: Date; isAllDay: boolean; timeZone: string },
+): { startsAt: Date; endsAt: Date; isAllDay: boolean; timeZone: string } {
+  if (existing.isAllDay) {
+    return {
+      startsAt: due,
+      endsAt: new Date(due.getTime() + 86_400_000),
+      isAllDay: true,
+      timeZone: 'UTC',
+    };
+  }
+
+  // The wall-clock time it is at now, on the new date. Built from the parts
+  // rather than by adding a difference in milliseconds, so a move across a clock
+  // change lands on the same hour rather than an hour beside it.
+  const [year, month, day] = dateInZone(due, 'UTC')
+    .split('-')
+    .map((part) => Number(part));
+  const at = new Date(existing.startsAt);
+  const startsAt = new Date(
+    year,
+    month - 1,
+    day,
+    at.getHours(),
+    at.getMinutes(),
+    0,
+    0,
+  );
+
+  return {
+    startsAt,
+    endsAt: new Date(startsAt.getTime() + (existing.endsAt.getTime() - existing.startsAt.getTime())),
+    isAllDay: false,
+    timeZone: existing.timeZone,
+  };
 }
 
 /**
@@ -259,6 +558,7 @@ async function importEvents(
         googleICalUid: item.iCalUID ?? null,
         googleEtag: item.etag ?? null,
         externalAttendees: unmatched,
+        kind: kindFor(item.eventType),
         lastSyncedAt: new Date(),
       };
 
@@ -340,21 +640,26 @@ export async function syncUserCalendars(
   for (const account of accounts) {
     try {
       result.agendasImported += await importAgendas(account);
+      // Task lists become agendas of their own, so the loop below walks them
+      // exactly as it walks calendars — see importTaskLists.
+      await importTaskLists(account, log);
 
       const agendas = await prisma.agenda.findMany({
         where: { accountId: account.id, removedAt: null },
-        select: { id: true, googleCalendarId: true, googleSyncToken: true },
+        select: { id: true, googleCalendarId: true, googleSyncToken: true, googleTaskListId: true },
       });
 
       for (const agenda of agendas) {
         try {
-          const counts = await importEvents(account, agenda);
+          const counts = agenda.googleTaskListId
+            ? await importTasks(account, agenda)
+            : await importEvents(account, agenda);
           result.eventsImported += counts.imported;
           result.eventsRemoved += counts.removed;
         } catch (caught) {
-          // One unreadable calendar must not cost the account its other ones —
-          // a single shared calendar with odd permissions is common.
-          log(caught, `events for agenda ${agenda.id}`);
+          // One unreadable calendar or list must not cost the account its other
+          // ones — a single shared calendar with odd permissions is common.
+          log(caught, `items for agenda ${agenda.id}`);
         }
       }
     } catch (caught) {

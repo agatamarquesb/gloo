@@ -121,6 +121,8 @@ interface EventRow {
   recurringEventId: string | null;
   originalStart: Date | null;
   googleEventId: string | null;
+  kind: string;
+  isDone: boolean;
   externalAttendees: unknown;
   assignees: { user: Parameters<typeof toUserDto>[0] }[];
   agenda: { isReadOnly: boolean; googleCalendarId: string | null };
@@ -169,5 +171,7 @@ export function toCalendarEventDto(
     originalStart: overrides?.originalStart ?? event.originalStart?.toISOString() ?? null,
     isReadOnly: event.agenda.isReadOnly,
     isFromGoogle: event.googleEventId !== null,
+    kind: event.kind as CalendarEventDto['kind'],
+    isDone: event.isDone,
   };
 }
