@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, MoreHorizontal, Pencil, Unlink } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronRight, MoreVertical, Pencil, Unlink } from 'lucide-react';
 import { Button, Input, Popover } from '@heroui/react';
 import { TextField } from 'react-aria-components';
 
@@ -27,9 +27,16 @@ import { AgendaRow } from './AgendaRow';
 export function AccountGroup({
   account,
   onRequestRemoveAgenda,
+  draft,
 }: {
   account: CalendarAccountDto;
   onRequestRemoveAgenda: (agenda: AgendaDto, provider: CalendarProvider) => void;
+  /**
+   * The agenda being made, if one is and it belongs here — rendered as the last
+   * line of this list so it is written where it will end up. Only the Gloo
+   * account is ever given one: a Google agenda has to be made in Google.
+   */
+  draft?: ReactNode;
 }) {
   const updateAccount = useUpdateCalendarAccount();
   const disconnect = useDisconnectCalendarAccount();
@@ -105,13 +112,16 @@ export function AccountGroup({
               isIconOnly
               size="sm"
               variant="ghost"
-              className={`${dotsMenuButton} opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100`}
+              className={`${dotsMenuButton} size-5 min-w-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100`}
               aria-label={strings.calendar.agendas.manageAccount}
             >
-              <MoreHorizontal className="size-4" />
+              {/* Vertical and on the row's own right-hand end, like the one on
+                  an agenda under it — and, like that one, only there while the
+                  pointer is on the row. */}
+              <MoreVertical className="size-4" />
             </Button>
 
-            <Popover.Content className={`w-56 ${FIELD_PANEL}`}>
+            <Popover.Content placement="bottom end" className={`w-52 ${FIELD_PANEL}`}>
               <Popover.Dialog className="p-1">
                 <div className="flex flex-col gap-0.5">
                   <button
@@ -141,8 +151,14 @@ export function AccountGroup({
         <p className="px-2 text-xs text-danger">{strings.calendar.agendas.reauthNeeded}</p>
       ) : null}
 
-      {account.isCollapsed ? null : (
-        <ul className="flex flex-col">
+      {/* A collapsed group still opens for a draft: the alternative is pressing
+          "Criar nova agenda" and watching nothing happen.
+
+          `gap-0.5` puts the hair of space between the rows on the list rather
+          than in the rows themselves: padding inside a row grows the ground that
+          lights up under it, and that band is meant to stay tight to the name. */}
+      {account.isCollapsed && !draft ? null : (
+        <ul className="flex flex-col gap-0.5">
           {account.agendas.map((agenda) => (
             <AgendaRow
               key={agenda.id}
@@ -150,6 +166,7 @@ export function AccountGroup({
               onRequestRemove={() => onRequestRemoveAgenda(agenda, account.provider)}
             />
           ))}
+          {draft}
         </ul>
       )}
     </section>

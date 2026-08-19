@@ -43,7 +43,9 @@ export function MiniCalendarCard({
   return (
     // The month is the whole card, so it needs no name above it — the same call
     // the Dashboard's calendar makes, and for the same reason.
-    <DashboardCard hideTitle title={strings.dashboard.calendar}>
+    // `shrink-0`: the month is the fixed row of the column, and a squeezed
+    // calendar loses a week off the bottom rather than scrolling.
+    <DashboardCard hideTitle title={strings.dashboard.calendar} className="shrink-0">
       <MonthCalendar
         // The Dashboard's own scale and its three greens for today, the day you
         // picked and the day under the pointer — one compact month, drawn twice.

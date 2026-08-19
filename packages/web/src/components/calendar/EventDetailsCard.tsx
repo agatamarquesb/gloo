@@ -1,13 +1,11 @@
-import { Clock, MapPin, Shapes, UserRound } from 'lucide-react';
+import type { Ref } from 'react';
+import { Clock, Shapes } from 'lucide-react';
 
 import type { AgendaDto, CalendarEventDto } from '@gloo/shared';
 
-import { AssigneeAvatars } from '@/components/tasks/AssigneeAvatars';
 import { CalendarAgendaGlyph, CalendarDayGlyph } from '@/components/common/CalendarGlyph';
-import { isNotesEmpty, RichNotes } from '@/components/common/RichNotes';
 import {
   OVERVIEW_BAR,
-  OVERVIEW_BOX,
   OVERVIEW_ICON,
   OVERVIEW_TITLE,
   OverviewChevron,
@@ -20,15 +18,28 @@ import { strings } from '@/strings/pt-BR';
 
 import { formatEventTime } from './EventBlock';
 
+/**
+ * The date in its short form — `22 ago. 2026`.
+ *
+ * Assembled from the parts rather than taken as a whole, because pt-BR writes a
+ * short date as "22 de ago. de 2026" and the two "de"s are three quarters of the
+ * width of the row for none of its meaning. Dropping every literal and joining
+ * on a space leaves the day, the month and the year, in whatever order the
+ * locale puts them.
+ */
 function formatEventDate(iso: string, isAllDay: boolean): string {
   return new Intl.DateTimeFormat(CALENDAR_LOCALE, {
     day: 'numeric',
-    month: 'long',
+    month: 'short',
     year: 'numeric',
     // An all-day date is floating: read in the viewer's zone it would name the
     // day before for anyone west of Greenwich.
     ...(isAllDay ? { timeZone: 'UTC' } : {}),
-  }).format(new Date(iso));
+  })
+    .formatToParts(new Date(iso))
+    .filter((part) => part.type !== 'literal')
+    .map((part) => part.value)
+    .join(' ');
 }
 
 /** The number written inside the little calendar, read the same way the row above it is. */
@@ -42,30 +53,51 @@ function dayOfMonth(iso: string, isAllDay: boolean): number {
  * change it.
  *
  * The Dashboard's day summary drawn a second time — the same box, the same bar
- * in the agenda's colour, the same labelled rows at the same size. All of that
- * lives in OverviewCard; what is here is only which facts this side has to tell
- * and how they are formatted.
+ * in the agenda's colour, the same rows at the same size. All of that lives in
+ * OverviewCard; what is here is only which facts this side has to tell and how
+ * they are formatted.
+ *
+ * Headingless, and the rows are read by their icons — see OverviewRow's
+ * `hideLabel`. Four facts and no more: when, how long, what kind of thing it
+ * is, and whose agenda it is on. The description, the place and the guests are
+ * all in the dialog the chevron opens — this card is the glance, not the record,
+ * and a note of any length turned the column under it into a scroll.
  *
  * Everything is formatted in the viewer's own zone, for the same reason the
- * blocks are — see formatEventTime. The description is rendered as markup
- * because the modal writes it with the same rich-text editor a task's notes use,
- * and it arrives already sanitised by the API.
+ * blocks are — see formatEventTime.
  */
 export function EventDetailsCard({
   event,
   agenda,
   onEdit,
+  ref,
 }: {
   /** Always something: the page does not render this card with nothing to show. */
   event: CalendarEventDto;
   agenda: AgendaDto | undefined;
   onEdit: () => void;
+  /** The page holds this to tell a click inside the card from one outside it. */
+  ref?: Ref<HTMLElement>;
 }) {
   return (
-    // The heading at the size of the item's own name below it, as on the
-    // Agendas card — this is a card naming one thing, not a section of the page.
-    <DashboardCard title={strings.calendar.details.title} titleClassName={OVERVIEW_TITLE}>
-      <div className={OVERVIEW_BOX}>
+    // No heading on screen. The card appears only because something was just
+    // clicked and it names that thing on its own first line — a word saying
+    // "Detalhes" above it was a label for something the reader had already been
+    // told. Kept for screen readers, which arrive at the card without having
+    // seen the click that opened it.
+    <DashboardCard
+      ref={ref}
+      hideTitle
+      title={strings.calendar.details.title}
+      titleClassName={OVERVIEW_TITLE}
+    >
+      {/* The card *is* the box. OVERVIEW_BOX — the bordered, padded frame the
+          Dashboard's day panel draws round each of its items — put a second
+          rounded outline 20px inside the card's own, and its padding stacked on
+          the card's to leave the rows floating in the middle of the column. That
+          frame is there to separate one item from the next; here there is only
+          ever one. Only the agenda's colour bar survives it. */}
+      <div className="flex gap-2.5">
         <span aria-hidden {...colorFill(agenda?.color ?? 'gray', OVERVIEW_BAR)} />
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -91,88 +123,40 @@ export function EventDetailsCard({
               />
             }
             label={strings.calendar.details.date}
+            hideLabel
           >
             {formatEventDate(event.startsAt, event.isAllDay)}
           </OverviewRow>
 
-          <OverviewRow icon={<Clock className={OVERVIEW_ICON} />} label={strings.calendar.details.time}>
+          <OverviewRow
+            icon={<Clock className={OVERVIEW_ICON} />}
+            label={strings.calendar.details.time}
+            hideLabel
+          >
             {event.isAllDay
               ? strings.calendar.event.allDay
               : `${formatEventTime(event.startsAt)} – ${formatEventTime(event.endsAt)}`}
           </OverviewRow>
 
           {/* What this is: an event, a Google task, or a booked appointment slot. */}
-          <OverviewRow icon={<Shapes className={OVERVIEW_ICON} />} label={strings.dashboard.day.type}>
+          <OverviewRow
+            icon={<Shapes className={OVERVIEW_ICON} />}
+            label={strings.dashboard.day.type}
+            hideLabel
+          >
             {strings.dashboard.day.itemKind[event.kind]}
           </OverviewRow>
 
           <OverviewRow
             icon={<CalendarAgendaGlyph className={OVERVIEW_ICON} />}
             label={strings.calendar.details.category}
+            hideLabel
           >
-            <span className="flex min-w-0 items-start gap-2">
-              {/* `mt-0.5` rather than centred on the row: a two-line agenda name
-                  left the chip floating between its lines instead of beside the
-                  first of them. */}
-              <span
-                aria-hidden
-                {...colorFill(agenda?.color ?? 'gray', 'mt-0.5 size-3 shrink-0 rounded-sm')}
-              />
-              <span className="min-w-0 break-words">{agenda?.name ?? '—'}</span>
-            </span>
+            {/* The name alone. The agenda's colour is already the bar down the
+                left of this box, and a swatch on the row said it a second time
+                two centimetres away from the first. */}
+            <span className="min-w-0 break-words">{agenda?.name ?? '—'}</span>
           </OverviewRow>
-
-          {event.location ? (
-            <OverviewRow icon={<MapPin className={OVERVIEW_ICON} />} label={strings.calendar.details.location}>
-              {/^https?:\/\//.test(event.location) ? (
-                <a
-                  href={event.location}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="break-all text-green-deep underline"
-                >
-                  {event.location}
-                </a>
-              ) : (
-                event.location
-              )}
-            </OverviewRow>
-          ) : null}
-
-          {event.assignees.length > 0 || event.externalAttendees.length > 0 ? (
-            <OverviewRow icon={<UserRound className={OVERVIEW_ICON} />} label={strings.calendar.details.team}>
-              <span className="flex flex-wrap items-center gap-2">
-                <AssigneeAvatars assignees={event.assignees} />
-                {/* Guests Google knows about that have no Gloo user to match.
-                    Shown as addresses because that is all we have of them. */}
-                {event.externalAttendees.map((email) => (
-                  <span key={email} className="text-xs text-muted">
-                    {email}
-                  </span>
-                ))}
-              </span>
-            </OverviewRow>
-          ) : null}
-
-          {isNotesEmpty(event.description ?? '') ? null : (
-            <>
-              <span className="my-3 h-px w-full bg-border" />
-              {/* The same renderer the task and routine modals read a note
-                  through, locked. Not dangerouslySetInnerHTML: this markup comes
-                  from the rich-text editor and nothing else in the app injects it
-                  by hand, so there is one place that decides how stored notes
-                  become DOM. */}
-              <RichNotes
-                value={event.description ?? ''}
-                onChange={() => undefined}
-                isEditing={false}
-                title={null}
-                compact
-                placeholder=""
-                ariaLabel={strings.calendar.event.description}
-              />
-            </>
-          )}
         </div>
       </div>
     </DashboardCard>

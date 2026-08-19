@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { CalendarPlus, MoreHorizontal } from 'lucide-react';
-import { Button, Input, Popover } from '@heroui/react';
-import { TextField } from 'react-aria-components';
+import { Button, Popover } from '@heroui/react';
 
-import { CalendarProvider, type AgendaDto } from '@gloo/shared';
+import { CalendarProvider, LABEL_COLORS, type AgendaDto, type PaletteColor } from '@gloo/shared';
 
 import { GoogleCalendarIcon } from '@/components/common/GoogleCalendarIcon';
 import { OVERVIEW_TITLE } from '@/components/common/OverviewCard';
@@ -14,6 +13,7 @@ import { dotsMenuButton, menuRow } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 import { AccountGroup } from './AccountGroup';
+import { NewAgendaRow } from './NewAgendaRow';
 import { RemoveAgendaModal } from './RemoveAgendaModal';
 
 /** Which agenda the confirmation modal is about, and where it came from. */
@@ -33,24 +33,27 @@ interface RemovalTarget {
 export function AgendasCard({ onLinkGoogle }: { onLinkGoogle: () => void }) {
   const { data: accounts = [], isPending } = useCalendarAccounts();
   const createAgenda = useCreateAgenda();
-  const [draftName, setDraftName] = useState<string | null>(null);
+  /** True while an agenda is being written — see NewAgendaRow. */
+  const [isDrafting, setDrafting] = useState(false);
+  const [isMenuOpen, setMenuOpen] = useState(false);
   const [removing, setRemoving] = useState<RemovalTarget | null>(null);
 
   const glooAccount = accounts.find((account) => account.provider === CalendarProvider.GLOO);
-  const defaultAgendaName =
-    accounts
-      .flatMap((account) => account.agendas)
-      .find((agenda) => agenda.isDefault)?.name ?? '';
+  const allAgendas = accounts.flatMap((account) => account.agendas);
+  const defaultAgendaName = allAgendas.find((agenda) => agenda.isDefault)?.name ?? '';
 
-  function commitNewAgenda() {
-    const name = draftName?.trim();
-    if (name && glooAccount) {
-      // No colour in the payload: the API picks the first one the user isn't
-      // already using, which is a better default than making them choose before
-      // they have seen the agenda exist.
-      createAgenda.mutate({ accountId: glooAccount.id, name });
-    }
-    setDraftName(null);
+  /**
+   * What the new row opens on: the first palette colour nothing else is wearing,
+   * or the top of the palette once all ten are taken. The same rule the API used
+   * to apply on its own, moved to where it can now be seen and changed.
+   */
+  const takenColors = new Set(allAgendas.map((agenda) => agenda.color));
+  const nextColor: PaletteColor =
+    LABEL_COLORS.find((color) => !takenColors.has(color)) ?? LABEL_COLORS[0];
+
+  function commitNewAgenda(name: string, color: PaletteColor) {
+    if (glooAccount) createAgenda.mutate({ accountId: glooAccount.id, name, color });
+    setDrafting(false);
   }
 
   return (
@@ -62,24 +65,33 @@ export function AgendasCard({ onLinkGoogle }: { onLinkGoogle: () => void }) {
         // type in the column and read as the heading of everything under it,
         // Detalhes included.
         titleClassName={OVERVIEW_TITLE}
-        // The card fills whatever the column has left and the list inside it
-        // scrolls — see the wrapper below. The floor is what keeps it a list:
-        // squeezed to the few pixels a tall Detalhes card leaves over, it became
-        // a title with a scrollbar under it.
-        className="min-h-[9rem] flex-1"
+        // The name of the list sits just above it: at the card's usual gap-4 the
+        // word floated halfway between the month above and the first agenda.
+        bodyGap="gap-1"
+        // `grow shrink-0`: the card takes any height the column has spare, and
+        // keeps its full content height when it hasn't — so the list is never
+        // cut, and what scrolls is the row around it.
+        className="grow shrink-0"
         action={
-          <Popover>
+          <Popover isOpen={isMenuOpen} onOpenChange={setMenuOpen}>
+            {/* 20px, which is also the height of the title beside it: at
+                HeroUI's 32px the button sat 6px lower than the word it belongs
+                to, since the header aligns its two ends to the top. */}
             <Button
               isIconOnly
               size="sm"
               variant="ghost"
-              className={dotsMenuButton}
+              className={`${dotsMenuButton} size-5 min-w-0 p-0`}
               aria-label={strings.calendar.agendas.manage}
             >
               <MoreHorizontal className="size-4" />
             </Button>
 
-            <Popover.Content className={`w-60 ${FIELD_PANEL}`}>
+            {/* Right-aligned under the `···` and narrower than it was: at 240px
+                a panel hanging off a button in the card's top corner ran past
+                the card's own edge and out over the page. 224px is as narrow as
+                it goes with "Adicionar Google Agenda" on one line. */}
+            <Popover.Content placement="bottom end" className={`w-56 ${FIELD_PANEL}`}>
               <Popover.Dialog className="p-1">
                 <div className="flex flex-col gap-0.5">
                   {/* Creates it in the Gloo account: it is the only one whose
@@ -88,13 +100,26 @@ export function AgendasCard({ onLinkGoogle }: { onLinkGoogle: () => void }) {
                   <button
                     type="button"
                     className={menuRow}
-                    onClick={() => setDraftName('')}
+                    onClick={() => {
+                      setDrafting(true);
+                      // The row it opens is under this panel. Leaving the menu
+                      // up meant answering it and then having to dismiss it to
+                      // see what you had asked for.
+                      setMenuOpen(false);
+                    }}
                     disabled={!glooAccount}
                   >
                     <CalendarPlus className="size-4" />
                     {strings.calendar.agendas.createAgenda}
                   </button>
-                  <button type="button" className={menuRow} onClick={onLinkGoogle}>
+                  <button
+                    type="button"
+                    className={menuRow}
+                    onClick={() => {
+                      onLinkGoogle();
+                      setMenuOpen(false);
+                    }}
+                  >
                     <GoogleCalendarIcon className="size-4" />
                     {strings.calendar.agendas.addGoogle}
                   </button>
@@ -107,43 +132,30 @@ export function AgendasCard({ onLinkGoogle }: { onLinkGoogle: () => void }) {
         {isPending ? (
           <p className="text-sm text-muted">{strings.common.loading}</p>
         ) : (
-          // The list is what scrolls, not the page: an account with thirty
-          // agendas under it used to push the whole column down and take the
-          // calendar's own scrollbar with it. The card's height is fixed by the
-          // column, and everything past it is reached inside this box.
-          <div className="gloo-thin-scroll flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+          // No scroller of its own: the card is as tall as the whole list, and
+          // the second row of the column is the one place a long list is
+          // scrolled. Two nested scrollers meant the agendas moved under the
+          // pointer while the card they were in stayed put.
+          <div className="flex flex-1 flex-col gap-4">
             {accounts.map((account) => (
               <AccountGroup
                 key={account.id}
                 account={account}
                 onRequestRemoveAgenda={(agenda, provider) => setRemoving({ agenda, provider })}
+                // A new agenda is written at the end of the Gloo list, where it
+                // will appear — see NewAgendaRow. It has no button of its own:
+                // the `···` beside the title is what asks for one.
+                draft={
+                  isDrafting && account.id === glooAccount?.id ? (
+                    <NewAgendaRow
+                      defaultColor={nextColor}
+                      onSave={commitNewAgenda}
+                      onCancel={() => setDrafting(false)}
+                    />
+                  ) : undefined
+                }
               />
             ))}
-
-            {/* Where a new agenda is typed. It has no button of its own any
-                more — the `···` above is what asks for one — so it is only ever
-                on screen between that press and Enter. */}
-            {draftName === null ? null : (
-              <TextField
-                aria-label={strings.calendar.agendas.newAgenda}
-                value={draftName}
-                onChange={setDraftName}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitNewAgenda();
-                  if (event.key === 'Escape') setDraftName(null);
-                }}
-                // Same as the account rename: the field appears because
-                // "Criar nova agenda" was pressed, so the caret belongs in it.
-                // eslint-disable-next-line jsx-a11y/no-autofocus
-                autoFocus
-              >
-                <Input
-                  className="h-8 text-sm"
-                  placeholder={strings.calendar.agendas.newAgenda}
-                  onBlur={commitNewAgenda}
-                />
-              </TextField>
-            )}
           </div>
         )}
       </DashboardCard>

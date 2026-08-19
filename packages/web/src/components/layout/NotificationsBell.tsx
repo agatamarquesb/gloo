@@ -135,7 +135,7 @@ export function NotificationsBell() {
                 // Unbounded on purpose: the list only ever holds what is late or
                 // due within two days, so it stays short by construction. The
                 // max height is there for the day that stops being true.
-                <ul className="flex max-h-96 flex-col gap-2 overflow-y-auto">
+                <ul className="gloo-thin-scroll flex max-h-96 flex-col gap-2 overflow-y-auto">
                   {notifications.map((notification) => (
                     <NotificationRow
                       key={notification.id}

@@ -95,7 +95,7 @@ export function RoutineTrash({ onClose }: { onClose: () => void }) {
           card's, for the same reason: the rows lift on hover and the scroller
           would clip the scaled edge, while the negative margin keeps them on the
           panel's own margins. */}
-      <div className="-mx-1.5 min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
+      <div className="gloo-thin-scroll -mx-1.5 min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
         {isLoading ? (
           <p className="py-4 text-center text-xs text-muted">{strings.common.loading}</p>
         ) : isEmpty ? (

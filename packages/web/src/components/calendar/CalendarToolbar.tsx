@@ -6,7 +6,7 @@ import { Button, Popover } from '@heroui/react';
 import { CalendarViewMode } from '@gloo/shared';
 
 import { SearchField } from '@/components/common/SearchField';
-import { PANEL_MATCHES_TRIGGER } from '@/theme/fieldStyles';
+import { FIELD_PANEL, PANEL_MATCHES_TRIGGER } from '@/theme/fieldStyles';
 import { dotsMenuButton, menuRow, outlineControl } from '@/theme/styleConstants';
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
 import { strings } from '@/strings/pt-BR';
@@ -167,23 +167,42 @@ export function CalendarToolbar({
             wearing the same outlined pill as the search field beside it, since
             the two are the row's two secondary controls. */}
         <Popover isOpen={isViewOpen} onOpenChange={setViewOpen}>
+          {/* One fixed width, cut for "Semana" — the longest of the three. Sized
+              to its own label the pill changed width every time the view did,
+              which moved the search field and the "+" beside it sideways as a
+              side effect of choosing a view. The label sits left and the chevron
+              at the far end, so the word starts in the same place in all three
+              states. */}
           <Button
             size="sm"
             variant="outline"
-            className={`${outlineControl} h-9 gap-1 rounded-full px-3 text-sm font-medium text-muted md:h-8`}
+            className={[
+              outlineControl,
+              'h-9 w-[6.5rem] justify-between gap-1 rounded-full px-3 text-sm font-medium text-muted md:h-8',
+              // A much lighter grey under the cursor: at HeroUI's own default
+              // the pill went almost as dark as the ink on it, which read as
+              // pressed rather than as hovered.
+              'hover:bg-default/40 data-[hovered=true]:bg-default/40',
+              // Open, the pill and its list are one shape: the bottom corners
+              // square off to meet the panel butting against them, exactly as a
+              // property row does in the task and routine modals (see
+              // OPEN_FIELD_GROUND). The top two keep the pill's radius.
+              'aria-expanded:rounded-b-none aria-expanded:bg-default/40',
+            ].join(' ')}
           >
             {strings.calendar.view[viewMode]}
-            <ChevronDown className="size-4" />
+            <ChevronDown className="size-4 shrink-0" />
           </Button>
 
-          {/* As wide as the pill it dropped from, and directly under it: the
-              panel used to be half the row wide and floating clear of a trigger
-              a third its size. Its top corners carry the pill's own radius so
-              the two silhouettes continue into each other instead of a square
-              box hanging off a round button. */}
+          {/* As wide as the pill it dropped from and touching it: the app's own
+              dropdown panel (FIELD_PANEL, which squares whichever edge meets the
+              trigger), with the two far corners rounded to the pill's radius so
+              the trigger and the list read as one silhouette. `offset={0}` is
+              what closes the 2px seam that used to leave the list floating below
+              the button. */}
           <Popover.Content
-            offset={2}
-            className={`${PANEL_MATCHES_TRIGGER} rounded-2xl rounded-t-[1.125rem] border border-border/50 shadow-[0_8px_20px_-12px_rgb(0_0_0/0.25)]`}
+            offset={0}
+            className={`${PANEL_MATCHES_TRIGGER} ${FIELD_PANEL} rounded-b-2xl data-[placement=top]:rounded-t-2xl`}
           >
             <Popover.Dialog className="p-1">
               <div className="flex flex-col gap-0.5">

@@ -10,8 +10,10 @@
  * `scrollbar-width: thin` is as narrow as the standard property goes, and at
  * ~11px it still ran over the right-hand end of a row: a task's avatar and a
  * routine's `···` both sit on that edge. WebKit's own pseudo-elements go
- * narrower, so the bar is 4px of thumb on no track at all, and the 6px of
- * padding these lists already carry is enough to keep it off the content.
+ * narrower, so the bar is 2px of thumb on no track at all, and the 6px of
+ * padding these lists already carry is enough to keep it off the content. A
+ * hairline is all it has to be: it says where you are in the list, and nothing
+ * in the app is dragged by its scrollbar.
  *
  * The thumb takes --border rather than a grey of its own, so it is the same
  * hairline as every rule in the app, and it only appears while the list is
@@ -28,8 +30,8 @@
 }
 
 .gloo-thin-scroll::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 2px;
+  height: 2px;
 }
 
 .gloo-thin-scroll::-webkit-scrollbar-track {

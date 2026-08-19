@@ -21,7 +21,7 @@ export function AppShell() {
             deliberately overhangs its column by a few pixels (the property rows'
             chevrons) or a value that refuses to wrap. Vertical scrolling is
             unaffected. */}
-        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 md:pb-0">
+        <main className="gloo-thin-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 md:pb-0">
           <Outlet />
         </main>
         <MobileNav />

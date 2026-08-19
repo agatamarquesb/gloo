@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, CircleDot, Eye, MoreHorizontal, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleDot, Eye, MoreVertical, Trash2 } from 'lucide-react';
 import { Button, Popover } from '@heroui/react';
 
 import type { AgendaDto } from '@gloo/shared';
@@ -46,17 +46,27 @@ export function AgendaMenu({
 
   return (
     <Popover onOpenChange={(open) => !open && setView('menu')}>
+      {/* Sized down to the line it ends: HeroUI's small icon button is 32px
+          square, which held every agenda row at 32px however tight its own
+          padding was. */}
       <Button
         isIconOnly
         size="sm"
         variant="ghost"
-        className={dotsMenuButton}
-        aria-label={strings.calendar.agendas.title}
+        className={`${dotsMenuButton} size-5 min-w-0 p-0`}
+        aria-label={strings.calendar.agendas.manageAgenda}
       >
-        <MoreHorizontal className="size-4" />
+        {/* Vertical, unlike the `···` on a card header: this one belongs to the
+            row it ends rather than to the card, and the upright form is what
+            says "this line" instead of "this panel". */}
+        <MoreVertical className="size-4" />
       </Button>
 
-      <Popover.Content className={`w-60 ${FIELD_PANEL}`}>
+      {/* Below the row it belongs to and flush with its right-hand end — the
+          same placement every dropdown in the app takes (see LabelPicker). It
+          used to open centred on the button, which put it over the agenda above
+          the one being changed. Narrow enough to stay inside the card. */}
+      <Popover.Content placement="bottom end" className={`w-52 ${FIELD_PANEL}`}>
         <Popover.Dialog className="p-1">
           {view === 'color' ? (
             <div className="flex flex-col gap-1">

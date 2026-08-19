@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { getLocalTimeZone, parseDate, today, type CalendarDate } from '@internationalized/date';
 import { useSearchParams } from 'react-router';
 
@@ -19,6 +19,7 @@ import { ConfirmEventChangeModal } from '@/components/calendar/ConfirmEventChang
 import { AgendasCard } from '@/components/calendar/agendas/AgendasCard';
 import { daysIn, stepFocused, visibleRange } from '@/components/calendar/calendarRange';
 import { useEventDrag } from '@/components/calendar/useEventDrag';
+import { useScrollEdges } from '@/components/common/SectionScroll';
 import { PageHeader } from '@/components/layout/PageHeader';
 import {
   useAgendasById,
@@ -36,6 +37,19 @@ import { strings } from '@/strings/pt-BR';
  * that writes it and the one place that reads it name it once.
  */
 export const CALENDAR_DATE_PARAM = 'data';
+
+/**
+ * The soft edge on the right-hand column, at whichever end has more content past
+ * it.
+ *
+ * Painted in `--background` rather than `--surface`: what runs off the end of
+ * this column is a card sitting on the page, and the page is what it has to fade
+ * into. 24px — enough to read as a fade rather than a line, short enough to
+ * leave a whole row of the list legible under it.
+ */
+const FADE = 'pointer-events-none absolute inset-x-0 z-10 h-6';
+const FADE_TOP = `${FADE} top-0 bg-[linear-gradient(to_bottom,var(--background),transparent)]`;
+const FADE_BOTTOM = `${FADE} bottom-0 bg-[linear-gradient(to_top,var(--background),transparent)]`;
 
 /**
  * The Calendar page.
@@ -212,6 +226,44 @@ export function CalendarPage() {
     setSelectedKey(instanceKey(event));
   }
 
+  /**
+   * The details card, and the column it scrolls in.
+   *
+   * The first is held so a press anywhere else can put the card away — see
+   * below. The second is what the fades at the top and bottom of the column are
+   * measured from.
+   */
+  const detailsRef = useRef<HTMLElement>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
+  const { edges, measure: measureColumn } = useScrollEdges(columnRef, selectedEvent);
+
+  /**
+   * A press outside the details card closes it.
+   *
+   * The card is the answer to a click, so it lasts as long as that click is the
+   * last thing you did: click anywhere else — the grid's own background, the
+   * month, the agendas — and it goes. Clicking another event still selects it,
+   * because this runs in the capture phase and the block's own handler, which
+   * runs after it, sets the new selection.
+   *
+   * `click` rather than `pointerdown`, which is where this started. Closing the
+   * card takes 200-odd pixels out of the column, so anything the user was
+   * pressing in it moved out from under the pointer between the press and the
+   * release — and a button whose press ends somewhere else is not a press at
+   * all. The `···` on the Agendas card simply stopped opening. By `click` the
+   * gesture is already complete.
+   */
+  useEffect(() => {
+    if (!selectedKey) return;
+    function handle(clicked: MouseEvent) {
+      const target = clicked.target;
+      if (target instanceof Node && detailsRef.current?.contains(target)) return;
+      setSelectedKey(null);
+    }
+    document.addEventListener('click', handle, true);
+    return () => document.removeEventListener('click', handle, true);
+  }, [selectedKey]);
+
   /** Paging: the week itself moves, and the grid leans the way it went. */
   function step(direction: 1 | -1) {
     setFocusedDate(stepFocused(focusedDate, viewMode, direction));
@@ -221,7 +273,12 @@ export function CalendarPage() {
   }
 
   return (
-    <div>
+    // At xl the page is exactly one screen and the grid takes whatever the
+    // header leaves — a flex column rather than a `calc()` on the grid, because
+    // the header's own height is what that calculation kept guessing at, and
+    // being 20px out is what left the strip of bare page under the cards.
+    // Below xl the columns stack and the page is as long as its content.
+    <div className="xl:flex xl:h-full xl:flex-col">
       <PageHeader title={strings.nav.calendar} />
 
       {/* Three quarters to the grid rather than two thirds: the right-hand
@@ -231,14 +288,18 @@ export function CalendarPage() {
           One screen tall at xl and never taller, so the page itself has nothing
           to scroll: what scrolls is whichever of the two columns the pointer is
           over — the grid through its own hours, the right-hand column through
-          its cards. A page that scrolled as well made three scrollbars out of
-          one gesture, and the bottom of the card was somewhere you had to travel
-          to. The row is capped as well as the container, because a grid row
-          sizes to its content and would otherwise overflow the height set here.
+          the cards under its month. A page that scrolled as well made three
+          scrollbars out of one gesture, and the bottom of the card was somewhere
+          you had to travel to. The row is capped as well as the container,
+          because a grid row sizes to its content and would otherwise overflow
+          the height set here.
+
+          The bottom padding is the header's own top padding, so the page is
+          framed by the same margin all the way round.
 
           Below xl the two columns stack, and a stacked page has to be as long as
           what is in it. */}
-      <div className="grid grid-cols-1 gap-4 px-4 pb-6 md:gap-5 md:px-6 xl:h-[calc(100vh-9.5rem)] xl:grid-cols-4 xl:grid-rows-[minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 px-4 pb-4 md:gap-5 md:px-6 md:pb-6 xl:min-h-0 xl:flex-1 xl:grid-cols-4 xl:grid-rows-[minmax(0,1fr)]">
         <div className="flex min-h-0 flex-col gap-4 md:gap-5 xl:col-span-3">
           {/* The outcome of a Google link, which arrives as a redirect rather
               than as a response to anything the page asked for. Dismissible,
@@ -330,29 +391,56 @@ export function CalendarPage() {
           </section>
         </div>
 
-        {/* The column is its own scroller: the month, the details of whatever is
-            selected and a long list of agendas do not always fit one screen, and
-            this is what the pointer scrolls when it is over them. */}
-        <div className="gloo-thin-scroll flex min-h-0 flex-col gap-4 overflow-y-auto md:gap-5">
+        {/* Two rows, and only the second of them moves. The month is a fixed
+            block of dates whose whole use is being in the same place every time
+            you look for it — scrolling it away to reach the agendas made the
+            fastest control on the page the one you had to go and find. */}
+        <div className="flex min-h-0 flex-col gap-4 md:gap-5">
           <MiniCalendarCard
             focusedDate={focusedDate}
             onFocusedDateChange={setFocusedDate}
             visibleRange={range}
           />
-          {/* Only when there is something to detail. An empty card telling you
-              to select an event was a permanent hole between the month and the
-              agendas — the agendas simply start here when nothing is selected,
-              and move down to make room when something is. */}
-          {selectedEvent ? (
-            <EventDetailsCard
-              event={selectedEvent}
-              agenda={agendasById.get(selectedEvent.agendaId)}
-              onEdit={() =>
-                setEditing({ event: selectedEvent, start: new Date(selectedEvent.startsAt) })
-              }
-            />
-          ) : null}
-          <AgendasCard onLinkGoogle={() => connectGoogle.mutate()} />
+
+          {/* The second row is the scroller: the details of whatever is selected
+              and the whole list of agendas, which together do not always fit
+              what the month leaves. Nothing inside it scrolls on its own any
+              more, so the agendas card is as tall as its list and one gesture
+              reaches the end of it.
+
+              A gradient at whichever end has more content past it, painted in
+              the page's own ground so a card running off the top or the bottom
+              dissolves into it instead of being cut through the middle of a row.
+              Only while there is something past that edge — see
+              useScrollEdges — and never over the pointer, so the cards under it
+              are still clickable. */}
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            {edges.top ? <div aria-hidden className={FADE_TOP} /> : null}
+
+            <div
+              ref={columnRef}
+              onScroll={measureColumn}
+              className="gloo-thin-scroll flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto md:gap-5"
+            >
+              {/* Only when there is something to detail. An empty card telling
+                  you to select an event was a permanent hole between the month
+                  and the agendas — the agendas simply start here when nothing is
+                  selected, and move down to make room when something is. */}
+              {selectedEvent ? (
+                <EventDetailsCard
+                  ref={detailsRef}
+                  event={selectedEvent}
+                  agenda={agendasById.get(selectedEvent.agendaId)}
+                  onEdit={() =>
+                    setEditing({ event: selectedEvent, start: new Date(selectedEvent.startsAt) })
+                  }
+                />
+              ) : null}
+              <AgendasCard onLinkGoogle={() => connectGoogle.mutate()} />
+            </div>
+
+            {edges.bottom ? <div aria-hidden className={FADE_BOTTOM} /> : null}
+          </div>
         </div>
       </div>
 

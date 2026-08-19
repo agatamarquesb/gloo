@@ -53,6 +53,7 @@ export const OVERVIEW_ICON = 'size-3.5 shrink-0 text-foreground';
 export function OverviewRow({
   icon,
   label,
+  hideLabel = false,
   children,
 }: {
   /**
@@ -62,16 +63,31 @@ export function OverviewRow({
    */
   icon: ReactNode;
   label: string;
+  /**
+   * Keeps the word off the row but not out of the page: the glyph takes its
+   * title and screen readers still hear it, so the row is still a labelled pair.
+   *
+   * For the narrow column beside the calendar, where a fixed label column spent
+   * a third of the width writing "Data" beside a date. The value then sits
+   * against its icon instead of on a rule two words away.
+   */
+  hideLabel?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-2 py-1">
+    <div
+      className={`grid items-start py-1 ${
+        hideLabel
+          ? 'grid-cols-[auto_minmax(0,1fr)] gap-1.5'
+          : 'grid-cols-[5.75rem_minmax(0,1fr)] gap-2'
+      }`}
+    >
       {/* The icon at full strength while the word stays grey, as in the two
           entity modals — see LABEL_ICON. At this size a muted glyph is mostly
           gone, and these are what the column is scanned by. */}
-      <span className="flex items-center gap-1.5 text-xs text-muted">
+      <span className="flex items-center gap-1.5 text-xs text-muted" title={hideLabel ? label : undefined}>
         {icon}
-        {label}
+        {hideLabel ? <span className="sr-only">{label}</span> : label}
       </span>
       <span className="min-w-0 text-xs text-foreground">{children}</span>
     </div>

@@ -1,9 +1,11 @@
-import { Check, Clock } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 import { CalendarItemKind, type AgendaDto, type CalendarEventDto } from '@gloo/shared';
 
 import { AssigneeAvatars } from '@/components/tasks/AssigneeAvatars';
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
+
+import { blockHeight } from './gridMetrics';
 import { colorBlock } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
@@ -11,13 +13,27 @@ import { strings } from '@/strings/pt-BR';
 const COMPACT_MINUTES = 45;
 /** And below this, not even that fits on its own line. */
 const TINY_MINUTES = 25;
-/** Avatars need a block this tall before they stop crowding the times. */
-const AVATAR_MINUTES = 75;
 /**
  * From this many lanes, a column is too narrow for avatars whatever its height
  * — they are a fixed width, so they spill sideways where text merely truncates.
  */
 const CROWDED_COLUMNS = 3;
+
+/**
+ * What each line of a block costs, in the size it is drawn at: the title at
+ * 11px, the times at 10px, both `leading-tight`, and a row of 32px faces with
+ * the 4px above it.
+ *
+ * Measured in pixels rather than guessed at in minutes, because that is the unit
+ * the answer is in: whether a second line of title fits is a question about the
+ * height of the box, and a minutes threshold is only ever a proxy for it — one
+ * that was silently wrong the moment an hour stopped being 64px.
+ */
+const TITLE_LINE = 14;
+const TIME_LINE = 12;
+const AVATAR_ROW = 36;
+/** `py-1`, top and bottom. A tiny block carries `py-0` and gives this back. */
+const VERTICAL_PADDING = 8;
 
 /**
  * An instant as a clock time, in the *viewer's* zone.
@@ -57,6 +73,7 @@ export function EventBlock({
   onResizeStart,
   onPointerDown,
   isOverlapping = false,
+  isPast = false,
   style,
 }: {
   event: CalendarEventDto;
@@ -76,6 +93,13 @@ export function EventBlock({
    * thing separating two brown cards of the same agenda where they overlap.
    */
   isOverlapping?: boolean;
+  /**
+   * The event is over — the clock has passed its *end*, not its start. Something
+   * running now is still happening, however far into it you are, and dimming it
+   * at its own halfway mark would take the colour off the one block on the grid
+   * that matters most.
+   */
+  isPast?: boolean;
   /** Absent on a read-only event, which has no resize handle. */
   onResizeStart?: (pointer: React.PointerEvent) => void;
   /** Begins a move drag. Absent on a read-only event. */
@@ -86,49 +110,70 @@ export function EventBlock({
   // did. Grey is the neutral fallback rather than a missing background.
   const color = agenda?.color ?? 'gray';
   const paint = colorBlock(color);
-  /**
-   * The block's own fill taken a third of the way to black — dark enough to read
-   * as an edge against the colour it encloses, close enough to still be that
-   * colour. `currentColor` would have been the ink, which is already chosen for
-   * contrast and would give a white rule on a dark event.
-   */
-  const selectionEdge = `color-mix(in srgb, ${
-    typeof paint.style?.backgroundColor === 'string' ? paint.style.backgroundColor : 'currentColor'
-  } 65%, black)`;
   const isTask = event.kind === CalendarItemKind.TASK;
   const isTiny = minutes < TINY_MINUTES;
   const isCompact = minutes < COMPACT_MINUTES;
 
+  /**
+   * What the block has room for, worked out from its own height downwards.
+   *
+   * The title wraps onto a second line only when a second line actually fits.
+   * It used to wrap whenever the block was over 25 minutes, which cut the
+   * second line in half through the letters — a title clipped mid-word reads as
+   * broken, where one ending in an ellipsis reads as shortened. So: two lines
+   * when they fit, otherwise one line and the ellipsis.
+   *
+   * The faces come last and are the first thing dropped, for the same reason:
+   * half a row of heads along the bottom edge of a block is a rendering fault,
+   * and the two lines above them are what the block is for.
+   */
+  const room = blockHeight(minutes) - (isTiny ? 0 : VERTICAL_PADDING) - (isCompact ? 0 : TIME_LINE);
+  const titleLines = room >= TITLE_LINE * 2 ? 2 : 1;
+  const hasAvatars =
+    event.assignees.length > 0 &&
+    columns < CROWDED_COLUMNS &&
+    room - titleLines * TITLE_LINE >= AVATAR_ROW;
+
   return (
     <div
       onPointerDown={onPointerDown}
-      className={`${paint.className} group/event absolute overflow-hidden rounded-lg border px-2 text-black ${
+      // `@container`: the block sizes what is inside it. A lane in a week column
+      // is anything from 90px down to 30px depending on how many events are
+      // running at once, and the only thing that knows which is the block
+      // itself — hence the container queries on the time below rather than a
+      // guess made from the lane count.
+      className={`${paint.className} group/event @container absolute flex flex-col overflow-hidden rounded-[2px] border px-2 text-black ${
         isTiny ? 'py-0' : 'py-1'
+      } ${
+        // Too short to stack a title and anything under it: what there is room
+        // for goes in the middle, rather than sitting on the top edge with the
+        // rest of the block empty below it.
+        isCompact ? 'justify-center' : ''
+      } ${
+        // Done with. Dimmed rather than greyed, so the agenda's colour is still
+        // legible — the past is still what the day was made of.
+        isPast ? 'opacity-55' : ''
       } ${
         // The selected event is marked with an edge rather than a different
         // fill: the fill is the agenda's identity and must not double as state.
         //
-        // Its own colour taken down a step, not black — a hard dark rule round a
-        // brown block read as a hole cut in the grid — and one pixel, drawn
-        // *inside* the block (`ring-inset`) so it is not cropped by the column
-        // and does not push the block off its own left edge.
-        isSelected ? 'ring-1 ring-inset' : ''
+        // A light grey, the same hairline every rule in the app is drawn in, and
+        // the same one pixel the overlap outline below uses — the two marks are
+        // the same weight so a selected block does not also read as a thicker
+        // one. Drawn *inside* the block (`ring-inset`) so it is not cropped by
+        // the column and does not push the block off its own left edge.
+        isSelected ? 'ring-1 ring-inset ring-[var(--border)]' : ''
       } ${
         // A hairline of the card's own ground around a block that sits on top of
         // another, so the two read as two. Drawn outside the block rather than
-        // in — an inset line would eat two pixels of a fifteen-minute event —
-        // and as a shadow, so it costs no layout and cannot move anything.
-        isOverlapping ? 'shadow-[0_0_0_2px_var(--surface)]' : ''
+        // in — an inset line would eat a pixel of a fifteen-minute event — and
+        // as a shadow, so it costs no layout and cannot move anything.
+        isOverlapping ? 'shadow-[0_0_0_1px_var(--surface)]' : ''
       }`}
       // The block's position and its colour are both inline — the first because
       // it is computed per event, the second because a colour the user mixed has
-      // no class to carry it. See colorBlock. The selected ring is the same
-      // colour mixed towards black, which is why it is also written here.
-      style={{
-        ...style,
-        ...paint.style,
-        ...(isSelected ? { '--tw-ring-color': `color-mix(in srgb, ${selectionEdge} 100%, transparent)` } : {}),
-      }}
+      // no class to carry it. See colorBlock.
+      style={{ ...style, ...paint.style }}
     >
       {/* The click target is stretched behind the content rather than wrapped
           around it — the same reason a routine row does it (see
@@ -138,7 +183,7 @@ export function EventBlock({
         type="button"
         aria-pressed={isSelected}
         onClick={onSelect}
-        className={`absolute inset-0 z-0 rounded-lg ${
+        className={`absolute inset-0 z-0 ${
           event.isReadOnly ? 'cursor-default' : 'cursor-pointer'
         }`}
       >
@@ -146,9 +191,11 @@ export function EventBlock({
       </button>
 
       <div className="pointer-events-none relative z-10">
+        {/* 11px: a day column is around 90px wide, and this is the size at which
+            a two-word title fits a line of it. */}
         <p
-          className={`flex items-center gap-1.5 truncate font-medium ${
-            isTiny ? 'text-[11px] leading-tight' : 'text-xs'
+          className={`flex gap-1.5 text-[11px] leading-tight font-medium ${
+            isTiny ? 'items-center' : 'items-start'
           }`}
         >
           {/* A Google task carries its own tick, right where the title starts —
@@ -170,25 +217,47 @@ export function EventBlock({
               {event.isDone ? <Check className="size-2.5" strokeWidth={3} /> : null}
             </label>
           ) : null}
-          <span className={`truncate ${isTask && event.isDone ? 'line-through opacity-70' : ''}`}>
+          {/* Two lines before anything is given up, rather than one line and an
+              ellipsis: "conteúdo | ins…" on a card half a finger wide told the
+              reader nothing, and the second line was empty space directly under
+              it. Only where the second line has nowhere to go — see `room`
+              above — does the title truncate instead. */}
+          <span
+            className={`min-w-0 ${titleLines === 2 ? 'line-clamp-2 break-words' : 'truncate'} ${
+              isTask && event.isDone ? 'line-through opacity-70' : ''
+            }`}
+          >
             {event.title || strings.calendar.event.untitled}
           </span>
         </p>
 
-        {/* The time line is tight on purpose: a day column is around 90px, and
-            at 11px with spaces around the dash "07:00 – 09:00" overflows and
-            truncates mid-timestamp, which reads as a broken value rather than a
-            shortened one. Smaller type, a hair-gap after the icon, no spaces
-            round the dash, and tabular figures so the digits don't jitter
-            between blocks. */}
+        {/* The times, directly under the title they belong to and written as
+            wide as the block can take them.
+
+            Three states, decided by the block's own width rather than by how
+            many lanes its cluster needed: the pair with spaces round the dash,
+            the start alone, and — narrower than a single timestamp — nothing at
+            all. A time cut in half reads as a broken value rather than a
+            shortened one, which is why the parts disappear whole.
+
+            The breakpoints are content-box widths, which is what a container
+            query measures: the block's own 8px of padding either side is already
+            out of them. The pair measures 67px at this size; 68px is the first width
+            that holds it.
+
+            10px and tabular figures, so the digits don't jitter between blocks
+            and the line stays a step quieter than the name above it. */}
         {isCompact ? null : (
-          <p className="mt-0.5 flex items-center gap-0.5 truncate text-[10px] tabular-nums opacity-70">
-            <Clock className="size-2.5 shrink-0" />
-            {formatEventTime(event.startsAt)}–{formatEventTime(event.endsAt)}
+          <p className="hidden text-[10px] leading-tight tabular-nums opacity-70 @min-[2.25rem]:block">
+            <span className="whitespace-nowrap">{formatEventTime(event.startsAt)}</span>
+            <span className="hidden whitespace-nowrap @min-[4.25rem]:inline">
+              {' – '}
+              {formatEventTime(event.endsAt)}
+            </span>
           </p>
         )}
 
-        {minutes >= AVATAR_MINUTES && columns < CROWDED_COLUMNS && event.assignees.length > 0 ? (
+        {hasAvatars ? (
           <div className="mt-1">
             <AssigneeAvatars assignees={event.assignees} />
           </div>

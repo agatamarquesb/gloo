@@ -67,7 +67,7 @@ export function CalendarMonthGrid({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div className="gloo-thin-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="grid grid-cols-7 border-b border-border pb-2">
         {days.slice(0, 7).map((day) => (
           <span

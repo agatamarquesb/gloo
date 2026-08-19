@@ -4,13 +4,14 @@ import type { CalendarDate } from '@internationalized/date';
 
 import { CalendarItemKind, type AgendaDto, type CalendarEventDto } from '@gloo/shared';
 
+import { useNow } from '@/hooks/ui/useNow';
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
 import { colorBlock } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
 import { EventBlock } from './EventBlock';
 import { layoutAllDay, layoutDay, type LayoutEvent } from './eventLayout';
-import { FIRST_VISIBLE_HOUR, HOUR_HEIGHT, MINUTES_PER_DAY } from './gridMetrics';
+import { HOUR_HEIGHT, MINUTES_PER_DAY, blockHeight, initialScrollTop } from './gridMetrics';
 import type { DragPreview } from './useEventDrag';
 
 /**
@@ -22,16 +23,20 @@ interface GridEvent extends LayoutEvent {
 }
 
 /**
- * The bare strip down the left of every block, the step each overlapping block
- * is pushed in by, and the space kept clear on the right so two blocks in the
- * same start group do not meet.
+ * The bare strip of column kept clear beside every block, the step each
+ * overlapping block is pushed in by, and the hairline between a block and the
+ * next column.
+ *
+ * The strip is on the *right*: a block starts on its day's own edge, which is
+ * where the eye looks for it and where the hour labels line up. It used to be on
+ * the left, and a column of events all indented 10px read as a column aligned to
+ * the wrong side.
  */
 const GUTTER = 10;
 const OVERLAP_STEP = 14;
 const BLOCK_GAP = 2;
-
-/** Where the grid scrolls to on arrival — see FIRST_VISIBLE_HOUR. */
-const INITIAL_SCROLL_HOUR = FIRST_VISIBLE_HOUR;
+/** How far off its column's rule a block sits, so the two do not touch. */
+const BLOCK_INSET = 1;
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
@@ -108,6 +113,11 @@ export function CalendarTimeGrid({
   todayIso,
 }: CalendarTimeGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The line across today's column, and which blocks are behind it. Both change
+  // with the clock rather than with anything the user does — see useNow.
+  const now = useNow();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const todayColumn = todayIso;
 
   // All-day events are floating dates, not spans of the clock, so they never
   // enter the timed grid — placed there they would either occupy all 24 hours
@@ -154,9 +164,10 @@ export function CalendarTimeGrid({
   const allDayRows = allDayStrip.reduce((rows, entry) => Math.max(rows, entry.row + 1), 0);
 
   useEffect(() => {
-    // Once, on arrival. Re-running on every page would fight the user's own
-    // scrolling every time they moved a week.
-    if (scrollRef.current) scrollRef.current.scrollTop = INITIAL_SCROLL_HOUR * HOUR_HEIGHT;
+    // Once, on arrival, and on the hour it actually is — see initialScrollTop.
+    // Re-running on every page would fight the user's own scrolling every time
+    // they moved a week.
+    if (scrollRef.current) scrollRef.current.scrollTop = initialScrollTop();
   }, []);
 
   return (
@@ -176,8 +187,14 @@ export function CalendarTimeGrid({
           const isToday = day.toString() === todayIso;
           return (
             <div key={day.toString()} className="min-w-0 flex-1 px-1 text-center">
+              {/* 14px: this row names the seven columns under it and is read
+                  before any of them, so it carries the same size as the body
+                  text rather than the 12px of a caption. */}
+              {/* Today's column is named in the brand green — the deep step of
+                  it, which is the one that can carry text on a light surface.
+                  See --green-deep. */}
               <span
-                className={`text-xs ${isToday ? 'font-semibold text-accent-soft-foreground' : 'text-muted'}`}
+                className={`text-sm ${isToday ? 'font-semibold text-green-deep' : 'text-muted'}`}
               >
                 {/* first-letter:uppercase for the same reason the toolbar's
                     heading needs it: PT-BR weekday names are lowercase. */}
@@ -225,7 +242,7 @@ export function CalendarTimeGrid({
                 color,
                 `mx-0.5 flex min-w-0 items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[11px] text-black ${
                   original.isReadOnly ? '' : 'cursor-grab active:cursor-grabbing'
-                } ${selectedEventId === key ? 'ring-1 ring-inset ring-black/40' : ''}`,
+                } ${selectedEventId === key ? 'ring-1 ring-inset ring-[var(--border)]' : ''}`,
               );
 
               return (
@@ -339,6 +356,27 @@ export function CalendarTimeGrid({
                   />
                 ))}
 
+                {/* Now, on the only column it can be on. A hairline the full
+                    width of the day with a dot on its left end — the dot is what
+                    makes a 1px rule read as a marker rather than as one more of
+                    the grid's own hour lines, which is why it sits on the edge
+                    the hour labels are read from. 2px, so it still reads as one
+                    line where it crosses a block of its own colour.
+
+                    Above every block (z-40) and deaf to the pointer: it marks
+                    the grid, it is not part of it, and an event that happens to
+                    be running now must still be clickable through it. */}
+                {day.toString() === todayColumn ? (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 z-40"
+                    style={{ top: (nowMinutes / 60) * HOUR_HEIGHT }}
+                  >
+                    <span className="absolute top-1/2 -left-[3px] size-2 -translate-y-1/2 rounded-full bg-danger" />
+                    <span className="block h-0.5 w-full bg-danger" />
+                  </div>
+                ) : null}
+
                 {positioned.map(({ event, column, columns, depth, startMinute, endMinute }) => {
                   const minutes = endMinute - startMinute;
                   const original = event.source;
@@ -350,6 +388,9 @@ export function CalendarTimeGrid({
                       agenda={agendasById.get(original.agendaId)}
                       isSelected={selectedEventId === event.id}
                       isOverlapping={depth > 0}
+                      // Over and done with — measured on the end, so whatever is
+                      // running right now keeps its colour until it finishes.
+                      isPast={new Date(event.endsAt).getTime() <= now.getTime()}
                       onToggleDone={
                         original.kind === CalendarItemKind.TASK
                           ? (done) => onToggleDone?.(original, done)
@@ -370,27 +411,29 @@ export function CalendarTimeGrid({
                       }
                       style={{
                         top: (startMinute / 60) * HOUR_HEIGHT,
-                        // A floor so a 15-minute event is still readable, and
-                        // -2 so consecutive blocks show a seam rather than
-                        // meeting as one unbroken band of colour.
-                        height: Math.max(18, (minutes / 60) * HOUR_HEIGHT - 2),
+                        // See blockHeight — the block reads the same number to
+                        // decide what will fit inside it.
+                        height: blockHeight(minutes),
                         // Two insets, and they mean different things.
                         //
-                        // GUTTER is the strip of bare column down the left of
-                        // every block: that strip is the day itself, and
-                        // pressing it is how a new event is started at the hour
-                        // under the pointer. At the 2px it used to be there was
-                        // nowhere on a busy day to press that was not an event.
+                        // GUTTER is the strip of bare column left clear at the
+                        // *end* of every block: that strip is the day itself,
+                        // and pressing it is how a new event is started at the
+                        // hour under the pointer. At the 2px it used to be there
+                        // was nowhere on a busy day to press that was not an
+                        // event.
                         //
                         // The depth step is how far this block is laid over the
                         // ones that started before it — see PositionedEvent —
-                        // and the z-index is what puts it on top of them. Both
-                        // are measured from the left, so what stays visible of
-                        // an earlier block is its own left-hand edge.
+                        // and the z-index is what puts it on top of them. It is
+                        // measured from the left, so what stays visible of an
+                        // earlier block is its own left-hand edge.
                         zIndex: depth + 1,
-                        left: `calc(${(column / columns) * 100}% + ${GUTTER + depth * OVERLAP_STEP}px)`,
+                        left: `calc(${(column / columns) * 100}% + ${
+                          BLOCK_INSET + depth * OVERLAP_STEP
+                        }px)`,
                         width: `calc(${(1 / columns) * 100}% - ${
-                          GUTTER + depth * OVERLAP_STEP + BLOCK_GAP
+                          BLOCK_INSET + depth * OVERLAP_STEP + GUTTER + BLOCK_GAP
                         }px)`,
                       }}
                     />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { hiddenScrollbar } from '@/theme/styleConstants';
 
@@ -36,6 +36,51 @@ const FADE_BOTTOM = `${FADE} bottom-0 bg-[linear-gradient(to_top,var(--overlay),
 const EDGE_SLACK = 1;
 
 /**
+ * Which ends of a scroller have content past them.
+ *
+ * Exported because the fade is not only a dialog's: the Calendar page's
+ * right-hand column is a scroller too, and it needs the same answer to draw the
+ * same soft edge in its own ground. What differs between the two is what the
+ * gradient is painted in, which is the caller's business — this only says
+ * whether there is anything up there or down there.
+ *
+ * Remeasured on resize as well as on scroll: a section's height comes from the
+ * box around it, and a list that fitted at one window size overflows at the
+ * next. ResizeObserver on the content rather than the window, so adding a row is
+ * caught too.
+ */
+export function useScrollEdges(
+  ref: RefObject<HTMLElement | null>,
+  /** Re-observed when this changes — the children, as a rule. */
+  content?: unknown,
+) {
+  const [edges, setEdges] = useState({ top: false, bottom: false });
+
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const top = el.scrollTop > EDGE_SLACK;
+    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - EDGE_SLACK;
+    setEdges((current) =>
+      current.top === top && current.bottom === bottom ? current : { top, bottom },
+    );
+  }, [ref]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    for (const child of el.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [ref, measure, content]);
+
+  return { edges, measure };
+}
+
+/**
  * How the scroller itself behaves: down only, and with no bar of its own.
  *
  * `overflow-x-hidden` is not decoration. A box with `overflow-y: auto` and the
@@ -62,32 +107,7 @@ export function SectionScroll({
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ top: false, bottom: false });
-
-  const measure = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    const top = el.scrollTop > EDGE_SLACK;
-    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - EDGE_SLACK;
-    setEdges((current) =>
-      current.top === top && current.bottom === bottom ? current : { top, bottom },
-    );
-  }, []);
-
-  // Remeasured on resize as well as on scroll: a section's height comes from the
-  // dialog's, and a list that fitted at one window size overflows at the next.
-  // ResizeObserver on the content rather than the window, so adding a row is
-  // caught too.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    for (const child of el.children) observer.observe(child);
-    return () => observer.disconnect();
-  }, [measure, children]);
+  const { edges, measure } = useScrollEdges(ref, children);
 
   return (
     <div className={WRAPPER}>

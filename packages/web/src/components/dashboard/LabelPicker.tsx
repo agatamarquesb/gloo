@@ -216,7 +216,7 @@ export function LabelPicker({
               {visible.length === 0 ? (
                 <p className="py-4 text-center text-sm text-muted">{strings.label.empty}</p>
               ) : (
-                <ul className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+                <ul className="gloo-thin-scroll flex max-h-64 flex-col gap-2 overflow-y-auto">
                   {visible.map((label) => (
                     <li key={label.id} className="flex items-center gap-2">
                       <AppCheckbox
