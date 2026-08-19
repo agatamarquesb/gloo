@@ -21,13 +21,8 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { parseDate, type CalendarDate } from '@internationalized/date';
-import { Button, Calendar, Label, ListBox, Modal, Popover, Select } from '@heroui/react';
-// react-aria's own Button, not HeroUI's, for the two properties that open
-// something other than a dropdown: HeroUI's carries its own padding, radius and
-// hover fill, and all three are exactly what a bare property value must not
-// have. This one is a press target and nothing else.
-import { Button as AriaButton, TextArea, TextField } from 'react-aria-components';
+import { Button, Label, ListBox, Modal, Select } from '@heroui/react';
+import { TextArea, TextField } from 'react-aria-components';
 
 import {
   LabelScope,
@@ -44,6 +39,7 @@ import { NotesBlock } from '@/components/common/NotesBlock';
 import { isNotesEmpty } from '@/components/common/RichNotes';
 import { SecondaryButton } from '@/components/common/SecondaryButton';
 import { AssigneeValue } from '@/components/common/AssigneeValue';
+import { DatePropertyValue } from '@/components/common/DatePropertyValue';
 import { UserAvatar } from '@/components/common/UserAvatar';
 // The picker a routine's tags are chosen from — the same panel, the same
 // create/edit flow. Tags are one pool shared by both kinds of thing, so this is
@@ -60,11 +56,10 @@ import {
   useUpdateTaskStatus,
 } from '@/hooks/queries/tasks';
 import { useUsers } from '@/hooks/queries/users';
-import { formatDay, isDayPast } from '@/lib/formatDate';
+import { isDayPast } from '@/lib/formatDate';
 import { canMutateEntity } from '@/lib/permissions';
 import { playSound } from '@/lib/sounds';
 import {
-  FIELD_PANEL,
   LISTBOX_FLUSH,
   OPEN_FIELD_FILL,
   OPEN_FIELD_FILL_LIGHT,
@@ -285,35 +280,6 @@ const PROPERTY_ORDER = [
 type TaskPropertyKey = (typeof PROPERTY_ORDER)[number];
 
 /**
- * A property whose value opens a popover rather than a dropdown — the deadline
- * and the project.
- *
- * `relative`, because the chevron is placed the way HeroUI places a Select's:
- * absolutely, 8px in from the trigger's own right edge. The trigger overhangs
- * its column by exactly that 8px (see BARE_TRIGGER), so every chevron in the
- * list — HeroUI's and this one — lands on one vertical line.
- */
-// No width of its own: the shared trigger class is already `w-full` (see
-// BARE_TRIGGER_NO_INDICATOR) and restating it here would only be a second place
-// to change. `items-baseline` because the overdue mark beside the date is type
-// rather than a glyph — see OverdueMark — so what lines the two up is the line
-// they are written on, not the middle of their boxes.
-const POPOVER_TRIGGER = 'relative flex items-center rounded-md outline-none';
-
-/**
- * The calendar cut to the panel it lives in — PROPERTY_PANEL's 171.5px, like
- * every other popover in the column, which for a month of seven columns leaves a
- * little over 22px a day.
- *
- * That is what the shorter spacing scale is for: at the default the gaps between
- * the cells were taking the width the cells needed, and Saturday was being cut
- * off by the panel's edge. Everything else — the numbers, the weekday initials,
- * the month at the head of it — is a step down in .gloo-compact-calendar in
- * globals.css, which is where the class-name selectors live and why.
- */
-const CALENDAR_TYPE = 'gloo-compact-calendar [--spacing:0.15rem]';
-
-/**
  * Everything the dialog edits as a form. Status is deliberately not here: it
  * saves the moment it changes, both because it is the one property you can also
  * change from a task row and because it drives the clock behind the productivity
@@ -370,12 +336,9 @@ function toFormValue(task: TaskDetailDto): FormState {
 
 /**
  * The deadline: a date written out in full ("30 de julho, 2026") that opens a
- * calendar when the dialog is unlocked.
- *
- * A calendar in a popover rather than the segmented `DateField` the create form
- * uses, because a property row shows a *value*, not a field — three editable
- * segments and a suffix button would be the only control in the column with
- * chrome of its own.
+ * calendar when the dialog is unlocked — the shared property date, see
+ * DatePropertyValue, plus the one thing that is this row's alone: the mark that
+ * says the day has passed.
  */
 function DeadlineValue({
   value,
@@ -395,82 +358,19 @@ function DeadlineValue({
   isOverdue: boolean;
   triggerClass: string;
 }) {
-  const [isOpen, setOpen] = useState(false);
-
-  const selected = useMemo<CalendarDate | null>(() => {
-    try {
-      return value ? parseDate(value) : null;
-    } catch {
-      return null;
-    }
-  }, [value]);
-
-  const label = formatDay(value) ?? EMPTY_VALUE;
-  const tone = isOverdue ? 'text-overdue-ink!' : '';
   // The mark belongs to the date, not to the row: it says this *day* has passed,
-  // so it follows the day itself and moves with it into and out of edit mode —
-  // hence `gap-1` below as well as on the trigger it turns into (see
-  // BARE_TRIGGER_NO_INDICATOR), so unlocking the dialog moves it by nothing.
-  const mark = isOverdue ? <OverdueMark className="shrink-0" /> : null;
-
-  if (!isEditing) {
-    return (
-      <span className="flex items-center gap-1">
-        <span className={`${PROPERTY_VALUE} ${tone}`}>{label}</span>
-        {mark}
-      </span>
-    );
-  }
-
+  // so it follows the day itself and moves with it into and out of edit mode.
   return (
-    <Popover isOpen={isOpen} onOpenChange={setOpen}>
-      {/* No fill and no hover: a date is a value you can change, and a pill
-          lighting up under the cursor made it the loudest thing in the column. */}
-      <AriaButton className={`${triggerClass} ${POPOVER_TRIGGER}`}>
-        <span className={`break-words ${PROPERTY_VALUE} ${tone}`}>{label}</span>
-        {mark}
-      </AriaButton>
-
-      {/* The column's one panel width, like every other property's. HeroUI's
-          calendar is `container-type: inline-size` — its cells are a share of
-          its width — so the month is cut to the panel rather than overflowing
-          it; see CALENDAR_TYPE for the scale that makes seven columns fit. */}
-      <Popover.Content {...listboxPopover} className={`${PROPERTY_PANEL} ${FIELD_PANEL}`}>
-        <Popover.Dialog className="p-2">
-          <Calendar
-            className={`w-full max-w-none ${CALENDAR_TYPE}`}
-            aria-label={strings.task.fields.deadline}
-            value={selected}
-            onChange={(date) => {
-              onChange(date ? date.toString() : '');
-              // Nothing else to choose once a day is picked, and a calendar left
-              // open over the properties hides the rows it was opened from.
-              setOpen(false);
-            }}
-          >
-            <Calendar.Header>
-              <Calendar.YearPickerTrigger>
-                <Calendar.YearPickerTriggerHeading />
-                <Calendar.YearPickerTriggerIndicator />
-              </Calendar.YearPickerTrigger>
-              <Calendar.NavButton slot="previous" />
-              <Calendar.NavButton slot="next" />
-            </Calendar.Header>
-            <Calendar.Grid>
-              <Calendar.GridHeader>
-                {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
-              </Calendar.GridHeader>
-              <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
-            </Calendar.Grid>
-            <Calendar.YearPickerGrid>
-              <Calendar.YearPickerGridBody>
-                {({ year }) => <Calendar.YearPickerCell year={year} />}
-              </Calendar.YearPickerGridBody>
-            </Calendar.YearPickerGrid>
-          </Calendar>
-        </Popover.Dialog>
-      </Popover.Content>
-    </Popover>
+    <DatePropertyValue
+      value={value}
+      onChange={onChange}
+      isEditing={isEditing}
+      label={strings.task.fields.deadline}
+      triggerClass={triggerClass}
+      panelWidth={PROPERTY_PANEL}
+      tone={isOverdue ? 'text-overdue-ink!' : ''}
+      mark={isOverdue ? <OverdueMark className="shrink-0" /> : null}
+    />
   );
 }
 

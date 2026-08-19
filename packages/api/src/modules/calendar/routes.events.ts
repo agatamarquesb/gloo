@@ -4,6 +4,7 @@ import {
   endOfDayInZone,
   expandEvents,
   isEventRecurrence,
+  isPaletteColor,
   type CalendarEventDto,
   type CreateEventInput,
   type RecurrenceMaster,
@@ -226,6 +227,9 @@ export async function calendarEventRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: 'Recorrência inválida' });
       }
     }
+    if (body.color !== undefined && body.color !== null && !isPaletteColor(body.color)) {
+      return reply.code(400).send({ error: 'color inválida' });
+    }
 
     // An agenda the caller owns and can write to, or their default. Checked
     // rather than trusted: the id arrives from the client.
@@ -265,6 +269,9 @@ export async function calendarEventRoutes(app: FastifyInstance) {
           ? new Date(endOfDayInZone(body.recurrenceUntil, timeZone))
           : null,
         byWeekdays: body.byWeekdays ?? [],
+        // Null and absent are the same answer here: no colour of its own, so
+        // the block wears its agenda's.
+        color: body.color ?? null,
         assignees: { create: (body.assigneeIds ?? []).map((userId) => ({ userId })) },
       },
       include: eventInclude,
@@ -299,6 +306,9 @@ export async function calendarEventRoutes(app: FastifyInstance) {
     if (body.startsAt && body.endsAt && new Date(body.endsAt) < new Date(body.startsAt)) {
       return reply.code(400).send({ error: 'O fim precisa ser depois do início' });
     }
+    if (body.color !== undefined && body.color !== null && !isPaletteColor(body.color)) {
+      return reply.code(400).send({ error: 'color inválida' });
+    }
 
     const timeZone = body.timeZone ?? existing.timeZone;
 
@@ -313,6 +323,9 @@ export async function calendarEventRoutes(app: FastifyInstance) {
       ...(body.isAllDay !== undefined ? { isAllDay: body.isAllDay } : {}),
       ...(body.timeZone !== undefined ? { timeZone } : {}),
       ...(body.byWeekdays !== undefined ? { byWeekdays: body.byWeekdays } : {}),
+      // Unlike most fields here, null is a value rather than "leave it": it is
+      // how "Padrão" in the colour panel puts the block back on its agenda.
+      ...(body.color !== undefined ? { color: body.color } : {}),
       ...(body.assigneeIds !== undefined
         ? {
             assignees: {
@@ -357,6 +370,7 @@ export async function calendarEventRoutes(app: FastifyInstance) {
               ),
           isAllDay: body.isAllDay ?? existing.isAllDay,
           timeZone,
+          color: body.color !== undefined ? body.color : existing.color,
           recurringEventId: existing.id,
           originalStart,
           assignees: {

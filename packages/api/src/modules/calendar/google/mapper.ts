@@ -1,4 +1,4 @@
-import { EventRecurrence, isEventRecurrence } from '@gloo/shared';
+import { EventRecurrence, GOOGLE_EVENT_COLORS, isEventRecurrence } from '@gloo/shared';
 
 /**
  * Translating between Google's event shape and ours.
@@ -35,6 +35,34 @@ export interface GoogleEvent {
    * "appointment" a booked slot arrives as. See kindFor in sync.ts.
    */
   eventType?: string;
+  /**
+   * The event's own colour, as an index into Google's eleven — set only when
+   * the user picked one over the calendar's default. See GOOGLE_EVENT_COLORS.
+   */
+  colorId?: string;
+  /**
+   * The event *label*, Google's newer way of colouring a card — an opaque id
+   * with no name and no colour anywhere in the API.
+   *
+   * Read only so that we can warn before destroying one: writing `colorId`
+   * clears it, and it cannot be written back. See googleEventLabelId.
+   */
+  eventLabelId?: string;
+}
+
+/**
+ * An event's own colour, or null for one wearing its calendar's.
+ *
+ * The palette lives in @gloo/shared because both sides need it: this is where an
+ * incoming colorId becomes a colour, and the event dialog is where the same
+ * eleven are offered so that what a user picks is something Google can be told.
+ *
+ * A colorId we don't recognise — a twelfth Google adds one day — is treated as
+ * no colour rather than as grey: the agenda's colour is always a defensible
+ * answer, and inventing one is not.
+ */
+export function eventColorHex(event: GoogleEvent): string | null {
+  return event.colorId ? (GOOGLE_EVENT_COLORS[event.colorId] ?? null) : null;
 }
 
 /** RFC 5545 weekday tokens, in the 0=Sunday order the rest of the app uses. */

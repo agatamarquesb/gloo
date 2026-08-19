@@ -8,8 +8,28 @@ interface MiniCalendarCardProps {
   /** The day the grid is centred on. Also what decides which week is banded. */
   focusedDate: CalendarDate;
   onFocusedDateChange: (date: CalendarDate) => void;
-  /** The first and last day currently on the grid, inclusive. */
-  visibleRange: { start: CalendarDate; end: CalendarDate };
+  /**
+   * A day was *picked* rather than merely moved to — a click on a cell, or
+   * Enter on the focused one. The page answers it by opening that day, which is
+   * a change of view as well as of date, so it cannot go through
+   * `onFocusedDateChange`: arrowing across the month must still only move the
+   * band.
+   */
+  onOpenDay: (date: CalendarDate) => void;
+  /**
+   * The run of days to band, inclusive. Not the grid's own range — see
+   * bandRange: on a single day the band is still that day's whole week.
+   */
+  bandedRange: { start: CalendarDate; end: CalendarDate };
+  /**
+   * The day to mark inside the band, or null for none.
+   *
+   * Null is what month view sends. There, the band is the whole month and every
+   * day in it is equally on screen, so marking the one that happens to be
+   * focused says a day was chosen when none was — leaving today as the only
+   * thing standing out, which is the only thing that is actually true.
+   */
+  pickedDate: CalendarDate | null;
 }
 
 /**
@@ -25,19 +45,28 @@ interface MiniCalendarCardProps {
 export function MiniCalendarCard({
   focusedDate,
   onFocusedDateChange,
-  visibleRange,
+  onOpenDay,
+  bandedRange,
+  pickedDate,
 }: MiniCalendarCardProps) {
   function bandClassName(date: CalendarDate): string {
-    if (date.compare(visibleRange.start) < 0 || date.compare(visibleRange.end) > 0) return '';
+    // The mark on the day the grid is showing. Drawn by a class of ours rather
+    // than by react-aria's own selection, which is also why `value` is held
+    // empty below: with a day selected, pressing that same day is not a change
+    // and fires nothing — so clicking the day already on screen, from month view
+    // or from week view, would do nothing at all.
+    const picked = pickedDate && date.compare(pickedDate) === 0 ? ' gloo-day-picked' : '';
 
-    const isStart = date.compare(visibleRange.start) === 0;
-    const isEnd = date.compare(visibleRange.end) === 0;
+    if (date.compare(bandedRange.start) < 0 || date.compare(bandedRange.end) > 0) return picked;
+
+    const isStart = date.compare(bandedRange.start) === 0;
+    const isEnd = date.compare(bandedRange.end) === 0;
 
     // Names only — the fill and the radii live in globals.css beside the rest of
     // the compact month. Written as Tailwind utilities here they lost to the
     // stylesheet's own `.gloo-compact-month .calendar__cell`, and the run came
     // out as seven rounded boxes instead of one pill.
-    return `gloo-band${isStart ? ' gloo-band-start' : ''}${isEnd ? ' gloo-band-end' : ''}`;
+    return `gloo-band${isStart ? ' gloo-band-start' : ''}${isEnd ? ' gloo-band-end' : ''}${picked}`;
   }
 
   return (
@@ -55,7 +84,10 @@ export function MiniCalendarCard({
         ariaLabel={strings.dashboard.calendar}
         focusedValue={focusedDate}
         onFocusChange={onFocusedDateChange}
-        onChange={onFocusedDateChange}
+        // Held empty on purpose — see bandClassName. Every press is then a
+        // change, and the day the page considers picked is painted above.
+        value={null}
+        onChange={onOpenDay}
         cellClassName={bandClassName}
       />
     </DashboardCard>

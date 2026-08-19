@@ -6,6 +6,7 @@ import { sanitizeNotes } from '../../../lib/sanitizeHtml';
 import { googleFetch, googleTasksFetch, GoogleAuthError } from './client';
 import {
   attendeeEmails,
+  eventColorHex,
   isAllDay,
   parseEventTime,
   parseRecurrence,
@@ -81,9 +82,14 @@ interface CalendarListEntry {
  * the same colour here, and ours — a palette of ten assigned by order of import
  * — made "Feriados" a different colour in each place.
  *
- * The cost is that recolouring a Google agenda inside Gloo no longer sticks: the
- * next sync writes Google's value back over it. That is the same trade the name
- * already makes, and it is what "exactly the colour it is in Google" means.
+ * Recolouring or renaming one *here* still sticks, because the change is pushed
+ * to Google before this ever reads it back — see updateRemoteCalendar, which
+ * writes the same two fields this import prefers (`summaryOverride`, and the
+ * background colour under `colorRgbFormat`). So the rule is one-way per sync and
+ * two-way per user action: whatever Google holds wins, and what Gloo changes is
+ * put into Google first so that it is what Google holds. A palette key does come
+ * back as the hex it stands for, which is the same colour by a different name.
+ *
  * Agendas in the Gloo account are untouched by any of this — they have no
  * calendar upstream and keep the palette.
  */
@@ -559,13 +565,38 @@ async function importEvents(
         googleEtag: item.etag ?? null,
         externalAttendees: unmatched,
         kind: kindFor(item.eventType),
+        // Only so the dialog can warn before a colour destroys it — see
+        // CalendarEvent.googleEventLabelId. Google owns it and it is rewritten
+        // here like everything else Google owns.
+        googleEventLabelId: item.eventLabelId ?? null,
         lastSyncedAt: new Date(),
       };
 
       const existing = await prisma.calendarEvent.findFirst({
         where: { agendaId: agenda.id, googleEventId: item.id },
-        select: { id: true },
+        select: { id: true, googleColorId: true },
       });
+
+      /**
+       * The colour, which is the one field here Google does *not* simply own.
+       *
+       * Everything else in `data` is rewritten on every sync, because Google is
+       * authoritative for an event it holds. The colour cannot be: our palette
+       * is open and Google's is eleven swatches, so a colour chosen in Gloo has
+       * no colorId to push back — and rewriting it from Google's unchanged
+       * answer is what made a colour revert a minute after it was set.
+       *
+       * So the comparison is against what Google said *last time*, not against
+       * what we are currently showing. Same answer as before → Google has
+       * nothing new to say and the local colour stands. A different answer,
+       * including one cleared over there, is a decision made on Google's side
+       * and is adopted. See CalendarEvent.googleColorId.
+       */
+      const googleColorId = item.colorId ?? null;
+      const colorChange =
+        existing && existing.googleColorId === googleColorId
+          ? {}
+          : { color: eventColorHex(item), googleColorId };
 
       // Assignees are replaced wholesale rather than merged: Google's attendee
       // list is authoritative for an event it owns, and a merge would make a
@@ -578,12 +609,13 @@ async function importEvents(
       if (existing) {
         await prisma.calendarEvent.update({
           where: { id: existing.id },
-          data: { ...data, assignees },
+          data: { ...data, ...colorChange, assignees },
         });
       } else {
         await prisma.calendarEvent.create({
           data: {
             ...data,
+            ...colorChange,
             agendaId: agenda.id,
             createdById: account.userId,
             assignees: { create: matchedUserIds.map((userId) => ({ userId })) },

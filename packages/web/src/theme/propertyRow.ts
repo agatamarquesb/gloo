@@ -113,7 +113,19 @@ export const BARE_TRIGGER = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FI
  * ground rather than growing by it. So the band and the panel under it are the
  * same box seen twice, whichever property opened them.
  */
-export const BARE_TRIGGER_NO_INDICATOR = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FIELD_GROUND} aria-expanded:-mt-1.5 aria-expanded:pt-1.5 aria-expanded:pb-1.5 w-full gap-1 p-0 text-left`;
+export const BARE_TRIGGER_NO_INDICATOR = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FIELD_GROUND} aria-expanded:-mt-1.5 aria-expanded:pt-1.5 aria-expanded:pb-1.5 gap-1 p-0 text-left`;
+
+/**
+ * The trigger's width, which is `w-full` for every row that owns its own — the
+ * band, and the panel under it, are then the column itself.
+ *
+ * A row may ask for another: `TRIGGER_HUGS` for a value followed by something
+ * else on the same line (the event dialog's dates, which carry an answer beside
+ * them), or any width of its own for a list whose options are short enough that
+ * a full-width panel is mostly air. See `width` in propertyStyles.
+ */
+export const TRIGGER_FILL = 'w-full';
+export const TRIGGER_HUGS = 'w-fit max-w-full min-w-0';
 
 /**
  * The trigger's height, which sets the row's. Locked it comes down to just clear
@@ -222,12 +234,23 @@ export function propertyStyles(
      * make a taller row instead of a clipped one.
      */
     fluid = false,
-  }: { row?: string; height?: string; indicator?: boolean; fluid?: boolean } = {},
+    /**
+     * The trigger's own width. The whole value column unless a row asks for
+     * something else — see TRIGGER_FILL and TRIGGER_HUGS.
+     */
+    width = TRIGGER_FILL,
+  }: {
+    row?: string;
+    height?: string;
+    indicator?: boolean;
+    fluid?: boolean;
+    width?: string;
+  } = {},
 ) {
   const undimmed = isEditing ? '' : VIEW_UNDIMMED;
   const base = indicator
     ? BARE_TRIGGER
-    : `${BARE_TRIGGER_NO_INDICATOR} ${isEditing ? 'cursor-pointer' : ''}`;
+    : `${BARE_TRIGGER_NO_INDICATOR} ${width} ${isEditing ? 'cursor-pointer' : ''}`;
   // Fluid, the control has no height of its own and sits at the top of its row:
   // a value on two lines must start where its label does, and anything centred
   // in a taller box starts lower than the label beside it.

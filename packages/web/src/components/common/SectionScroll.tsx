@@ -32,7 +32,22 @@ const FADE = 'pointer-events-none absolute inset-x-0 z-10 h-[14px]';
 const FADE_TOP = `${FADE} top-0 bg-[linear-gradient(to_bottom,var(--overlay),transparent)]`;
 const FADE_BOTTOM = `${FADE} bottom-0 bg-[linear-gradient(to_top,var(--overlay),transparent)]`;
 
-/** Both edges are within a pixel of the end — sub-pixel scroll heights are real. */
+/**
+ * How far past an edge something has to reach to count as being past it.
+ *
+ * One pixel, and it is a tolerance for the compositor rather than for the
+ * measurement: the two numbers compared below are both fractional layout values
+ * taken in the same pass, so they agree exactly except where a transform or a
+ * fractional device pixel puts them a hair apart.
+ *
+ * This used to be 2, guarding against something else entirely — `scrollHeight`
+ * is rounded up to a whole pixel while `scrollTop` is not, so a scroller whose
+ * content was 612.4px tall reported 613 and could never satisfy
+ * `scrollTop + clientHeight >= scrollHeight`. A list scrolled all the way down
+ * still measured as having something past it and kept a fade over its own last
+ * row. Any fixed slack is a guess at how wrong that rounding will be on a given
+ * screen; measuring the content's own box instead makes the question exact.
+ */
 const EDGE_SLACK = 1;
 
 /**
@@ -59,8 +74,22 @@ export function useScrollEdges(
   const measure = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    const top = el.scrollTop > EDGE_SLACK;
-    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - EDGE_SLACK;
+
+    // The content's own box against the scroller's, both fractional and both
+    // read in the same layout pass — see EDGE_SLACK for why not scrollHeight.
+    // First and last *element* children, so a scroller wrapping bare text falls
+    // back to the rounded numbers rather than measuring nothing.
+    const box = el.getBoundingClientRect();
+    const first = el.firstElementChild?.getBoundingClientRect();
+    const last = el.lastElementChild?.getBoundingClientRect();
+
+    const top = first
+      ? first.top < box.top - EDGE_SLACK
+      : el.scrollTop > EDGE_SLACK;
+    const bottom = last
+      ? last.bottom > box.bottom + EDGE_SLACK
+      : el.scrollTop + el.clientHeight < el.scrollHeight - EDGE_SLACK;
+
     setEdges((current) =>
       current.top === top && current.bottom === bottom ? current : { top, bottom },
     );

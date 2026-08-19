@@ -58,11 +58,27 @@ export function useTask(id: string | undefined) {
   });
 }
 
-export function useTaskSummary(assigneeId?: string) {
+/**
+ * The four status counts, under whatever else is narrowing the list.
+ *
+ * Takes the same filters the list takes, minus the status — the number written
+ * on a filter has to be what pressing that filter would show, so a count that
+ * ignored the sector, the person or the day picked on the month would contradict
+ * the rows under it. The status is the one thing it cannot take, since it is
+ * what each of the four counts supplies for itself.
+ *
+ * Called with nothing at all by the Dashboard's tiles, which summarise the whole
+ * business.
+ */
+export function useTaskSummary(filters: Omit<TaskFilters, 'status' | 'sortBy' | 'sortDir'> = {}) {
+  const qs = toQueryString(filters);
   return useQuery({
-    queryKey: taskKeys.summary(assigneeId),
-    queryFn: () =>
-      apiClient.get<TaskSummaryDto>(`/tasks/summary${assigneeId ? `?assigneeId=${assigneeId}` : ''}`),
+    queryKey: taskKeys.summary(qs),
+    queryFn: () => apiClient.get<TaskSummaryDto>(`/tasks/summary${qs}`),
+    // Same reasoning as the list's: the counts are re-asked for on every
+    // keystroke of the search box, and emptying them to "—" between answers
+    // made the row of pills flicker.
+    placeholderData: keepPreviousData,
   });
 }
 

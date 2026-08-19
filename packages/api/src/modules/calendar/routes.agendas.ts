@@ -1,9 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 
-import { isPaletteColor, type CreateAgendaInput, type UpdateAgendaInput } from '@gloo/shared';
+import {
+  isPaletteColor,
+  toHex,
+  type CreateAgendaInput,
+  type UpdateAgendaInput,
+} from '@gloo/shared';
 
 import { prisma } from '../../lib/prisma';
-import { createRemoteCalendar } from './google/push';
+import { createRemoteCalendar, updateRemoteCalendar } from './google/push';
 import { agendaSelect, toAgendaDto } from './mapper';
 import { defaultAgendaFor, ensureCalendarProvisioned, nextAgendaColor } from './provision';
 
@@ -18,7 +23,7 @@ const MAX_NAME_LENGTH = 60;
 async function ownedAgenda(id: string, userId: string) {
   return prisma.agenda.findFirst({
     where: { id, userId, removedAt: null },
-    include: { account: { select: { provider: true } } },
+    include: { account: true },
   });
 }
 
@@ -139,6 +144,29 @@ export async function calendarAgendaRoutes(app: FastifyInstance) {
           select: agendaSelect,
         });
       });
+
+      // A Google agenda is a mirror, so a name or a colour changed here has to
+      // reach the calendar it mirrors — otherwise the next sync reads Google's
+      // untouched values back over both, and the change simply disappears a
+      // minute after it was made. Awaited so the sync polling behind this page
+      // cannot overtake it; a failure costs the push and not the local write.
+      if (
+        agenda.account.provider === 'GOOGLE' &&
+        agenda.googleCalendarId &&
+        (name !== undefined || color !== undefined)
+      ) {
+        await updateRemoteCalendar(
+          agenda.account,
+          agenda.googleCalendarId,
+          {
+            ...(name !== undefined ? { name: name.trim() } : {}),
+            // Google has no notion of "lime": what goes over the wire is the
+            // hex the palette key stands for. See toHex.
+            ...(color !== undefined ? { color: toHex(color) } : {}),
+          },
+          (error) => request.log.warn({ err: error }, 'calendarList.patch failed'),
+        );
+      }
 
       return toAgendaDto(updated);
     },

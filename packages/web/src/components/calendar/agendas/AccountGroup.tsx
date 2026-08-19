@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight, MoreVertical, Pencil, Unlink } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Settings, Unlink } from 'lucide-react';
 import { Button, Input, Popover } from '@heroui/react';
 import { TextField } from 'react-aria-components';
 
@@ -27,10 +27,17 @@ import { AgendaRow } from './AgendaRow';
 export function AccountGroup({
   account,
   onRequestRemoveAgenda,
+  onReconnect,
   draft,
 }: {
   account: CalendarAccountDto;
   onRequestRemoveAgenda: (agenda: AgendaDto, provider: CalendarProvider) => void;
+  /**
+   * Sends the user back through Google's consent screen. The same flow that
+   * links a new account: it is matched by the Google id it comes back with, so
+   * consenting again updates this account rather than adding a second one.
+   */
+  onReconnect: () => void;
   /**
    * The agenda being made, if one is and it belongs here — rendered as the last
    * line of this list so it is written where it will end up. Only the Gloo
@@ -115,10 +122,14 @@ export function AccountGroup({
               className={`${dotsMenuButton} size-5 min-w-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100`}
               aria-label={strings.calendar.agendas.manageAccount}
             >
-              {/* Vertical and on the row's own right-hand end, like the one on
-                  an agenda under it — and, like that one, only there while the
-                  pointer is on the row. */}
-              <MoreVertical className="size-4" />
+              {/* A gear rather than the `···` this wore. What hangs under it is
+                  the account's *settings* — its name and the link itself — and
+                  a Google account is the only thing in this card that has any:
+                  the three dots said "more of this row" beside a row that is
+                  otherwise only a name. Small, and on the row's own right-hand
+                  end like the chevron on an agenda under it — and, like that
+                  one, only there while the pointer is on the row. */}
+              <Settings className="size-3.5" />
             </Button>
 
             <Popover.Content placement="bottom end" className={`w-52 ${FIELD_PANEL}`}>
@@ -147,22 +158,37 @@ export function AccountGroup({
         ) : null}
       </header>
 
+      {/* And the way out of it, on the line that says there is a problem. The
+          message used to be a paragraph and nothing else, which was fine while
+          the only cause was an expired refresh token — the user had to reconnect
+          and there was nowhere else to go. It is now also what an account linked
+          before this app asked to write the calendar list says (see
+          updateRemoteCalendar), and telling someone to reconnect without giving
+          them the button is a dead end. */}
       {account.needsReauth ? (
-        <p className="px-2 text-xs text-danger">{strings.calendar.agendas.reauthNeeded}</p>
+        <button
+          type="button"
+          className="px-2 text-left text-xs text-danger underline underline-offset-2 hover:text-danger"
+          onClick={onReconnect}
+        >
+          {strings.calendar.agendas.reauthNeeded}
+        </button>
       ) : null}
 
       {/* A collapsed group still opens for a draft: the alternative is pressing
           "Criar nova agenda" and watching nothing happen.
 
-          `gap-0.5` puts the hair of space between the rows on the list rather
-          than in the rows themselves: padding inside a row grows the ground that
-          lights up under it, and that band is meant to stay tight to the name. */}
+          The gap goes on the list rather than in the rows themselves: padding
+          inside a row grows the ground that lights up under it, and that band is
+          meant to stay tight to the name. 4px — one step up from the hairline it
+          was, which had the names reading as a solid block. */}
       {account.isCollapsed && !draft ? null : (
-        <ul className="flex flex-col gap-0.5">
+        <ul className="flex flex-col gap-1">
           {account.agendas.map((agenda) => (
             <AgendaRow
               key={agenda.id}
               agenda={agenda}
+              provider={account.provider}
               onRequestRemove={() => onRequestRemoveAgenda(agenda, account.provider)}
             />
           ))}

@@ -43,6 +43,22 @@ export function visibleRange(focused: CalendarDate, mode: CalendarViewMode): Dat
   };
 }
 
+/**
+ * The days the mini calendar bands, which is not the same question.
+ *
+ * The grid shows a day, a week or a month; the month beside it always shows the
+ * *week*, except in month view where it shows the month. That asymmetry is the
+ * point: a band one cell wide says nothing a highlight on that cell doesn't
+ * already say, and what a reader wants from the small calendar while looking at
+ * a single day is where that day sits in its week.
+ *
+ * So Dia and Semana band the same seven days and differ only in what the grid
+ * draws, and Mês is the one view where the two calendars agree.
+ */
+export function bandRange(focused: CalendarDate, mode: CalendarViewMode): DateRange {
+  return visibleRange(focused, mode === CalendarViewMode.DAY ? CalendarViewMode.WEEK : mode);
+}
+
 /** Every day in the range, in order — the grid's columns, or its cells. */
 export function daysIn(range: DateRange): CalendarDate[] {
   const days: CalendarDate[] = [];

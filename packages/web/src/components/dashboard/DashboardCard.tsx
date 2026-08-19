@@ -9,6 +9,7 @@ export function DashboardCard({
   title,
   subtitle,
   action,
+  titleAction,
   children,
   className = '',
   titleClassName = 'text-lg font-semibold',
@@ -19,6 +20,15 @@ export function DashboardCard({
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  /**
+   * A control that belongs to the heading rather than to the far end of the row
+   * — the Tasks page's projects card, whose chevron reads as part of the word it
+   * follows ("Projetos ›") rather than as a second thing on the line.
+   *
+   * `action` is still the other corner, for controls that act on the card's
+   * contents rather than on the card's subject.
+   */
+  titleAction?: ReactNode;
   children: ReactNode;
   /**
    * What separates the heading from the body. A prop rather than something the
@@ -71,7 +81,12 @@ export function DashboardCard({
         }`}
       >
         <div>
-          <h2 className={`${titleClassName} text-surface-foreground`}>{title}</h2>
+          {/* The heading and whatever follows it on one line, so a chevron sits
+              against the word rather than under it. */}
+          <div className="flex items-center gap-1">
+            <h2 className={`${titleClassName} text-surface-foreground`}>{title}</h2>
+            {titleAction}
+          </div>
           {subtitle ? <p className="text-sm text-muted">{subtitle}</p> : null}
         </div>
         {action}

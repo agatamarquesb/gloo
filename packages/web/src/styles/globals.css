@@ -177,11 +177,13 @@
   /**
    * A task row's ground while the pointer is on it.
    *
-   * The palest step of the brand green — a shade above #eef2cf, which is the
-   * tint the row's own edge is drawn in: the fill has to read as the row lighting
-   * up, not as a second green block appearing inside its outline.
+   * The palest step of the brand green there is — a wash rather than a tint. It
+   * sits well inside #eef2cf, the green the row's own edge is drawn in: the fill
+   * has to read as the row lighting up under the pointer, not as a second green
+   * block appearing inside its outline. At the fuller value it was, the row read
+   * as selected rather than as merely hovered.
    */
-  --row-hover: #f3f6dd;
+  --row-hover: #fafcee;
 
   /**
    * Overdue red where it lands on the card itself — a late task's title, the
@@ -352,8 +354,10 @@
   --value-ink: #d4d4d8;
 
   /* A green-tinted step off the surface rather than the light mode's pale green
-     wash, which on a dark card would be a lit panel rather than a hovered row. */
-  --row-hover: color-mix(in oklab, var(--green) 14%, #1b1b1e);
+     wash, which on a dark card would be a lit panel rather than a hovered row.
+     Lightened alongside it, by the same reasoning: what the pointer leaves
+     behind is a breath of green, not a filled row. */
+  --row-hover: color-mix(in oklab, var(--green) 9%, #1b1b1e);
 
   /* Outline only: a filled white disc glared and a dark one read as a heavy hole
      punched in the tile, but dropping the disc entirely left the icon floating
@@ -682,11 +686,12 @@ body {
   }
 
   /*
-   * `.gloo-day-picked` beside react-aria's own attribute: the Dashboard drives
-   * its selection itself — see the overlay in CalendarCard, which exists so that
-   * pressing the day already open closes it — so on that card the attribute
-   * never arrives and the class is what paints. The mini calendar still uses the
-   * attribute. Same fill either way.
+   * `.gloo-day-picked` beside react-aria's own attribute: both compact months
+   * now drive their own selection — the Dashboard so that pressing the day
+   * already open closes it, the Calendar page's so that pressing the day already
+   * on the grid still opens it in Dia — so neither gets the attribute and the
+   * class is what paints. The attribute is kept in the selector for any calendar
+   * that does let react-aria hold the selection. Same fill either way.
    */
   .calendar__cell[data-selected='true'],
   .calendar__cell.gloo-day-picked {
@@ -722,6 +727,77 @@ body {
  */
 .gloo-month-dots .calendar__cell {
   margin-bottom: 9px;
+}
+
+/*
+ * A month in a column narrower than its own grid — the Tasks page's third
+ * column, which is a fifth of the page.
+ *
+ * The compact month's cell is a fixed 28px square centred in its track, which is
+ * what keeps the Dashboard's dates lined up under their weekday. Seven of those
+ * come to 196px, and at 178px of card the grid simply ran off the right edge:
+ * "sáb." and "dom." met in the middle of the last column.
+ *
+ * So here the cell gives up its fixed width and fills whatever track it is
+ * given, and the weekday above it is set small enough that the *track* can be
+ * that narrow — the abbreviation is what the column was being sized by. The
+ * month's own name drops its minimum too: it was reserved at the width of
+ * "setembro de 2026" so the arrow after it would not step sideways through the
+ * year, and there is no room for that reservation here.
+ *
+ * After .gloo-compact-month and .gloo-month-dots deliberately: same specificity,
+ * so this only wins by coming later.
+ */
+.gloo-month-tight {
+  .calendar__cell {
+    width: 100%;
+    /*
+     * And shorter rows, so the month comes out roughly as tall as it is wide.
+     *
+     * The compact month spends 15px of vertical room per row on top of the
+     * cell — 2px above, 2px below, and the 9px .gloo-month-dots opens under it
+     * for a day's marks. Over six weeks that is 90px, which is what stood the
+     * month up as a tall rectangle in a narrow column. Halved above and below
+     * and trimmed under the dots to just enough to clear the next row's box,
+     * the grid loses about 40px and lands near square.
+     */
+    margin-block: 1px;
+  }
+
+  .calendar__header-cell {
+    font-size: 0.625rem;
+    padding-bottom: 0.125rem;
+  }
+
+  .calendar__heading {
+    min-width: 0;
+    /* Small enough that the arrow *after* the month is still on the card. The
+       row is `‹ setembro de 2026 ›` inside a quarter of the page, and at the
+       card's own heading size the name pushed the second arrow off the end. */
+    font-size: 0.8125rem;
+    /* Dropping the minimum let the name shrink to whatever was left and break
+       across two lines — "agosto" over "de 2026". It takes its natural width
+       instead; the arrows on either side keep theirs, and the three together
+       still come in under the card.
+
+       `flex: none` with it. HeroUI gives the heading `flex: 1 0 0%`, which in
+       the leading arrangement makes it share the row's slack with the spacer
+       after the arrows — it settled at 65px, and the text, now refusing to
+       wrap, ran out from under it and across the arrow. Sized to its content
+       instead, and the spacer takes all the slack. */
+    white-space: nowrap;
+    flex: none;
+  }
+}
+
+/*
+ * The dots' room in the tight month: 6px rather than 9, which is the mark plus
+ * one pixel of clearance and nothing else. Its own rule rather than part of the
+ * block above, because it has to outrank `.gloo-month-dots .calendar__cell` —
+ * two classes against two, so it wins by coming later.
+ */
+.gloo-month-tight.gloo-month-dots .calendar__cell {
+  margin-bottom: 6px;
 }
 
 /*
@@ -783,8 +859,8 @@ body {
  * what stops that -1 from sliding behind the card.
  */
 .gloo-month-band .calendar__cell.gloo-band[data-today='true'],
-.gloo-month-band .calendar__cell.gloo-band[data-selected='true'],
-.gloo-month-band .calendar__cell.gloo-band[data-selected='true']:hover,
+.gloo-month-band .calendar__cell.gloo-band.gloo-day-picked,
+.gloo-month-band .calendar__cell.gloo-band.gloo-day-picked:hover,
 .gloo-month-band .calendar__cell.gloo-band[data-today='true']:hover {
   background-color: var(--week-band);
 }
@@ -793,12 +869,12 @@ body {
    light enough in both themes to carry black, which is what the compact month
    sets for every filled day and what would otherwise put black digits on a dark
    olive square. */
-.gloo-month-band .calendar__cell.gloo-band[data-selected='true']:not([data-today='true']) {
+.gloo-month-band .calendar__cell.gloo-band.gloo-day-picked:not([data-today='true']) {
   color: var(--foreground);
 }
 
 .gloo-month-band .calendar__cell.gloo-band[data-today='true']::before,
-.gloo-month-band .calendar__cell.gloo-band[data-selected='true']::before {
+.gloo-month-band .calendar__cell.gloo-band.gloo-day-picked::before {
   content: '';
   position: absolute;
   inset: 0;

@@ -123,6 +123,8 @@ interface EventRow {
   googleEventId: string | null;
   kind: string;
   isDone: boolean;
+  color: string | null;
+  googleEventLabelId: string | null;
   externalAttendees: unknown;
   assignees: { user: Parameters<typeof toUserDto>[0] }[];
   agenda: { isReadOnly: boolean; googleCalendarId: string | null };
@@ -173,5 +175,12 @@ export function toCalendarEventDto(
     isFromGoogle: event.googleEventId !== null,
     kind: event.kind as CalendarEventDto['kind'],
     isDone: event.isDone,
+    // Same guard the agenda's colour gets, and the same reason — except that
+    // here "nothing valid" and "nothing at all" mean the same thing: the block
+    // falls back to its agenda either way.
+    color: isPaletteColor(event.color) ? event.color : null,
+    // Whether, never which: the id is opaque and useless to anything that isn't
+    // Google. All the client needs is that there is something here to lose.
+    hasGoogleLabel: event.googleEventLabelId !== null,
   };
 }

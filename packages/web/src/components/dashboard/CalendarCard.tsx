@@ -74,12 +74,57 @@ function monthInstants(focused: CalendarDate) {
   };
 }
 
-export function CalendarCard() {
+export function CalendarCard({
+  tasksOnly = false,
+  narrow = false,
+  pickedDay,
+  onPickDay,
+}: {
+  /**
+   * Mark days with task deadlines and nothing else — no events, no agenda
+   * filter, and a day summary that lists only what is due.
+   *
+   * For the Tasks page, whose month sits beside a list of tasks and a chart
+   * about tasks: a dot there that turns out to be a meeting is answering a
+   * question that column never asked. The Dashboard keeps both, which is what
+   * makes its month the whole day rather than one half of it.
+   */
+  tasksOnly?: boolean;
+  /**
+   * The month is in a column too narrow for its own grid — see
+   * .gloo-month-tight, which drops the cell's fixed width and shrinks the
+   * weekday abbreviations so seven columns fit where six used to.
+   */
+  narrow?: boolean;
+  /**
+   * The day marked on the month, as `YYYY-MM-DD`, when the caller owns the
+   * choice rather than the card.
+   *
+   * Given together with `onPickDay`, the card stops summarising the day
+   * altogether: no panel, and no closing itself when a press lands elsewhere on
+   * the page. The Tasks page drives it that way — pressing a day there filters
+   * the list underneath to that deadline, so what the choice means lives in the
+   * URL and the month is only showing which day is on.
+   */
+  pickedDay?: string | null;
+  /**
+   * What to do with a press instead of opening the summary. Null when the day
+   * already picked is pressed again, which is how the choice is cleared.
+   */
+  onPickDay?: (day: string | null) => void;
+} = {}) {
   const navigate = useNavigate();
   const { data: me } = useMe();
   const [focused, setFocused] = useState<CalendarDate>(() => today(getLocalTimeZone()));
-  /** The day whose summary is open, or null while the card is just a month. */
+  /**
+   * The day whose summary is open, or null while the card is just a month.
+   *
+   * Only used when the caller has not taken the choice over — see `pickedDay`,
+   * which replaces this and means the card summarises nothing.
+   */
   const [selected, setSelected] = useState<CalendarDate | null>(null);
+  /** Whether the choice is the caller's rather than this card's. */
+  const isControlled = onPickDay !== undefined;
   const sectorColors = useSectorColors();
   const cardRef = useRef<HTMLElement>(null);
 
@@ -87,7 +132,8 @@ export function CalendarCard() {
   const { fromIso, toIso } = monthInstants(focused);
   const { data: entries = [] } = useTasksCalendar(from, to);
   const { data: sectors = [] } = useSectors();
-  const { data: allEvents = [] } = useCalendarEvents(fromIso, toIso);
+  // Not asked for at all when the month is about tasks — see `tasksOnly`.
+  const { data: allEvents = [] } = useCalendarEvents(fromIso, toIso, { enabled: !tasksOnly });
   // Two views of one query — the map for looking an event's agenda up, the tree
   // for the menu, which lists agendas under the account they belong to.
   const { data: accounts = [] } = useCalendarAccounts();
@@ -130,8 +176,8 @@ export function CalendarCard() {
    * the ticks in the menu can never disagree.
    */
   const events = useMemo(
-    () => allEvents.filter((event) => !hiddenAgendas.has(event.agendaId)),
-    [allEvents, hiddenAgendas],
+    () => (tasksOnly ? [] : allEvents.filter((event) => !hiddenAgendas.has(event.agendaId))),
+    [tasksOnly, allEvents, hiddenAgendas],
   );
 
   /**
@@ -229,8 +275,14 @@ export function CalendarCard() {
     [accounts, agendasById],
   );
 
+  /**
+   * The day marked on the month: the caller's when there is one, this card's
+   * otherwise.
+   */
+  const markedDay = isControlled ? (pickedDay ?? null) : (selected?.toString() ?? null);
+
   /** What the open summary is listing — nothing at all while it is closed. */
-  const selectedDay = selected?.toString() ?? null;
+  const selectedDay = isControlled ? null : (selected?.toString() ?? null);
   const dayItems = useMemo(
     () =>
       selectedDay
@@ -251,7 +303,16 @@ export function CalendarCard() {
    * close something you opened by clicking is a rule with no reason.
    */
   function selectDay(date: CalendarDate) {
-    setSelected((current) => (current?.toString() === date.toString() ? null : date));
+    const day = date.toString();
+
+    if (onPickDay) {
+      // Pressing the day already on turns it off, exactly as it closes the
+      // summary in the other arrangement — the cell is the switch either way.
+      onPickDay(pickedDay === day ? null : day);
+      return;
+    }
+
+    setSelected((current) => (current?.toString() === day ? null : date));
   }
 
   /**
@@ -263,7 +324,7 @@ export function CalendarCard() {
    * gone before whatever was pressed underneath reacts.
    */
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || isControlled) return;
 
     const onPointerDown = (event: PointerEvent) => {
       if (cardRef.current?.contains(event.target as Node)) return;
@@ -271,7 +332,7 @@ export function CalendarCard() {
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [selected]);
+  }, [selected, isControlled]);
 
   return (
     // The month's own name is the card's heading — see `hideTitle`.
@@ -279,18 +340,27 @@ export function CalendarCard() {
       <MonthCalendar
         // Shorter rows and a rounded square on today, rather than HeroUI's
         // square cell and its circle — see .gloo-dashboard-calendar.
-        className="gloo-compact-month gloo-month-dots"
+        // `my-auto` with the tight month: it shares a row with cards that can be
+        // taller than a six-week grid, and the slack splits above and below the
+        // month rather than pooling under it. Auto margins on a flex child are
+        // what centres it; on the Dashboard the month is the top of a column and
+        // stays where it is.
+        className={`gloo-compact-month gloo-month-dots${narrow ? ' gloo-month-tight my-auto' : ''}`}
         ariaLabel={strings.dashboard.calendar}
         // The month is this card's heading, so it leads the row and the arrows
         // follow it; the far end of that row is where the agenda filter goes,
         // which is the corner every other card keeps its `···` in.
         leadingHeading
+        // No agenda filter on a month with no agendas on it: every option in it
+        // would tick and untick something the card is not drawing.
         headerAction={
-          <CalendarAgendaMenu
-            accounts={agendaGroups}
-            hiddenIds={hiddenAgendas}
-            onToggle={toggleAgenda}
-          />
+          tasksOnly ? null : (
+            <CalendarAgendaMenu
+              accounts={agendaGroups}
+              hiddenIds={hiddenAgendas}
+              onToggle={toggleAgenda}
+            />
+          )
         }
         focusedValue={focused}
         onFocusChange={setFocused}
@@ -304,9 +374,7 @@ export function CalendarCard() {
         // in MonthCalendar.
         value={null}
         // Which leaves the picked day for us to paint.
-        cellClassName={(date) =>
-          selected && date.compare(selected) === 0 ? 'gloo-day-picked' : ''
-        }
+        cellClassName={(date) => (date.toString() === markedDay ? 'gloo-day-picked' : '')}
         renderCellExtra={(date) => {
           const day = date.toString();
           const sectorIds = bySector.get(day) ?? [];

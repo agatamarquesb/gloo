@@ -4,7 +4,8 @@ export const taskKeys = {
   all: ['tasks'] as const,
   list: (filters: TaskFilters) => ['tasks', 'list', filters] as const,
   detail: (id: string) => ['tasks', 'detail', id] as const,
-  summary: (assigneeId?: string) => ['tasks', 'summary', assigneeId] as const,
+  /** Keyed by the query string, since the summary now takes the list's filters. */
+  summary: (query: string) => ['tasks', 'summary', query] as const,
   bySector: ['tasks', 'by-sector'] as const,
   calendar: (from: string, to: string) => ['tasks', 'calendar', from, to] as const,
 };

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ArrowDownAZ, ArrowUpAZ, Filter } from 'lucide-react';
 import { Button, Label, ListBox, Popover, Select } from '@heroui/react';
 
@@ -26,6 +27,8 @@ export function TaskFiltersBar({
   onAssigneeChange,
   sectors,
   users,
+  action,
+  isFiltered = false,
 }: {
   search: string;
   onSearchChange: (value: string) => void;
@@ -39,6 +42,25 @@ export function TaskFiltersBar({
   onAssigneeChange: (value: string | undefined) => void;
   sectors: SectorDto[];
   users: UserDto[];
+  /**
+   * A control for the far end of the row — the Tasks page's "add".
+   *
+   * Here rather than anywhere else on the card because this row *is* the top of
+   * the section: it is the first thing in the box, and its right edge is the
+   * section's top right corner. A button placed anywhere else would need a
+   * header row of its own over a card that has never had one.
+   */
+  action?: ReactNode;
+  /**
+   * Whether anything behind the "Filtrar por" button is actually narrowing the
+   * list — a sector, a person, or the day picked on the month above.
+   *
+   * The button says so in the brand green, set bold, glyph and all. Three of the
+   * four filters live inside a popover and the fourth is a press on a calendar
+   * in another card entirely, so without this the only way to tell a filtered
+   * list from a short one is to open the popover and look.
+   */
+  isFiltered?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -72,7 +94,15 @@ export function TaskFiltersBar({
         </Popover>
 
         <Popover>
-          <Button variant="outline" className="rounded-full">
+          {/* The ink and nothing else: the button keeps its outline and its white
+              ground either way, so the row does not change shape when a filter
+              goes on — what changes is that its label is written in green and a
+              step heavier. --green-deep rather than --green, which is a fill
+              colour and barely legible as words on a light surface. */}
+          <Button
+            variant="outline"
+            className={`rounded-full ${isFiltered ? 'font-semibold text-green-deep' : ''}`}
+          >
             <Filter className="size-4" />
             {strings.common.filterBy}
           </Button>
@@ -126,6 +156,8 @@ export function TaskFiltersBar({
             </Popover.Dialog>
           </Popover.Content>
         </Popover>
+
+        {action}
       </div>
     </div>
   );

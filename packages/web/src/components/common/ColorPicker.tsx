@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import { Input, Label } from '@heroui/react';
-import { TextField } from 'react-aria-components';
 
 import { LABEL_COLORS, isHexColor, type HexColor, type PaletteColor } from '@gloo/shared';
 
-import { SecondaryButton } from '@/components/common/SecondaryButton';
 import { colorFill } from '@/theme/labelColors';
 import { modalDivider } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
@@ -142,12 +139,23 @@ function hexToHsv(hex: string): Hsv {
   return { h: (h + 360) % 360, s: max === 0 ? 0 : span / max, v: max };
 }
 
-const SWATCH = 'h-8 w-full rounded-lg transition-transform hover:scale-105';
+export const SWATCH = 'h-8 w-full rounded-lg transition-transform hover:scale-105';
+
+/**
+ * The same palette in a panel that hangs off a property row rather than filling
+ * a dialog — the event's "Cor do card".
+ *
+ * Square and small: the swatches carry the panel's whole size, so a fixed 24px
+ * cell is what takes the popover down to the width of five of them and the
+ * height of two rows. `aspect-square` rather than a second height, so the two
+ * numbers cannot drift apart.
+ */
+export const SWATCH_COMPACT = 'size-6 aspect-square rounded-md transition-transform hover:scale-105';
 
 /** Where the mixer opens when there is nothing to edit — a mid orange. */
 const DEFAULT_MIX: HexColor = '#bf8756';
-const SWATCH_SELECTED = 'ring-2 ring-foreground ring-offset-2 ring-offset-surface';
-const SECTION_TITLE = 'text-xs font-medium text-muted';
+export const SWATCH_SELECTED = 'ring-2 ring-foreground ring-offset-2 ring-offset-surface';
+export const SECTION_TITLE = 'text-xs font-medium text-muted';
 
 /**
  * The mixer: a saturation/value square over the chosen hue, a hue slider under
@@ -157,10 +165,17 @@ const SECTION_TITLE = 'text-xs font-medium text-muted';
 function ColorMixer({
   initial,
   onPick,
+  onLive,
 }: {
   /** What it opens on: a colour being edited, or a starting point for a new one. */
   initial: HexColor;
   onPick: (color: HexColor) => void;
+  /**
+   * What the square is on right now, reported as it moves — so the dashed "+"
+   * at the end of the saved row can add the colour being mixed, which is where
+   * a hand goes as often as the one inside the mixer itself.
+   */
+  onLive?: (color: HexColor) => void;
 }) {
   const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(initial));
   const [typed, setTyped] = useState<string>(initial);
@@ -169,6 +184,7 @@ function ColorMixer({
   const hex = hsvToHex(hsv);
   // The field follows the square unless the field is what moved.
   useEffect(() => setTyped(hex), [hex]);
+  useEffect(() => onLive?.(hex), [hex, onLive]);
 
   function moveTo(event: React.PointerEvent<HTMLDivElement>) {
     const box = areaRef.current?.getBoundingClientRect();
@@ -230,26 +246,34 @@ function ColorMixer({
         }}
       />
 
-      <div className="flex items-end gap-2">
-        <TextField value={typed} onChange={handleTyped} className="flex flex-1 flex-col gap-1">
-          <Label className="text-xs text-muted">{strings.color.hex}</Label>
-          <Input fullWidth placeholder="#000000" className="text-sm" />
-        </TextField>
-
-        {/* A glyph rather than the word: the panel is 288px wide and "Adicionar"
-            took a third of the row the hex is typed into. What it does is the
-            same either way — the colour on the square joins the row above and
-            fills the dashed "+" it was mixed from. */}
-        <SecondaryButton
-          size="sm"
-          isIconOnly
-          className="size-9 shrink-0"
+      {/* One field, not three controls: the colour it comes to, the code for
+          it, and the way to keep it. The preview is what the square and the
+          field agree on, so a code typed by hand is answered before it is
+          added; the "+" sits inside the same box because it is that field's own
+          verb, and outside it took a third of the row. */}
+      <div className="flex items-center gap-1.5 rounded-md border border-outline-control px-1.5 py-1">
+        <span
+          aria-hidden
+          className="size-4 shrink-0 rounded-sm border border-black/10"
+          style={{ backgroundColor: isHexColor(typed) ? typed : hex }}
+        />
+        <input
+          type="text"
+          aria-label={strings.color.hex}
+          value={typed}
+          onChange={(event) => handleTyped(event.target.value)}
+          placeholder="#000000"
+          className="min-w-0 flex-1 bg-transparent p-0 text-[12px] outline-none placeholder:text-muted"
+        />
+        <button
+          type="button"
           aria-label={strings.common.add}
-          isDisabled={!isHexColor(typed)}
-          onPress={() => isHexColor(typed) && onPick(typed)}
+          disabled={!isHexColor(typed)}
+          onClick={() => isHexColor(typed) && onPick(typed)}
+          className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted hover:text-foreground disabled:cursor-default disabled:opacity-40"
         >
-          <Plus className="size-4" />
-        </SecondaryButton>
+          <Plus className="size-3.5" />
+        </button>
       </div>
     </div>
   );
@@ -276,12 +300,30 @@ type Mixing = null | { mode: 'create' } | { mode: 'edit'; color: HexColor };
 export function ColorPicker({
   value,
   onChange,
+  compact = false,
 }: {
   value: PaletteColor;
   onChange: (color: PaletteColor) => void;
+  /** The small square grid a property row opens — see SWATCH_COMPACT. */
+  compact?: boolean;
 }) {
   const { colors, add, replace, remove } = useCustomColors(value);
   const [mixing, setMixing] = useState<Mixing>(null);
+  /**
+   * What the open mixer is currently on. Held here so the dashed "+" at the end
+   * of the saved row can add it: with the mixer open that button is the nearest
+   * thing to the colour on screen, and pressing it to close the panel instead of
+   * keeping the colour was the panel arguing with the hand.
+   */
+  const [mixed, setMixed] = useState<HexColor | null>(null);
+
+  const swatch = compact ? SWATCH_COMPACT : SWATCH;
+  // Compact, the grid is as wide as its five squares and no wider: the panel
+  // takes its width from here, which is the point of the smaller cell.
+  // Six across compact, five at full size: the small panel is as wide as its
+  // widest line, and a sixth column spends that width on colours rather than
+  // leaving it empty beside them.
+  const grid = compact ? 'grid w-fit grid-cols-6 gap-1.5' : 'grid grid-cols-5 gap-2';
 
   /** Choosing any swatch is an answer, so it also puts the mixer away. */
   function pick(color: PaletteColor) {
@@ -292,7 +334,7 @@ export function ColorPicker({
   return (
     <div className="flex flex-col gap-2">
       <span className={SECTION_TITLE}>{strings.color.palette}</span>
-      <div className="grid grid-cols-5 gap-2">
+      <div className={grid}>
         {LABEL_COLORS.map((color) => (
           <button
             key={color}
@@ -300,7 +342,7 @@ export function ColorPicker({
             aria-label={color}
             aria-pressed={value === color}
             onClick={() => pick(color)}
-            {...colorFill(color, `${SWATCH} ${value === color ? SWATCH_SELECTED : ''}`)}
+            {...colorFill(color, `${swatch} ${value === color ? SWATCH_SELECTED : ''}`)}
           />
         ))}
       </div>
@@ -308,7 +350,7 @@ export function ColorPicker({
       <div className={`${modalDivider} my-1`} />
 
       <span className={SECTION_TITLE}>{strings.color.custom}</span>
-      <div className="grid grid-cols-5 gap-2">
+      <div className={grid}>
         {colors.map((color) => {
           const isEditing = mixing?.mode === 'edit' && mixing.color === color;
           return (
@@ -324,7 +366,7 @@ export function ColorPicker({
                 }
                 {...colorFill(
                   color,
-                  `${SWATCH} w-full ${value === color ? SWATCH_SELECTED : ''}`,
+                  `${swatch} ${value === color ? SWATCH_SELECTED : ''}`,
                 )}
               />
 
@@ -352,10 +394,18 @@ export function ColorPicker({
           type="button"
           aria-label={strings.color.add}
           aria-expanded={mixing?.mode === 'create'}
-          onClick={() =>
-            setMixing((open) => (open?.mode === 'create' ? null : { mode: 'create' }))
-          }
-          className={`${SWATCH} flex items-center justify-center border border-dashed border-outline-control text-muted hover:text-foreground`}
+          onClick={() => {
+            // Open, it keeps what is being mixed — the same thing the "+" inside
+            // the mixer's own field does. Shut, it opens the mixer.
+            if (mixing?.mode === 'create' && mixed) {
+              add(mixed);
+              onChange(mixed);
+              setMixing(null);
+              return;
+            }
+            setMixing((open) => (open?.mode === 'create' ? null : { mode: 'create' }));
+          }}
+          className={`${swatch} flex items-center justify-center border border-dashed border-outline-control text-muted hover:text-foreground`}
         >
           <Plus className="size-4" />
         </button>
@@ -367,6 +417,7 @@ export function ColorPicker({
           // colour rather than on wherever the square was left.
           key={mixing.mode === 'edit' ? mixing.color : 'new'}
           initial={mixing.mode === 'edit' ? mixing.color : DEFAULT_MIX}
+          onLive={setMixed}
           onPick={(color) => {
             if (mixing.mode === 'edit') replace(mixing.color, color);
             else add(color);

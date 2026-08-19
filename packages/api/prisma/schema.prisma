@@ -474,6 +474,44 @@ model CalendarEvent {
   /// thing you complete.
   isDone Boolean @default(false)
 
+  /// This event's own colour, when it has one — Google's "event colour", as
+  /// against the calendar's.
+  ///
+  /// Null is the ordinary case and means the agenda's colour, which is what
+  /// every row wore before this column existed. A palette key or a hex, like
+  /// every other colour here; an imported one is the hex behind Google's
+  /// colorId, since their eleven are not our ten.
+  color String?
+
+  /// The Google *event label* this event carries, if any.
+  ///
+  /// Stored only so the dialog can warn before destroying it. Google's labels
+  /// are the other way a card gets a colour over there, and they are
+  /// unreachable: the API returns an opaque id with no name and no colour,
+  /// resolves it nowhere, and ignores the field on write. Writing a `colorId`
+  /// — the one colour field it does accept — clears the label as a side effect,
+  /// and nothing can put it back.
+  ///
+  /// So this is never rendered and never sent anywhere. It is a flag that says
+  /// "there is something here the user is about to lose", and the DTO carries
+  /// only that much of it. Rewritten from Google on every sync, like everything
+  /// else Google owns.
+  googleEventLabelId String?
+
+  /// The `colorId` this event last arrived from Google with.
+  ///
+  /// What tells a colour the user chose here from a colour Google changed —
+  /// exactly the job googleTaskDue does for a task's date, and kept for the same
+  /// reason. Google's palette is eleven swatches and ours is open, so a colour
+  /// picked in Gloo has no colorId to push back; without this the next sync
+  /// would read Google's unchanged answer and write it over the user's choice,
+  /// which is a colour reverting a minute after it was set.
+  ///
+  /// So an *unchanged* colorId means "Google has nothing new to say about what
+  /// colour this is" and the local value stands. A changed one — including one
+  /// cleared over there — is a decision made on Google's side and wins.
+  googleColorId String?
+
   /// The mirror on Google's *Tasks* side, for a row whose kind is TASK. The list
   /// id is needed to write back: the Tasks API addresses a task as
   /// list + task, and there is no lookup by task id alone.

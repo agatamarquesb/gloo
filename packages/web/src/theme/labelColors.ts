@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 
-import { isHexColor, type LabelColor, type PaletteColor } from '@gloo/shared';
+import { isHexColor, toHex, type LabelColor, type PaletteColor } from '@gloo/shared';
 
 /**
  * Label color key → Tailwind class. Written out rather than interpolated
@@ -96,6 +96,52 @@ export function colorBlock(color: PaletteColor, extra = ''): ColorPaint {
   const fill = colorFill(color, extra);
   const edge = colorEdge(color);
   return { className: `${fill.className} ${edge.className}`.trim(), style: { ...fill.style, ...edge.style } };
+}
+
+/**
+ * How wide the agenda's stripe is on an event that carries a colour of its own.
+ *
+ * Drawn as the block's own left border rather than as a child: every one of the
+ * three things that paint an event — the timed block, the all-day bar, the
+ * month's chip — already has a border and already spreads a style, so this costs
+ * them nothing and cannot be forgotten by one of them. 4px is Google's own
+ * weight for it, and the smallest that still reads as a stripe on a block thirty
+ * pixels tall.
+ */
+const AGENDA_STRIPE = '4px';
+
+/**
+ * An event card, in the colour it should actually be.
+ *
+ * Two colours are in play and only sometimes: an event usually wears its
+ * agenda's, and an event given one of its own wears that instead — with a stripe
+ * of the agenda's down its left edge, so a card singled out still says which
+ * calendar it came from. Exactly how Google Calendar draws the same distinction,
+ * which is where most of these colours arrive from (see GOOGLE_EVENT_COLORS).
+ *
+ * The stripe is the fill of the agenda's colour rather than its darker edge
+ * step: it is standing in for the whole card the event would otherwise have
+ * been, not for that card's outline.
+ */
+export function colorEventBlock(
+  agendaColor: PaletteColor,
+  /** Null for the ordinary case — no colour of its own, so no stripe. */
+  eventColor: PaletteColor | null | undefined,
+  extra = '',
+): ColorPaint {
+  const paint = colorBlock(eventColor ?? agendaColor, extra);
+  if (!eventColor) return paint;
+
+  return {
+    className: paint.className,
+    style: {
+      ...paint.style,
+      borderLeftWidth: AGENDA_STRIPE,
+      // A hex whichever kind the agenda wears: a border colour is one value, and
+      // there is no class to reach for on the two-colour case.
+      borderLeftColor: toHex(agendaColor),
+    },
+  };
 }
 
 /**

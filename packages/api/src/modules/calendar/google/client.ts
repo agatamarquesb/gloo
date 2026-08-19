@@ -23,19 +23,29 @@ export const TASKS_API = 'https://tasks.googleapis.com/tasks/v1';
 /**
  * What we ask the user for.
  *
- * `calendar.calendarlist.readonly` to see which calendars they have,
- * `calendar.events` to read and write events on them, and `calendar.calendars`
+ * `calendar.calendarlist` to see which calendars they have *and* to write back
+ * the two things this app lets them change about one — its name and its colour;
+ * `calendar.events` to read and write events on them; and `calendar.calendars`
  * so "Nova agenda" can create a real calendar on their side. `openid email` is
  * what identifies the account being linked.
  *
- * Deliberately not the blanket `calendar` scope: these three say exactly what
- * the integration does, and the consent screen the user reads is the list of
- * scopes we ask for.
+ * The calendar-list scope was the `.readonly` variant until recolouring an
+ * agenda started reaching Google. Both the colour and the display name live on
+ * the *calendarList* entry rather than on the calendar — a calendar has no
+ * colour at all, and its `summary` is what everyone it is shared with sees — so
+ * `calendar.calendars` does not cover either of them, and the read-only variant
+ * came back 403 ACCESS_TOKEN_SCOPE_INSUFFICIENT. See updateRemoteCalendar, which
+ * is what marks an account linked under the old scope as needing to be
+ * reconnected.
+ *
+ * Deliberately still not the blanket `calendar` scope: these three say exactly
+ * what the integration does, and the consent screen the user reads is the list
+ * of scopes we ask for.
  */
 export const GOOGLE_SCOPES = [
   'openid',
   'email',
-  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+  'https://www.googleapis.com/auth/calendar.calendarlist',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.calendars',
   // Google Tasks is a separate product with a separate API, and this is what

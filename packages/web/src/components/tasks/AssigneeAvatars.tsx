@@ -9,7 +9,18 @@ const MAX_VISIBLE = 4;
  * with overlap + a "+N" overflow indicator, following the same visual
  * pattern used throughout the reference designs.
  */
-export function AssigneeAvatars({ assignees }: { assignees: UserDto[] }) {
+export function AssigneeAvatars({
+  assignees,
+  compact = false,
+}: {
+  assignees: UserDto[];
+  /**
+   * A 20px stack instead of the 32px one, for the Tasks page's project folders.
+   * Who is on a project is the least of the three facts on that row and can
+   * afford to be the smallest thing in it.
+   */
+  compact?: boolean;
+}) {
   const visible = assignees.slice(0, MAX_VISIBLE);
   const overflow = assignees.length - visible.length;
 
@@ -22,11 +33,20 @@ export function AssigneeAvatars({ assignees }: { assignees: UserDto[] }) {
     <div className="flex items-center -space-x-2">
       {visible.map((user) => (
         <div key={user.id} className="rounded-full">
-          <UserAvatar name={user.name} avatarUrl={user.avatarUrl} size="sm" />
+          <UserAvatar
+            name={user.name}
+            avatarUrl={user.avatarUrl}
+            size="sm"
+            className={compact ? 'size-5 text-[9px]' : undefined}
+          />
         </div>
       ))}
       {overflow > 0 ? (
-        <div className="flex size-8 items-center justify-center rounded-full bg-default text-xs font-medium text-default-foreground">
+        <div
+          className={`flex items-center justify-center rounded-full bg-default font-medium text-default-foreground ${
+            compact ? 'size-5 text-[9px]' : 'size-8 text-xs'
+          }`}
+        >
           +{overflow}
         </div>
       ) : null}

@@ -119,6 +119,22 @@ function IconButton({
   );
 }
 
+/**
+ * The shape the row's two secondary controls share: "Hoje" and the view
+ * selector beside it.
+ *
+ * Written down once because they sit against each other — any drift in height,
+ * radius or hover between the two is visible without moving your eye. The light
+ * grey under the cursor is the point of it: at HeroUI's own default the pill
+ * went almost as dark as the ink on it, which read as pressed rather than as
+ * hovered.
+ */
+const TOOLBAR_PILL = [
+  outlineControl,
+  'h-9 rounded-full text-sm font-medium text-muted md:h-8',
+  'hover:bg-default/40 data-[hovered=true]:bg-default/40',
+].join(' ');
+
 export function CalendarToolbar({
   viewMode,
   onViewModeChange,
@@ -143,10 +159,10 @@ export function CalendarToolbar({
           <ChevronLeft className="size-4" />
         </IconButton>
 
-        {/* The heading is also the way back to today — the "Hoje" button this
-            row no longer has. first-letter:uppercase because PT-BR month names
-            are lowercase, and a heading that reads "agosto de 2026" looks like a
-            typo mid-page. */}
+        {/* The heading is also a way back to today, the same as the "Hoje"
+            pill on the other end of the row. first-letter:uppercase because
+            PT-BR month names are lowercase, and a heading that reads "agosto de
+            2026" looks like a typo mid-page. */}
         <button
           type="button"
           onClick={onToday}
@@ -162,6 +178,21 @@ export function CalendarToolbar({
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        {/* The way back to the day you are actually on, and the first of the
+            row's two secondary controls — the same pill as the view selector it
+            sits against, because the two are pressed in the same breath: pick a
+            view, then come back to today in it. The heading on the left still
+            does the same thing, but a heading is not somewhere anyone looks for
+            a button. */}
+        <Button
+          size="sm"
+          variant="outline"
+          className={`${TOOLBAR_PILL} px-3`}
+          onPress={onToday}
+        >
+          {strings.calendar.today}
+        </Button>
+
         {/* Dia, Semana and Mês were three pills spending a third of the row on
             the two you are not in. One control, naming the one you are — and
             wearing the same outlined pill as the search field beside it, since
@@ -177,17 +208,20 @@ export function CalendarToolbar({
             size="sm"
             variant="outline"
             className={[
-              outlineControl,
-              'h-9 w-[6.5rem] justify-between gap-1 rounded-full px-3 text-sm font-medium text-muted md:h-8',
-              // A much lighter grey under the cursor: at HeroUI's own default
-              // the pill went almost as dark as the ink on it, which read as
-              // pressed rather than as hovered.
-              'hover:bg-default/40 data-[hovered=true]:bg-default/40',
+              TOOLBAR_PILL,
+              'w-[6.5rem] justify-between gap-1 px-3',
               // Open, the pill and its list are one shape: the bottom corners
               // square off to meet the panel butting against them, exactly as a
               // property row does in the task and routine modals (see
-              // OPEN_FIELD_GROUND). The top two keep the pill's radius.
-              'aria-expanded:rounded-b-none aria-expanded:bg-default/40',
+              // OPEN_FIELD_GROUND).
+              //
+              // And the top two come down from the capsule's own radius to the
+              // 8px the panel under them is drawn at. Kept at `rounded-full` the
+              // squared-off bottom turned the trigger into a dome sitting on a
+              // box — a shape neither half of the silhouette owns. At 8px the
+              // two read as one box with rounded corners, which is what the pill
+              // becomes for as long as its list is open.
+              'aria-expanded:rounded-b-none aria-expanded:rounded-t-lg aria-expanded:bg-default/40',
             ].join(' ')}
           >
             {strings.calendar.view[viewMode]}
@@ -202,7 +236,7 @@ export function CalendarToolbar({
               the button. */}
           <Popover.Content
             offset={0}
-            className={`${PANEL_MATCHES_TRIGGER} ${FIELD_PANEL} rounded-b-2xl data-[placement=top]:rounded-t-2xl`}
+            className={`${PANEL_MATCHES_TRIGGER} ${FIELD_PANEL} rounded-b-lg data-[placement=top]:rounded-t-lg`}
           >
             <Popover.Dialog className="p-1">
               <div className="flex flex-col gap-0.5">

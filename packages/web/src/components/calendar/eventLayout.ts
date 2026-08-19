@@ -15,12 +15,8 @@ export interface LayoutEvent {
 
 export interface PositionedEvent<T extends LayoutEvent> {
   event: T;
-  /** Which lane of its own start group, from 0. */
-  column: number;
-  /** How many events share that exact start, and so how many lanes to split. */
-  columns: number;
   /**
-   * How many earlier starts this event is laid over.
+   * How many blocks this event is laid over.
    *
    * 0 is a block that begins on its column's own left edge. 1 or more is a block
    * inset by that many steps, drawn on top of the ones it overlaps — which is
@@ -28,6 +24,13 @@ export interface PositionedEvent<T extends LayoutEvent> {
    * pressable, the way an overlapping day reads in Google Calendar.
    */
   depth: number;
+  /**
+   * How many blocks are piled up here, this one included — what says whether
+   * there is room inside for anything beyond a title. Not a width: every block
+   * is as wide as the column lets it be. See EventBlock, which drops the row of
+   * faces once a pile gets deep.
+   */
+  stacked: number;
   /** Minutes from midnight, clamped to the day being drawn. */
   startMinute: number;
   endMinute: number;
@@ -175,21 +178,23 @@ export function layoutAllDay<T extends LayoutEvent>(
 /**
  * Pack a single day's events.
  *
- * Two rules, which between them are how a day full of overlapping events stays
- * readable:
+ * One rule: an event that overlaps one already placed is drawn *over* it,
+ * stepped in from the left. The block underneath keeps a strip of itself showing
+ * — enough to read its colour and to press it — and every block stays as wide as
+ * the column allows. Google Calendar packs a busy day the same way.
  *
- *   - Events that begin at the *same* minute stand side by side, splitting the
- *     width between them. Neither is more important than the other and neither
- *     can cover the other up.
- *   - An event that begins *later* than one already running is drawn over it,
- *     stepped in from the left. The earlier block keeps a strip of itself
- *     showing — enough to read its colour and to press it — and the later block
- *     stays as wide as it can be.
+ * Splitting the width is what this replaced, and it was doing it twice over.
+ * First for any overlap at all, so a 09:00 event and a 09:30 event each lost
+ * half the column; then, after that was fixed, still for events beginning on the
+ * *same* minute — on the reasoning that neither of two things starting at 09:00
+ * is more important than the other and neither should cover the other up. True,
+ * but the cost was the thing itself: three 09:00 events split a 90px column into
+ * three 30px slivers, and a block that narrow shows about four characters of its
+ * own name. A step of overlap costs the blocks underneath 14px each and leaves
+ * all three readable, which is the trade that actually serves a reader.
  *
- * The lanes-of-equal-width packing this replaced obeyed neither: a 09:00 event
- * and a 09:30 event each lost half the column, so a morning with four things in
- * it was four slivers, none of them readable and none of them obviously later
- * than the next.
+ * Order decides what ends up on top: earliest first, and the longer of two
+ * starting together goes down first so the shorter sits on it.
  */
 export function layoutDay<T extends LayoutEvent>(
   events: T[],
@@ -208,36 +213,23 @@ export function layoutDay<T extends LayoutEvent>(
 
   const positioned: PositionedEvent<T>[] = [];
 
-  for (let index = 0; index < ordered.length; ) {
-    const startMinute = ordered[index].startMinute;
+  for (const entry of ordered) {
+    // Everything already placed that is still running when this one begins —
+    // one step each, whether it started earlier or on the same minute.
+    const under = positioned.filter(
+      (placed) => placed.endMinute > entry.startMinute && placed.startMinute < entry.endMinute,
+    ).length;
 
-    // Everything beginning on this exact minute, taken together: they are the
-    // ones that share a width rather than covering each other.
-    let groupEnd = index;
-    while (groupEnd < ordered.length && ordered[groupEnd].startMinute === startMinute) {
-      groupEnd += 1;
-    }
-    const group = ordered.slice(index, groupEnd);
-
-    // How many *distinct earlier starts* are still running underneath. Distinct,
-    // so three events that began together at 09:00 are one step down, not three.
-    const openStarts = new Set(
-      positioned.filter((entry) => entry.endMinute > startMinute).map((entry) => entry.startMinute),
-    );
-    const depth = Math.min(openStarts.size, MAX_DEPTH);
-
-    group.forEach((entry, lane) => {
-      positioned.push({
-        event: entry.event,
-        column: lane,
-        columns: group.length,
-        depth,
-        startMinute: entry.startMinute,
-        endMinute: entry.endMinute,
-      });
+    positioned.push({
+      event: entry.event,
+      // Capped, so a chain of six does not push the last one off the column;
+      // past the cap they share a step, and the ones underneath are still
+      // reachable by the strip each of them keeps.
+      depth: Math.min(under, MAX_DEPTH),
+      stacked: under + 1,
+      startMinute: entry.startMinute,
+      endMinute: entry.endMinute,
     });
-
-    index = groupEnd;
   }
 
   return positioned;

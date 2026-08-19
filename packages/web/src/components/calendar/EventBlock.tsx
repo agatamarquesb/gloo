@@ -6,7 +6,7 @@ import { AssigneeAvatars } from '@/components/tasks/AssigneeAvatars';
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
 
 import { blockHeight } from './gridMetrics';
-import { colorBlock } from '@/theme/labelColors';
+import { colorEventBlock } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
 /** Below this many minutes there is only room for the title. */
@@ -14,10 +14,13 @@ const COMPACT_MINUTES = 45;
 /** And below this, not even that fits on its own line. */
 const TINY_MINUTES = 25;
 /**
- * From this many lanes, a column is too narrow for avatars whatever its height
- * — they are a fixed width, so they spill sideways where text merely truncates.
+ * From this many blocks in a pile, the faces go.
+ *
+ * Not a width test any more — a cascaded block keeps the column's full width —
+ * but a visibility one: at three deep, the two underneath are showing a 14px
+ * strip each, and a row of heads inside a strip is a row of slivers.
  */
-const CROWDED_COLUMNS = 3;
+const CROWDED_STACK = 3;
 
 /**
  * What each line of a block costs, in the size it is drawn at: the title at
@@ -69,7 +72,7 @@ export function EventBlock({
   isTogglePending = false,
   onSelect,
   minutes,
-  columns,
+  stacked,
   onResizeStart,
   onPointerDown,
   isOverlapping = false,
@@ -85,8 +88,13 @@ export function EventBlock({
   onSelect: () => void;
   /** How tall the block is, in minutes — what decides how much fits. */
   minutes: number;
-  /** How many lanes its cluster needs — what decides how narrow it is. */
-  columns: number;
+  /**
+   * How many blocks are piled up here, this one included. Not a width — every
+   * block is as wide as its column allows — but a measure of how much of this
+   * one is actually showing, which is what decides whether faces are worth
+   * drawing.
+   */
+  stacked: number;
   /**
    * True when this block is laid over one that was already running — see
    * PositionedEvent. It is what earns the block its outline, which is the only
@@ -108,8 +116,10 @@ export function EventBlock({
 }) {
   // An agenda we can't resolve means the event arrived before the account list
   // did. Grey is the neutral fallback rather than a missing background.
-  const color = agenda?.color ?? 'gray';
-  const paint = colorBlock(color);
+  //
+  // The event's own colour wins where it has one, and the agenda's is then drawn
+  // as the stripe down the left edge — see colorEventBlock.
+  const paint = colorEventBlock(agenda?.color ?? 'gray', event.color);
   const isTask = event.kind === CalendarItemKind.TASK;
   const isTiny = minutes < TINY_MINUTES;
   const isCompact = minutes < COMPACT_MINUTES;
@@ -131,7 +141,7 @@ export function EventBlock({
   const titleLines = room >= TITLE_LINE * 2 ? 2 : 1;
   const hasAvatars =
     event.assignees.length > 0 &&
-    columns < CROWDED_COLUMNS &&
+    stacked < CROWDED_STACK &&
     room - titleLines * TITLE_LINE >= AVATAR_ROW;
 
   return (
@@ -142,7 +152,7 @@ export function EventBlock({
       // running at once, and the only thing that knows which is the block
       // itself — hence the container queries on the time below rather than a
       // guess made from the lane count.
-      className={`${paint.className} group/event @container absolute flex flex-col overflow-hidden rounded-[2px] border px-2 text-black ${
+      className={`${paint.className} group/event @container absolute flex flex-col overflow-hidden rounded-[3px] border px-2 text-black ${
         isTiny ? 'py-0' : 'py-1'
       } ${
         // Too short to stack a title and anything under it: what there is room

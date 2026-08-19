@@ -114,13 +114,24 @@ export function useDeleteAgenda() {
  * caches — that week alone. Recurring events arrive already expanded, so what
  * comes back is one entry per block on screen.
  */
-export function useCalendarEvents(from: string, to: string) {
+export function useCalendarEvents(
+  from: string,
+  to: string,
+  /**
+   * Whether to ask at all — the same escape `useTasks` offers, and for the same
+   * reason. The Tasks page's month marks task deadlines and nothing else, so
+   * fetching a month of calendar events there would be a request whose answer is
+   * thrown away.
+   */
+  { enabled = true }: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: calendarKeys.eventRange(from, to),
     queryFn: () =>
       apiClient.get<CalendarEventDto[]>(
         `/calendar/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
       ),
+    enabled,
   });
 }
 

@@ -117,27 +117,37 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   app.get('/summary', async (request): Promise<TaskSummaryDto> => {
-    const query = request.query as { assigneeId?: string };
-    const assigneeFilter = query.assigneeId ? { assignees: { some: { userId: query.assigneeId } } } : {};
+    const query = request.query as Record<string, string | undefined>;
+    // Every filter the list itself takes *except* the status, through the same
+    // builder the list uses. The figure on a filter has to be what pressing that
+    // filter would show, so a summary that ignored the sector, the person or the
+    // day picked on the month would have contradicted the rows underneath it.
+    // The status is what each count supplies for itself below.
+    const base = buildWhere({ ...query, status: undefined });
     const now = new Date();
 
-    const [upcoming, inProgress, completed, overdue] = await Promise.all([
-      prisma.task.count({ where: { ...assigneeFilter, status: 'TODO' } }),
-      prisma.task.count({ where: { ...assigneeFilter, status: 'IN_PROGRESS' } }),
-      prisma.task.count({ where: { ...assigneeFilter, status: 'DONE' } }),
+    const [upcoming, inProgress, completed, overdue, total] = await Promise.all([
+      prisma.task.count({ where: { ...base, status: 'TODO' } }),
+      prisma.task.count({ where: { ...base, status: 'IN_PROGRESS' } }),
+      prisma.task.count({ where: { ...base, status: 'DONE' } }),
       prisma.task.count({
-        // Same two kinds of late as the "Atrasada" filter — see buildWhere.
+        // Same two kinds of late as the "Atrasada" filter — see buildWhere. The
+        // OR is free to be set here because `base` was built without a status,
+        // which is the only thing that would have claimed it.
         where: {
-          ...assigneeFilter,
+          ...base,
           OR: [
             { status: 'OVERDUE' },
             { status: { notIn: ['DONE', 'OVERDUE'] }, dueDate: { lt: now } },
           ],
         },
       }),
+      // Its own count rather than the sum of the four: overdue overlaps TODO and
+      // IN_PROGRESS, so adding them would over-report the whole list.
+      prisma.task.count({ where: base }),
     ]);
 
-    return { upcoming, inProgress, completed, overdue };
+    return { upcoming, inProgress, completed, overdue, total };
   });
 
   app.get('/by-sector', async (): Promise<TaskBySectorDto[]> => {

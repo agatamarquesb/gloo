@@ -142,6 +142,14 @@ export interface TaskSummaryDto {
   inProgress: number;
   completed: number;
   overdue: number;
+  /**
+   * Every task, whatever state it is in — what the "Todas" filter would return.
+   *
+   * Counted rather than added up from the four above: a task that is late is
+   * also to do or in progress, so `overdue` overlaps them and the sum would be
+   * larger than the list it claims to describe.
+   */
+  total: number;
 }
 
 export interface TaskBySectorDto {
@@ -378,6 +386,30 @@ export interface CalendarEventDto {
    * on, so it survives the instance being dragged to another day.
    */
   originalStart: string | null;
+  /**
+   * The card's own colour, when it has been given one — Google calls this the
+   * event colour, as against the calendar's.
+   *
+   * Null is the ordinary case and means "whatever the agenda is", which is what
+   * every event wore before this existed. Set, the block is drawn in this colour
+   * with a stripe of the agenda's down its left edge, so an event that has been
+   * singled out still says which calendar it belongs to. Same as Google Calendar
+   * draws it, and imported from there: see GOOGLE_EVENT_COLORS.
+   */
+  color: PaletteColor | null;
+  /**
+   * True when Google is holding an *event label* on this event.
+   *
+   * Labels are the other way a card takes a colour in Google Calendar, and they
+   * cannot be mirrored: the API hands back an opaque id with no colour, resolves
+   * it nowhere, and ignores the field on write. Worse, writing the one colour
+   * field it does accept clears the label as a side effect, permanently.
+   *
+   * So this is a warning flag and nothing else — the dialog asks before letting
+   * a colour destroy one. Which label it is never reaches the client, because
+   * nothing here could do anything with it.
+   */
+  hasGoogleLabel: boolean;
   /** True when the event lives on a read-only agenda. Convenience for the grid. */
   isReadOnly: boolean;
   /** True when the event mirrors a Google one, so the UI can mark its origin. */
@@ -429,6 +461,8 @@ export interface CreateEventInput {
   /** Omitted or null for a series with no end date. */
   recurrenceUntil?: string | null;
   byWeekdays?: number[];
+  /** The card's own colour. Null clears it, back to the agenda's. */
+  color?: PaletteColor | null;
 }
 
 export type UpdateEventInput = Partial<CreateEventInput>;

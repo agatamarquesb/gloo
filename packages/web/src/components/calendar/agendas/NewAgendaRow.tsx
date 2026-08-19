@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { Check, X } from 'lucide-react';
-import { Button, Input, Popover } from '@heroui/react';
+import { Button, Input } from '@heroui/react';
 import { TextField } from 'react-aria-components';
 
 import type { PaletteColor } from '@gloo/shared';
 
-import { ColorPicker } from '@/components/common/ColorPicker';
-import { FIELD_PANEL, FLAT_INPUT, GREEN_UNDERLINE } from '@/theme/fieldStyles';
+import { FLAT_INPUT, GREEN_UNDERLINE } from '@/theme/fieldStyles';
 import { colorFill } from '@/theme/labelColors';
 import { dotsMenuButton } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
@@ -20,9 +19,12 @@ import { strings } from '@/strings/pt-BR';
  * Enter. The swatch, the name and the tick sit on the same three columns every
  * finished row uses, so the row you are typing is the row you will get.
  *
- * The colour is chosen here rather than left to the API, which would otherwise
- * assign one — the name and the colour are the whole of what an agenda is, and
- * choosing the second was a second trip through the `···` menu.
+ * The swatch shows the colour and does not offer to change it. Making an agenda
+ * is naming it; the colour it opens on is the one the palette had spare, and the
+ * one place it is chosen is the menu on the finished row — see AgendaMenu. A
+ * picker here made the first thing a new agenda asked for the least important
+ * thing about it, and put a second way of doing something the row already has a
+ * way of doing.
  */
 export function NewAgendaRow({
   defaultColor,
@@ -35,37 +37,22 @@ export function NewAgendaRow({
   onCancel: () => void;
 }) {
   const [name, setName] = useState('');
-  const [color, setColor] = useState<PaletteColor>(defaultColor);
 
   /** Enter, the tick, or clicking away — an empty name means it was abandoned. */
   function commit() {
     const trimmed = name.trim();
-    if (trimmed) onSave(trimmed, color);
+    if (trimmed) onSave(trimmed, defaultColor);
     else onCancel();
   }
 
   return (
-    <li className="flex items-center gap-2 px-2 py-0.5">
-      {/* The same box a finished row wears, and pressing it opens the app's one
-          colour picker — the ten it ships with, plus whatever this browser has
-          mixed. */}
-      <Popover>
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          aria-label={strings.calendar.agendas.color}
-          {...colorFill(
-            color,
-            'size-[18px] min-w-0 shrink-0 rounded-[5px] p-0 shadow-none data-[hovered=true]:opacity-80',
-          )}
-        />
-        <Popover.Content className={`w-60 ${FIELD_PANEL}`}>
-          <Popover.Dialog className="p-2">
-            <ColorPicker value={color} onChange={setColor} />
-          </Popover.Dialog>
-        </Popover.Content>
-      </Popover>
+    <li className="flex items-center gap-2 py-0.5">
+      {/* The same box a finished row wears, and nothing more: it says what
+          colour the agenda will be, in the place that colour will appear. */}
+      <span
+        aria-hidden
+        {...colorFill(defaultColor, 'size-[18px] shrink-0 rounded-[2px]')}
+      />
 
       <TextField
         aria-label={strings.calendar.agendas.newAgenda}

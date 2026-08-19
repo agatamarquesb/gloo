@@ -1,9 +1,9 @@
 import type { Ref } from 'react';
-import { Clock, Shapes } from 'lucide-react';
+import { Clock, Tag } from 'lucide-react';
 
 import type { AgendaDto, CalendarEventDto } from '@gloo/shared';
 
-import { CalendarAgendaGlyph, CalendarDayGlyph } from '@/components/common/CalendarGlyph';
+import { CalendarDayGlyph } from '@/components/common/CalendarGlyph';
 import {
   OVERVIEW_BAR,
   OVERVIEW_ICON,
@@ -138,9 +138,11 @@ export function EventDetailsCard({
               : `${formatEventTime(event.startsAt)} – ${formatEventTime(event.endsAt)}`}
           </OverviewRow>
 
-          {/* What this is: an event, a Google task, or a booked appointment slot. */}
+          {/* What this is: an event, a Google task, or a booked appointment slot.
+              A tag, which is what a kind is — the `Shapes` glyph it wore said
+              "geometry" rather than "category" at 14px. */}
           <OverviewRow
-            icon={<Shapes className={OVERVIEW_ICON} />}
+            icon={<Tag className={OVERVIEW_ICON} />}
             label={strings.dashboard.day.type}
             hideLabel
           >
@@ -148,13 +150,20 @@ export function EventDetailsCard({
           </OverviewRow>
 
           <OverviewRow
-            icon={<CalendarAgendaGlyph className={OVERVIEW_ICON} />}
+            // A dot in the agenda's own colour rather than a little calendar.
+            // Every other row here is headed by a glyph naming its *kind* of
+            // fact; this row's fact is which agenda, and an agenda is its colour
+            // — the same dot the month above draws, and the same colour as the
+            // bar down the left of this box. Sized to the 14px the glyphs beside
+            // it occupy, so the four icons still stack into one column.
+            icon={
+              <span aria-hidden className={`${OVERVIEW_ICON} flex items-center justify-center`}>
+                <span {...colorFill(agenda?.color ?? 'gray', 'size-2.5 rounded-full')} />
+              </span>
+            }
             label={strings.calendar.details.category}
             hideLabel
           >
-            {/* The name alone. The agenda's colour is already the bar down the
-                left of this box, and a swatch on the row said it a second time
-                two centimetres away from the first. */}
             <span className="min-w-0 break-words">{agenda?.name ?? '—'}</span>
           </OverviewRow>
         </div>

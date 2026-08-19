@@ -6,7 +6,7 @@ import { CalendarItemKind, type AgendaDto, type CalendarEventDto } from '@gloo/s
 
 import { useNow } from '@/hooks/ui/useNow';
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
-import { colorBlock } from '@/theme/labelColors';
+import { colorEventBlock } from '@/theme/labelColors';
 import { strings } from '@/strings/pt-BR';
 
 import { EventBlock } from './EventBlock';
@@ -181,7 +181,11 @@ export function CalendarTimeGrid({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      <div className="flex border-b border-border pb-2">
+      {/* `items-baseline`: the zone is 11px and the weekday names are 14px, and a
+          row of mixed sizes aligned to its top edge sits the small one visibly
+          higher than the line it belongs to. On the baseline the corner label
+          reads as part of the same row as the days it heads. */}
+      <div className="flex items-baseline border-b border-border pb-2">
         <span className="w-14 shrink-0 pr-2 text-right text-[11px] text-muted">{zoneLabel()}</span>
         {days.map((day) => {
           const isToday = day.toString() === todayIso;
@@ -238,9 +242,10 @@ export function CalendarTimeGrid({
               // placement outright. Every bar in the strip then fell in source
               // order rather than on its day, which is what put a Thursday task
               // in Friday's column and made a three-day bar one cell wide.
-              const paint = colorBlock(
+              const paint = colorEventBlock(
                 color,
-                `mx-0.5 flex min-w-0 items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[11px] text-black ${
+                original.color,
+                `flex min-w-0 items-center gap-1.5 rounded-[3px] border px-1.5 py-0.5 text-[11px] text-black ${
                   original.isReadOnly ? '' : 'cursor-grab active:cursor-grabbing'
                 } ${selectedEventId === key ? 'ring-1 ring-inset ring-[var(--border)]' : ''}`,
               );
@@ -377,7 +382,7 @@ export function CalendarTimeGrid({
                   </div>
                 ) : null}
 
-                {positioned.map(({ event, column, columns, depth, startMinute, endMinute }) => {
+                {positioned.map(({ event, stacked, depth, startMinute, endMinute }) => {
                   const minutes = endMinute - startMinute;
                   const original = event.source;
 
@@ -397,7 +402,7 @@ export function CalendarTimeGrid({
                           : undefined
                       }
                       minutes={minutes}
-                      columns={columns}
+                      stacked={stacked}
                       onSelect={() => onSelectEvent(original)}
                       onResizeStart={
                         original.isReadOnly
@@ -424,15 +429,18 @@ export function CalendarTimeGrid({
                         // event.
                         //
                         // The depth step is how far this block is laid over the
-                        // ones that started before it — see PositionedEvent —
-                        // and the z-index is what puts it on top of them. It is
-                        // measured from the left, so what stays visible of an
-                        // earlier block is its own left-hand edge.
+                        // ones it overlaps — see PositionedEvent — and the
+                        // z-index is what puts it on top of them. It is measured
+                        // from the left, so what stays visible of a block
+                        // underneath is its own left-hand edge.
+                        //
+                        // Full width from that step to the gutter, whatever else
+                        // is running: nothing here splits a column any more, so
+                        // three things at nine o'clock are three readable blocks
+                        // in a cascade rather than three slivers side by side.
                         zIndex: depth + 1,
-                        left: `calc(${(column / columns) * 100}% + ${
-                          BLOCK_INSET + depth * OVERLAP_STEP
-                        }px)`,
-                        width: `calc(${(1 / columns) * 100}% - ${
+                        left: `${BLOCK_INSET + depth * OVERLAP_STEP}px`,
+                        width: `calc(100% - ${
                           BLOCK_INSET + depth * OVERLAP_STEP + GUTTER + BLOCK_GAP
                         }px)`,
                       }}

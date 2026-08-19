@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react';
 
-import type { AgendaDto } from '@gloo/shared';
+import type { AgendaDto, CalendarProvider } from '@gloo/shared';
 
 import { useUpdateAgenda } from '@/hooks/queries/calendar';
 import { colorEdge, colorFill } from '@/theme/labelColors';
@@ -19,14 +19,17 @@ import { AgendaMenu } from './AgendaMenu';
  * Ticked is on the calendar, cleared is off, and the tick is drawn in the
  * agenda's own colour, which is how every calendar app does it.
  *
- * The `···` still waits for hover: eight agendas each carrying a permanent
- * button read as a toolbar rather than a list of names.
+ * The way through to that menu still waits for hover: eight agendas each
+ * carrying a permanent button read as a toolbar rather than a list of names.
  */
 export function AgendaRow({
   agenda,
+  provider,
   onRequestRemove,
 }: {
   agenda: AgendaDto;
+  /** Passed straight through to the menu, which is what turns on it. */
+  provider: CalendarProvider;
   onRequestRemove: () => void;
 }) {
   const updateAgenda = useUpdateAgenda();
@@ -42,13 +45,21 @@ export function AgendaRow({
     : colorEdge(agenda.color, 'bg-transparent');
 
   return (
-    // Tight rows and a pill for the hover: the list is a set of names, and at
-    // `py-1` in a 12px type size each one sat in a band half again its own
-    // height. The ground is fully rounded so it reads as a mark under the name
-    // rather than as a table row lighting up.
-    <li className="group flex items-center gap-2 rounded-full px-2 py-0.5 hover:bg-default/40">
+    // No padding of its own, which is what puts the two ends of the row on the
+    // card's own two edges: the box lands on the same vertical line as the
+    // chevron that folds the account above it, and the chevron that opens this
+    // agenda's menu lands under the `···` in the card's header. Padding here put
+    // both of them 8px inside those lines, which is exactly far enough to read
+    // as a list that had slipped.
+    //
+    // Tight rows, and the faintest ground for the hover: the list is a set of
+    // names, and at `py-1` in a 12px type size each one sat in a band half again
+    // its own height. A small radius rather than the capsule this wore — with no
+    // padding left to fill, a fully rounded ground cut the corners off the box
+    // sitting on its left edge.
+    <li className="group flex items-center gap-2 rounded-md py-0.5 hover:bg-default/25">
       <label
-        className={`relative flex size-[18px] shrink-0 cursor-pointer items-center justify-center rounded-[5px] border ${box.className}`}
+        className={`relative flex size-[18px] shrink-0 cursor-pointer items-center justify-center rounded-[2px] border ${box.className}`}
         style={box.style}
         title={isVisible ? strings.calendar.agendas.hide : strings.calendar.agendas.show}
       >
@@ -81,7 +92,7 @@ export function AgendaRow({
 
       {/* Last in the row, so it sits on the card's own right-hand edge. */}
       <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        <AgendaMenu agenda={agenda} onRequestRemove={onRequestRemove} />
+        <AgendaMenu agenda={agenda} provider={provider} onRequestRemove={onRequestRemove} />
       </span>
     </li>
   );

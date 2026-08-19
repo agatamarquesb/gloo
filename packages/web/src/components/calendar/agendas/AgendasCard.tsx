@@ -65,9 +65,11 @@ export function AgendasCard({ onLinkGoogle }: { onLinkGoogle: () => void }) {
         // type in the column and read as the heading of everything under it,
         // Detalhes included.
         titleClassName={OVERVIEW_TITLE}
-        // The name of the list sits just above it: at the card's usual gap-4 the
-        // word floated halfway between the month above and the first agenda.
-        bodyGap="gap-1"
+        // The name of the list sits above it rather than on it: at the card's
+        // usual gap-4 the word floated halfway between the month above and the
+        // first agenda, and at gap-1 it was sitting on the list's own first
+        // line. 12px is the step between the two.
+        bodyGap="gap-3"
         // `grow shrink-0`: the card takes any height the column has spare, and
         // keeps its full content height when it hasn't — so the list is never
         // cut, and what scrolls is the row around it.
@@ -142,6 +144,7 @@ export function AgendasCard({ onLinkGoogle }: { onLinkGoogle: () => void }) {
                 key={account.id}
                 account={account}
                 onRequestRemoveAgenda={(agenda, provider) => setRemoving({ agenda, provider })}
+                onReconnect={onLinkGoogle}
                 // A new agenda is written at the end of the Gloo list, where it
                 // will appear — see NewAgendaRow. It has no button of its own:
                 // the `···` beside the title is what asks for one.

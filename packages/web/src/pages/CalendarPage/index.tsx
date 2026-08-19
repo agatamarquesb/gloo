@@ -17,10 +17,11 @@ import { EventModal } from '@/components/calendar/EventModal';
 import { MiniCalendarCard } from '@/components/calendar/MiniCalendarCard';
 import { ConfirmEventChangeModal } from '@/components/calendar/ConfirmEventChangeModal';
 import { AgendasCard } from '@/components/calendar/agendas/AgendasCard';
-import { daysIn, stepFocused, visibleRange } from '@/components/calendar/calendarRange';
+import { bandRange, daysIn, stepFocused, visibleRange } from '@/components/calendar/calendarRange';
 import { useEventDrag } from '@/components/calendar/useEventDrag';
 import { useScrollEdges } from '@/components/common/SectionScroll';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { hiddenScrollbar } from '@/theme/styleConstants';
 import {
   useAgendasById,
   useCalendarAccounts,
@@ -32,11 +33,17 @@ import {
 } from '@/hooks/queries/calendar';
 import { strings } from '@/strings/pt-BR';
 
+import { CALENDAR_DATE_PARAM, CALENDAR_EVENT_PARAM } from '@/lib/calendarLink';
+
+import { readViewMode, writeViewMode } from './viewPreference';
+
 /**
- * Which day the page should open on, as `YYYY-MM-DD`. Exported so the one place
- * that writes it and the one place that reads it name it once.
+ * Which day the page should open on, as `YYYY-MM-DD`, and which event it should
+ * open the dialog on. Defined in lib/calendarLink, which is also where the event
+ * dialog's "Copiar link" builds them — re-exported here because this is the name
+ * the rest of the app already reaches for.
  */
-export const CALENDAR_DATE_PARAM = 'data';
+export { CALENDAR_DATE_PARAM };
 
 /**
  * The soft edge on the right-hand column, at whichever end has more content past
@@ -82,7 +89,18 @@ export function CalendarPage() {
       return today(getLocalTimeZone());
     }
   });
-  const [viewMode, setViewMode] = useState<CalendarViewMode>(CalendarViewMode.WEEK);
+  /**
+   * Dia, Semana or Mês — whichever was last left, read from the browser rather
+   * than reset on every arrival. See viewPreference for why the *date* is not
+   * remembered with it: the view is a way of reading the calendar, the day is
+   * where you happened to be browsing, and coming back to a calendar means
+   * coming back to now.
+   */
+  const [viewMode, setViewModeState] = useState<CalendarViewMode>(readViewMode);
+  function setViewMode(mode: CalendarViewMode) {
+    setViewModeState(mode);
+    writeViewMode(mode);
+  }
   const [search, setSearch] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   /**
@@ -102,6 +120,11 @@ export function CalendarPage() {
 
   const range = useMemo(() => visibleRange(focusedDate, viewMode), [focusedDate, viewMode]);
   const days = useMemo(() => daysIn(range), [range]);
+  /**
+   * What the month beside the grid bands, which is the grid's range everywhere
+   * except Dia — there it is that day's whole week. See bandRange.
+   */
+  const banded = useMemo(() => bandRange(focusedDate, viewMode), [focusedDate, viewMode]);
 
   // The query window is the visible range in the viewer's own zone: the grid's
   // first column starts at local midnight, not UTC midnight, and asking for the
@@ -118,6 +141,27 @@ export function CalendarPage() {
   const { data: events = [] } = useCalendarEvents(from, to);
   const { data: accounts = [] } = useCalendarAccounts();
   const agendasById = useAgendasById();
+
+  /**
+   * A link straight to one event — what the dialog's "Copiar link" writes.
+   *
+   * Once only, and only once the events for the day have arrived: the dialog is
+   * opened *on* an event, so there is nothing to open until the query that holds
+   * it has answered. Closing the dialog afterwards must not reopen it, which is
+   * what the ref is for.
+   */
+  const openedFromLink = useRef(false);
+  useEffect(() => {
+    if (openedFromLink.current) return;
+    const requested = searchParams.get(CALENDAR_EVENT_PARAM);
+    if (!requested) return;
+
+    const match = events.find((candidate) => candidate.id === requested);
+    if (!match) return;
+
+    openedFromLink.current = true;
+    setEditing({ event: match, start: new Date(match.startsAt) });
+  }, [events, searchParams]);
 
   const agendas = useMemo(
     () => accounts.flatMap((account) => account.agendas),
@@ -238,6 +282,30 @@ export function CalendarPage() {
   const { edges, measure: measureColumn } = useScrollEdges(columnRef, selectedEvent);
 
   /**
+   * Selecting an event brings its details into view.
+   *
+   * The card is written at the top of this column, above the agendas — so a
+   * reader who had scrolled down to the end of their agenda list and then
+   * clicked an event got an answer somewhere off the top of the screen, and no
+   * sign that anything had happened at all. The column goes back to the top,
+   * which is where the card is.
+   *
+   * Only on arriving at a selection, never on losing one: closing the card
+   * should leave the list where the reader left it. Smoothly, unless the machine
+   * has been told not to animate — the same rule the rest of the app follows in
+   * globals.css, asked here because this is script rather than a stylesheet.
+   */
+  useEffect(() => {
+    if (!selectedKey) return;
+    columnRef.current?.scrollTo({
+      top: 0,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth',
+    });
+  }, [selectedKey]);
+
+  /**
    * A press outside the details card closes it.
    *
    * The card is the answer to a click, so it lasts as long as that click is the
@@ -263,6 +331,18 @@ export function CalendarPage() {
     document.addEventListener('click', handle, true);
     return () => document.removeEventListener('click', handle, true);
   }, [selectedKey]);
+
+  /**
+   * A day was picked — in the month grid, or in the month beside it.
+   *
+   * One function for both because it is one intent: asking to see a day is
+   * asking for Dia, whichever calendar it was asked from. Arrowing through the
+   * small month is deliberately not this — that only moves the band.
+   */
+  function openDay(day: CalendarDate) {
+    setFocusedDate(day);
+    setViewMode(CalendarViewMode.DAY);
+  }
 
   /** Paging: the week itself moves, and the grid leans the way it went. */
   function step(direction: 1 | -1) {
@@ -339,7 +419,11 @@ export function CalendarPage() {
               onViewModeChange={setViewMode}
               range={range}
               onStep={step}
-              onToday={() => setFocusedDate(today(getLocalTimeZone()))}
+              // Today, and today on its own: "Hoje" is a request to see what is
+              // happening now, and answering it with the week or the month it
+              // falls in is the same view you already had with one cell
+              // highlighted differently.
+              onToday={() => openDay(today(getLocalTimeZone()))}
               search={search}
               onSearchChange={setSearch}
               onCreateEvent={() => setEditing({ event: null, start: defaultStart() })}
@@ -361,10 +445,7 @@ export function CalendarPage() {
                   agendasById={agendasById}
                   selectedEventId={selectedKey}
                   onSelectEvent={handleSelect}
-                  onOpenDay={(day) => {
-                    setFocusedDate(day);
-                    setViewMode(CalendarViewMode.DAY);
-                  }}
+                  onOpenDay={openDay}
                   onCreateOnDay={(start) => setEditing({ event: null, start })}
                   focusedMonth={focusedDate.month}
                   todayIso={today(getLocalTimeZone()).toString()}
@@ -396,10 +477,18 @@ export function CalendarPage() {
             you look for it — scrolling it away to reach the agendas made the
             fastest control on the page the one you had to go and find. */}
         <div className="flex min-h-0 flex-col gap-4 md:gap-5">
+          {/* Two ways in, and they mean different things. Arrowing through the
+              month only moves what the grid is centred on; *picking* a day is a
+              request to look at that day, so it switches the grid to Dia — the
+              same thing clicking a date in the month view does. */}
           <MiniCalendarCard
             focusedDate={focusedDate}
             onFocusedDateChange={setFocusedDate}
-            visibleRange={range}
+            onOpenDay={openDay}
+            bandedRange={banded}
+            // Nothing is marked in month view: the band is the whole month, so
+            // the only day standing out there is today.
+            pickedDate={viewMode === CalendarViewMode.MONTH ? null : focusedDate}
           />
 
           {/* The second row is the scroller: the details of whatever is selected
@@ -420,7 +509,23 @@ export function CalendarPage() {
             <div
               ref={columnRef}
               onScroll={measureColumn}
-              className="gloo-thin-scroll flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto md:gap-5"
+              // No bar of its own, unlike the grid beside it. Even the 2px
+              // hairline gloo-thin-scroll draws is 2px this column's cards do
+              // not have, and the month above the scroller is outside it — so
+              // Detalhes and Minhas agendas came out narrower than the calendar
+              // directly above them, which is visible as a step down the
+              // column's right-hand edge. The fades at both ends already say
+              // there is more.
+              // `overflow-anchor:none`: the details card is inserted at the
+              // *top* of this column, and Chrome's scroll anchoring answers
+              // that by pushing scrollTop down by exactly the card's height, so
+              // that whatever was on screen stays on screen. Which is the wrong
+              // instinct here — the card is the answer to the click that just
+              // happened, and anchoring is what kept it hidden above the fold
+              // even for a reader already at the top of the column. Off, the
+              // column stays where it is and the card appears in it; see the
+              // effect that also brings a reader back up from further down.
+              className={`${hiddenScrollbar} flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto [overflow-anchor:none] md:gap-5`}
             >
               {/* Only when there is something to detail. An empty card telling
                   you to select an event was a permanent hole between the month

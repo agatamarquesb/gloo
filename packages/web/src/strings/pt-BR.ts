@@ -262,6 +262,74 @@ export const strings = {
       },
     },
   },
+  /**
+   * The projects card beside the month on the Tasks page.
+   *
+   * Placeholder copy, like the three projects it labels: there is no projects
+   * table, endpoint or page yet — see PROJECTS in ProjectsCard.
+   */
+  projects: {
+    title: 'Projetos',
+    /** The chevron beside that heading, and what the pointer says it does. */
+    seeAll: 'Ver projetos',
+    /** Where a project is in its life. Its own words, not a task's. */
+    status: {
+      todo: 'A iniciar',
+      inProgress: 'Em andamento',
+      done: 'Concluído',
+    },
+    /** What kind of project it is, written after the run of dates. */
+    kind: {
+      launch: 'Lançamento',
+      brand: 'Marca',
+      product: 'Produto',
+    },
+    /** The page a folder opens onto, which does not exist yet. */
+    soon: {
+      title: 'Projetos',
+      body: 'Esta página ainda está sendo construída.',
+      back: 'Voltar para tarefas',
+    },
+  },
+  /** The row above the task list: the chart and the month. */
+  tasksPage: {
+    empty: 'Nenhuma tarefa encontrada.',
+    performance: {
+      title: 'Desempenho',
+      /** What the headline figure is: the average of every finished task. */
+      averageLabel: 'Tempo médio de conclusão',
+      /** Written under the figure, after the priority — "· Alta prioridade". */
+      prioritySuffix: 'prioridade',
+      /** The same caption when the chart is not split by priority at all. */
+      allScope: 'Todas as prioridades',
+      /**
+       * No task of this priority has ever been through "Em andamento", so there
+       * is no stretch of time to average.
+       */
+      noData: 'Sem tarefas concluídas nessa prioridade.',
+      /** And the same, for the unsplit view — where "nessa" would name nothing. */
+      noDataAll: 'Nenhuma tarefa concluída ainda.',
+      /** The two ends of the bar row: oldest completion on the left. */
+      axisStart: 'Mais antigas',
+      axisEnd: 'Recentes',
+      /** The second metric, under the bars. */
+      punctuality: 'Cumprimento do prazo',
+      onTime: 'No prazo',
+      late: 'Atrasadas',
+      /** A completed task with no deadline can be neither, and is left out. */
+      noDeadline: 'Sem prazo',
+      /** The tooltip on one bar: how long that task took. */
+      taskTime: 'Tempo',
+    },
+    /** Durations, written the way the brief asks for them: "2h 15min". */
+    duration: {
+      day: 'd',
+      hour: 'h',
+      minute: 'min',
+      /** Under a minute of tracked work — a figure, not an absence. */
+      lessThanMinute: '< 1min',
+    },
+  },
   profile: {
     title: 'Meu perfil',
     nameLabel: 'Nome',
@@ -348,14 +416,26 @@ export const strings = {
       manageAccount: 'Gerenciar conta de calendário',
       disconnect: 'Desconectar conta',
       reconnect: 'Reconectar',
-      reauthNeeded: 'O acesso a esta conta expirou.',
+      reauthNeeded: 'Reconecte esta conta do Google para voltar a sincronizar.',
       color: 'Cor',
+      renameAgenda: 'Renomear agenda',
       makeDefault: 'Tornar agenda padrão',
       showOnlyThis: 'Mostrar apenas esta',
       show: 'Mostrar agenda',
       hide: 'Ocultar agenda',
       remove: 'Remover agenda da lista',
       readOnly: 'Somente leitura',
+    },
+    /**
+     * The warning before a colour destroys a Google event label. Blunt on
+     * purpose — see ConfirmLabelLossModal: this is the last moment the label
+     * exists, and no later action can bring it back.
+     */
+    labelLoss: {
+      title: 'Isso vai remover a etiqueta',
+      body: 'Este evento tem uma etiqueta no Google Agenda. O Google não deixa uma etiqueta e uma cor de evento existirem juntas, então definir a cor remove a etiqueta — aqui e no Google Agenda.',
+      permanent: 'A ação é permanente: a etiqueta não pode ser recolocada pelo Gloo.',
+      confirm: 'Remover a etiqueta e definir a cor',
     },
     removeAgenda: {
       // The tail of "12 eventos serão movidos para X". Two forms because PT-BR
@@ -414,17 +494,52 @@ export const strings = {
     event: {
       titleLabel: 'Título',
       titlePlaceholder: 'Nome do evento',
+      /** The header's own word for an unlocked dialog — the task's and the
+          routine's, since the three dialogs lock and unlock the same way. */
+      editing: 'Editando',
+      /** The other two header actions, in the words the other dialogs use. */
+      copyLink: 'Copiar link',
+      deleteEvent: 'Deletar',
       agenda: 'Agenda',
       date: 'Data',
       startsAt: 'Início',
       endsAt: 'Fim',
-      allDay: 'Dia inteiro',
+      allDay: 'Dia todo',
       location: 'Local',
       locationPlaceholder: 'Link da reunião ou endereço',
-      team: 'Time',
+      /** Who else is on the event — Google's "convidados", singular here as the
+          row's name rather than as a count. */
+      team: 'Convidado',
       description: 'Descrição',
       untitled: 'Sem título',
       endBeforeStart: 'O fim precisa ser depois do início.',
+      /** The card's own colour, not the agenda's — see colorDefault below. */
+      color: 'Cor do card',
+      /**
+       * The card wears its agenda's colour — the answer that clears the extra
+       * one, and the only one the panel has to name: the trigger is the colour
+       * itself, so there is nothing left for a word to say there.
+       */
+      colorDefault: 'Manter cor padrão da agenda',
+      /**
+       * Google's eleven, by the `colorId` each one travels as. Their own names,
+       * as Google Calendar shows them in pt-BR — an event on a Google agenda can
+       * only wear one of these, because it is the only colour field on an event
+       * that Google lets anything write.
+       */
+      googleColorNames: {
+        '1': 'Lavanda',
+        '2': 'Sálvia',
+        '3': 'Uva',
+        '4': 'Flamingo',
+        '5': 'Banana',
+        '6': 'Tangerina',
+        '7': 'Pavão',
+        '8': 'Grafite',
+        '9': 'Mirtilo',
+        '10': 'Manjericão',
+        '11': 'Tomate',
+      } as Record<string, string>,
     },
     google: {
       linking: 'Conectando ao Google...',
