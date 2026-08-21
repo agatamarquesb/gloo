@@ -46,6 +46,7 @@ export function SearchField({
   className = '',
   placeholder = strings.common.search,
   slim = false,
+  heightClass,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -53,6 +54,19 @@ export function SearchField({
   placeholder?: string;
   /** Cut down to the height of a small button, for a filter row of them. */
   slim?: boolean;
+  /**
+   * One stated height, when the field has to match something exactly.
+   *
+   * The Tasks page's control row asks for it: five controls of four different
+   * kinds sit on that line — a fieldset, two buttons, this, and an icon button
+   * — and each of them arrives at its own height from its own defaults. One of
+   * them has to be told, and a field whose padding is inside its box is the one
+   * that cannot simply be given a class from outside (see `py-0` below).
+   *
+   * Wins over `slim`, which is the Dashboard's shorthand for the same idea at a
+   * size that steps down on a wide window.
+   */
+  heightClass?: string;
 }) {
   return (
     <TextField
@@ -75,7 +89,7 @@ export function SearchField({
         <Input
           fullWidth
           className={`${FLAT_INPUT} ${RESTING} ${FOCUSED} ${
-            slim ? SLIM_HEIGHT : ''
+            heightClass ? `${heightClass} py-0` : slim ? SLIM_HEIGHT : ''
           } rounded-full pl-9 text-muted transition-colors [--field-radius:9999px] [--field-shadow:none]`}
           placeholder={placeholder}
         />

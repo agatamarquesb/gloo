@@ -8,6 +8,7 @@ import { SecondaryButton } from '@/components/common/SecondaryButton';
 import { useMe } from '@/hooks/queries/auth';
 import { canMutateEntity } from '@/lib/permissions';
 import { strings } from '@/strings/pt-BR';
+import { liftRoom } from '@/theme/styleConstants';
 
 import { RoutineModal } from './RoutineModal';
 import { RoutineRow } from './RoutineRow';
@@ -86,7 +87,7 @@ export function AllRoutines({
           card's, for the same reason: the rows lift on hover and the scroller
           would clip the scaled edge, while the negative margin keeps them on the
           panel's own margins. */}
-      <div className="gloo-thin-scroll -mx-1.5 min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
+      <div className={`gloo-thin-scroll min-h-0 flex-1 overflow-y-auto ${liftRoom}`}>
         {shown.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted">{strings.routine.all.empty}</p>
         ) : (

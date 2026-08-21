@@ -51,6 +51,7 @@ import { useSectors } from '@/hooks/queries/sectors';
 import {
   useCreateTask,
   useDeleteTask,
+  useSetTaskStatus,
   useTask,
   useUpdateTask,
   useUpdateTaskStatus,
@@ -74,7 +75,6 @@ import {
   PROPERTY_ROW_PITCH,
   PROPERTY_ROW_SPLIT,
   PROPERTY_VALUE,
-  PROPERTY_VALUE_LOWER,
   VALUE_CELL,
   propertyStyles,
 } from '@/theme/propertyRow';
@@ -92,6 +92,7 @@ import { TaskPriorityChipSelect } from './TaskPriorityChipSelect';
 import { TaskProgressBar } from './TaskProgressBar';
 import { TaskStatusChipSelect } from './TaskStatusChipSelect';
 import { TaskSubtasks } from './TaskSubtasks';
+import { SAMPLE_PROJECTS } from './sampleProjects';
 
 /**
  * The air between the last property and the rule that closes the dialog's upper
@@ -386,7 +387,7 @@ function DeadlineValue({
  * When projects become real this list is what they replace — the row, its
  * trigger and its panel are already the shape they need to be.
  */
-const SAMPLE_PROJECTS = ['Lançamento', 'ID Juliana', 'Ferramenta ABC'] as const;
+
 
 /**
  * The task's tags, over its title — the pills it wears, and the one way to
@@ -430,11 +431,19 @@ function TaskLabelPills({ labelIds, className = '' }: { labelIds: string[]; clas
 function TaskModalContent({
   task,
   onClose,
+  onCreated,
   flushRef,
   isDraft = false,
 }: {
   task: TaskDetailDto;
   onClose: () => void;
+  /**
+   * The task the draft's Salvar just brought into existence — the one moment
+   * this dialog has an id it did not start with. Only the board asks for it, so
+   * it can move the new task into the column it was added from; everywhere else
+   * a created task is simply picked up by the list's own invalidation.
+   */
+  onCreated?: (created: TaskDetailDto) => void;
   /**
    * Where the dialog's pending save is left for the backdrop to call. Dismissing
    * from outside — a click on the overlay, Escape — is handled a component up,
@@ -632,7 +641,12 @@ function TaskModalContent({
     // drop back into reading. The list behind it picks the new task up from the
     // mutation's own invalidation.
     if (isDraft) {
-      createTask.mutate(payload, { onSuccess: onClose });
+      createTask.mutate(payload, {
+        onSuccess: (created) => {
+          onCreated?.(created);
+          onClose();
+        },
+      });
       return;
     }
 
@@ -750,7 +764,7 @@ function TaskModalContent({
               {/* Wrapped rather than cut: "marketing & aqui…" told you which
                   sector it was not. The row's height is a minimum, so a second
                   line makes it taller instead of hiding half a word. */}
-              <span className={`break-words ${PROPERTY_VALUE_LOWER}`}>{sectorName}</span>
+              <span className={`break-words ${PROPERTY_VALUE}`}>{sectorName}</span>
             </Select.Trigger>
           </div>
         </div>
@@ -761,13 +775,7 @@ function TaskModalContent({
                 key={sector.id}
                 id={sector.id}
                 textValue={sector.name}
-                // Lower case here as well as on the trigger: the value and the
-                // option that sets it are the same word, and it changed case
-                // between them.
-                //
-                // text-xs is the size every popover in this column speaks at —
-                // see LISTBOX_TEXT.
-                className={`${TEXT_LISTBOX_ITEM} ${LISTBOX_TEXT} lowercase first-letter:uppercase`}
+                className={`${TEXT_LISTBOX_ITEM} ${LISTBOX_TEXT}`}
               >
                 {sector.name}
               </ListBox.Item>
@@ -795,10 +803,6 @@ function TaskModalContent({
           </Label>
           <div className={VALUE_CELL}>
             <Select.Trigger className={trigger}>
-              {/* Not lower-cased, unlike the sector beside it: a sector is a
-                  part of the business and reads as one word of the column's own
-                  voice, while a project is a name someone gave a thing — and
-                  "id juliana" is not that name. */}
               <span className={`break-words ${PROPERTY_VALUE}`}>{project}</span>
             </Select.Trigger>
           </div>
@@ -834,9 +838,10 @@ function TaskModalContent({
         <div className={VALUE_CELL}>
           <TaskStatusChipSelect
             status={task.status}
-            // A task starts "A fazer" and cannot be moved along before it
-            // exists, so on a draft the chip is the label of a state rather
-            // than a control.
+            // A task cannot be moved along before it exists, so on a draft the
+            // chip is the label of a state rather than a control — the state
+            // being "A fazer", or the column the draft was opened from on the
+            // board.
             isDisabled={!canEdit || isDraft}
             panelWidth={PROPERTY_PANEL}
             onChange={(status: TaskStatus) => updateStatus.mutate(status)}
@@ -1243,7 +1248,11 @@ const BLANK_USER: UserDto = {
  * sector, so the row shows its placeholder and Salvar stays disabled until a
  * real one is picked. The API requires it.
  */
-function draftTask(userId: string | undefined, assigneeId: string | undefined): TaskDetailDto {
+function draftTask(
+  userId: string | undefined,
+  assigneeId: string | undefined,
+  status: TaskStatus,
+): TaskDetailDto {
   const now = new Date().toISOString();
 
   return {
@@ -1252,7 +1261,11 @@ function draftTask(userId: string | undefined, assigneeId: string | undefined): 
     description: null,
     dueDate: null,
     priority: 'MEDIUM',
-    status: TaskStatus.TODO,
+    // "A fazer" everywhere but on the board, where the column the draft was
+    // opened from is the state it is being written in — see `defaultStatus`.
+    // Shown here from the first keystroke rather than applied silently after
+    // Salvar, so the dialog says which column the task is about to appear in.
+    status,
     isOverdue: false,
     progress: 0,
     sector: { id: '', name: '' },
@@ -1289,17 +1302,32 @@ function draftTask(userId: string | undefined, assigneeId: string | undefined): 
 export function NewTaskModal({
   onClose,
   defaultAssigneeId,
+  defaultStatus,
 }: {
   onClose: () => void;
   /** Who the task lands on — the Dashboard fills in the person adding it. */
   defaultAssigneeId?: string;
+  /**
+   * Which state the task starts in — the board fills in the column its "+ Nova
+   * tarefa" was pressed in, so a task added under "Em andamento" appears there
+   * and not back at the head of the board.
+   *
+   * Applied *after* the create rather than as part of it: POST /tasks has no
+   * status field, and the status route is where the app keeps the bookkeeping a
+   * status change carries with it (when work started, when it finished). Going
+   * through it means a task created in a column is indistinguishable from one
+   * dragged there.
+   */
+  defaultStatus?: TaskStatus;
 }) {
   const { data: me } = useMe();
   const flushEdits = useRef<() => void>(() => {});
+  const setStatus = useSetTaskStatus();
+  const status = defaultStatus ?? TaskStatus.TODO;
 
   // Seeded once: re-making it on a later render would hand the dialog a fresh
   // task object and reset the form under whoever is typing in it.
-  const [task] = useState(() => draftTask(me?.id, defaultAssigneeId));
+  const [task] = useState(() => draftTask(me?.id, defaultAssigneeId, status));
 
   return (
     <Modal.Backdrop
@@ -1311,7 +1339,19 @@ export function NewTaskModal({
       }}
     >
       <Modal.Container scroll="inside" className={DIALOG_INSET}>
-        <TaskModalContent isDraft task={task} onClose={onClose} flushRef={flushEdits} />
+        <TaskModalContent
+          isDraft
+          task={task}
+          onClose={onClose}
+          // TODO is what a new task already is, so only the other three columns
+          // have anything to say here.
+          onCreated={
+            status === TaskStatus.TODO
+              ? undefined
+              : (created) => setStatus.mutate({ id: created.id, status })
+          }
+          flushRef={flushEdits}
+        />
       </Modal.Container>
     </Modal.Backdrop>
   );

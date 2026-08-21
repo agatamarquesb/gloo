@@ -270,8 +270,8 @@ export const strings = {
    */
   projects: {
     title: 'Projetos',
-    /** The chevron beside that heading, and what the pointer says it does. */
-    seeAll: 'Ver projetos',
+    /** The quiet way out, at the foot of the folders rather than by the title. */
+    seeAll: 'Ver todos',
     /** Where a project is in its life. Its own words, not a task's. */
     status: {
       todo: 'A iniciar',
@@ -283,6 +283,7 @@ export const strings = {
       launch: 'Lançamento',
       brand: 'Marca',
       product: 'Produto',
+      tool: 'Ferramenta',
     },
     /** The page a folder opens onto, which does not exist yet. */
     soon: {
@@ -294,32 +295,68 @@ export const strings = {
   /** The row above the task list: the chart and the month. */
   tasksPage: {
     empty: 'Nenhuma tarefa encontrada.',
+    /** The switch between the list and the board, and what each is called. */
+    view: {
+      label: 'Visualização',
+      list: 'Lista',
+      kanban: 'Kanban',
+    },
+    /** A board column with nothing in it. */
+    emptyColumn: 'Nada por aqui',
+    /** The way in at the head of each board column, under its name. */
+    newTask: 'Nova tarefa',
+    /**
+     * What the "Ordenar" menu offers. Short words, not the field names the
+     * modal writes out — a menu of three is read at a glance, and "Data de
+     * vencimento" is the longest line in a panel of one-word options.
+     */
+    sort: {
+      DUE_DATE: 'Prazo',
+      PRIORITY: 'Prioridade',
+      PROGRESS: 'Progresso',
+      /** The direction, under the rule: which end of that order comes first. */
+      ASC: 'Crescente',
+      DESC: 'Decrescente',
+    },
+    /** What a row of the "Filtrar" panel says: nothing ticked, or how many. */
+    filter: {
+      all: 'Todos',
+      selected: (count: number) => `${count} selecionados`,
+    },
     performance: {
       title: 'Desempenho',
       /** What the headline figure is: the average of every finished task. */
       averageLabel: 'Tempo médio de conclusão',
-      /** Written under the figure, after the priority — "· Alta prioridade". */
-      prioritySuffix: 'prioridade',
-      /** The same caption when the chart is not split by priority at all. */
+      /** And what it is taken over — every priority, which the bars then split. */
       allScope: 'Todas as prioridades',
-      /**
-       * No task of this priority has ever been through "Em andamento", so there
-       * is no stretch of time to average.
-       */
-      noData: 'Sem tarefas concluídas nessa prioridade.',
-      /** And the same, for the unsplit view — where "nessa" would name nothing. */
+      /** Nothing has ever been through "Em andamento", so there is no average. */
       noDataAll: 'Nenhuma tarefa concluída ainda.',
-      /** The two ends of the bar row: oldest completion on the left. */
-      axisStart: 'Mais antigas',
-      axisEnd: 'Recentes',
-      /** The second metric, under the bars. */
-      punctuality: 'Cumprimento do prazo',
+      /** And the same, once a period is narrowing what the card can see. */
+      noDataPeriod: 'Nenhuma tarefa concluída nesse período.',
+      /** The window the whole card is measured over. */
+      period: {
+        label: 'Período',
+        WEEK_1: 'Última semana',
+        WEEK_2: 'Últimas 2 semanas',
+        MONTH_1: 'Último mês',
+        MONTH_3: '3 meses',
+        MONTH_6: '6 meses',
+        YEAR_1: '1 ano',
+        ALL: 'Tudo',
+      },
+      /** Over a bar with no finished task behind it, in place of a duration. */
+      noBarData: '—',
+      /**
+       * The tooltip on one bar: how many finished tasks its average was taken
+       * over. Written with the count in front — "3 tarefas concluídas".
+       */
+      barTasks: 'tarefas concluídas',
+      barTask: 'tarefa concluída',
+      /** The second metric, under the bars — two counts and nothing else. */
       onTime: 'No prazo',
       late: 'Atrasadas',
       /** A completed task with no deadline can be neither, and is left out. */
       noDeadline: 'Sem prazo',
-      /** The tooltip on one bar: how long that task took. */
-      taskTime: 'Tempo',
     },
     /** Durations, written the way the brief asks for them: "2h 15min". */
     duration: {
@@ -383,6 +420,12 @@ export const strings = {
     previous: 'Período anterior',
     next: 'Próximo período',
     newEvent: 'Novo evento',
+    /**
+     * The verb, for the two places a new event is *started* rather than named:
+     * the "+" in the toolbar, which says it under the pointer, and the menu a
+     * right-click on the mini calendar opens on a day.
+     */
+    createEvent: 'Criar evento',
     /** Tail of "+2 mais" in a crowded month cell. */
     more: 'mais',
     /** Gutter label for the strip of all-day events above the grid. */
@@ -494,9 +537,14 @@ export const strings = {
     event: {
       titleLabel: 'Título',
       titlePlaceholder: 'Nome do evento',
-      /** The header's own word for an unlocked dialog — the task's and the
-          routine's, since the three dialogs lock and unlock the same way. */
-      editing: 'Editando',
+      /**
+       * The header's two states, named after what is being edited rather than
+       * left as the bare verb the other two dialogs use: this row also carries
+       * "Copiar link" and "Deletar", and "Editar" alone read as a third thing
+       * you could do to the link.
+       */
+      edit: 'Editar evento',
+      editing: 'Editando evento',
       /** The other two header actions, in the words the other dialogs use. */
       copyLink: 'Copiar link',
       deleteEvent: 'Deletar',
@@ -520,7 +568,13 @@ export const strings = {
        * one, and the only one the panel has to name: the trigger is the colour
        * itself, so there is nothing left for a word to say there.
        */
-      colorDefault: 'Manter cor padrão da agenda',
+      colorDefault: 'Manter cor padrão',
+      /**
+       * The locked dialog's way out to the source. Only live on an event that
+       * mirrors a Google one — there is nothing over there to open for an event
+       * that only exists here.
+       */
+      openInGoogle: 'Ver no Google Agenda',
       /**
        * Google's eleven, by the `colorId` each one travels as. Their own names,
        * as Google Calendar shows them in pt-BR — an event on a Google agenda can
@@ -569,8 +623,8 @@ export const strings = {
     edit: 'Editar',
     close: 'Fechar',
     search: 'Buscar',
-    sortBy: 'Ordenar por',
-    filterBy: 'Filtrar por',
+    sortBy: 'Ordenar',
+    filterBy: 'Filtrar',
     loading: 'Carregando...',
   },
 } as const;

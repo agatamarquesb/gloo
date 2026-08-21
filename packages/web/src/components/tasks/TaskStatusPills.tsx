@@ -21,11 +21,24 @@ const PILLS: { value: StatusPillValue; label: string; count: keyof TaskSummaryDt
 /**
  * The count's chip, in the corner of the pill it belongs to.
  *
- * Two grounds rather than one: on an unselected pill the row is the card's own
- * white and a neutral tint reads as a chip on it, while the selected pill is
- * filled brand green and that same tint would disappear into it — so there the
- * chip is a shadow of the fill instead. Both take the pill's own ink, which is
- * black either way and in both themes.
+ * Green on both, which is the point: the figure is the one thing on this row
+ * worth running your eye down, and in the neutral grey it was drawn in it read
+ * as a piece of the button's chrome rather than as the answer. The board's
+ * column headers count in the same green — see TaskKanban — so a status and how
+ * many are in it look the same whichever view you are on.
+ *
+ * Two greens, one per ground. On an unselected pill the row is the card's own
+ * white, so the chip is the brand green with black on it. The selected pill is
+ * already filled with that green, where the same swatch would vanish — so there
+ * the chip is the same green lightened, written as a white veil over it rather
+ * than as a second swatch: it is then the pill's own colour by construction and
+ * cannot drift from it. Lighter and not darker, because the chip has to read as
+ * a window cut in the fill; a darker green read as a second, heavier object
+ * sitting on it.
+ *
+ * A third of a veil and not a half: at 55% the mix came out at #e4ebb2, which is
+ * far enough from the pill under it to read as off-white rather than as the same
+ * green a step up. 35% lands on #d9e290 — plainly lighter, plainly still green.
  */
 const COUNT_CHIP = 'rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums';
 
@@ -86,7 +99,9 @@ export function TaskStatusPills({
             <span className="truncate">{pill.label}</span>
             {counts ? (
               <span
-                className={`${COUNT_CHIP} ${isActive ? 'bg-black/10' : 'bg-default/50'}`}
+                className={`${COUNT_CHIP} ${
+                  isActive ? 'bg-white/35 text-black' : 'bg-green text-black'
+                }`}
               >
                 {counts[pill.count]}
               </span>

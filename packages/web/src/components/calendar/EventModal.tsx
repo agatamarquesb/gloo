@@ -6,6 +6,7 @@ import {
   Link2,
   MapPin,
   Pencil,
+  Check,
   Repeat,
   Trash2,
   UserRound,
@@ -18,7 +19,6 @@ import { Button, Input, Label, ListBox, Modal, Popover, Select } from '@heroui/r
 import { Button as AriaButton, TextField } from 'react-aria-components';
 
 import {
-  CalendarItemKind,
   countOtherAttendees,
   EventRecurrence,
   GOOGLE_EVENT_COLORS,
@@ -30,10 +30,11 @@ import {
 } from '@gloo/shared';
 
 import { AppCheckbox } from '@/components/common/AppCheckbox';
+import { GoogleCalendarIcon } from '@/components/common/GoogleCalendarIcon';
 import {
   ColorPicker,
   SECTION_TITLE,
-  SWATCH_COMPACT,
+  SWATCH,
   SWATCH_SELECTED,
 } from '@/components/common/ColorPicker';
 import { AssigneeValue } from '@/components/common/AssigneeValue';
@@ -43,18 +44,21 @@ import { UserAvatar } from '@/components/common/UserAvatar';
 import { SecondaryButton } from '@/components/common/SecondaryButton';
 import { NotesBlock } from '@/components/common/NotesBlock';
 import { useMe } from '@/hooks/queries/auth';
-import { useCreateEvent, useDeleteEvent, useUpdateEvent } from '@/hooks/queries/calendar';
+import {
+  useCalendarAccounts,
+  useCreateEvent,
+  useDeleteEvent,
+  useUpdateEvent,
+} from '@/hooks/queries/calendar';
 import { useUsers } from '@/hooks/queries/users';
 import { eventLink } from '@/lib/calendarLink';
 import { playSound } from '@/lib/sounds';
 import { colorFill } from '@/theme/labelColors';
 import {
-  FIELD_PANEL,
   FLAT_INPUT,
-  FLAT_SELECT_TRIGGER,
+  FLOATING_PANEL,
+  PANEL_SCROLLS,
   LISTBOX_FLUSH,
-  NO_FIELD_BORDER,
-  OPEN_FIELD_FILL,
   PANEL_MATCHES_TRIGGER,
   TEXT_LISTBOX_ITEM,
   listboxPopover,
@@ -68,9 +72,7 @@ import {
   PROPERTY_ROW_PITCH,
   PROPERTY_ROW_SPLIT,
   PROPERTY_VALUE,
-  TRIGGER_HUGS,
   VALUE_CELL,
-  VIEW_TRIGGER,
   propertyStyles,
 } from '@/theme/propertyRow';
 import {
@@ -80,7 +82,6 @@ import {
   dialogPadding,
   dialogSection,
   dialogShape,
-  menuRow,
   modalDivider,
   modalDividerGap,
   quietTextButton,
@@ -101,30 +102,70 @@ const RECURRENCES: EventRecurrence[] = [
 const NO_RECURRENCE = 'NONE';
 
 /**
- * The head of the dialog: the title, what kind of thing it is, and the air that
- * holds the pair off the first property.
+ * The head of the dialog: the title, and the air that holds it off the first
+ * property.
  *
- * The numbers are the other two dialogs' — 10px from the header's rule down to
- * the title and 8px from the block down to the properties — because this is the
- * same object seen a third time. See HEADER_ROW in RoutineModal.
+ * 8px down to the properties, which is the other two dialogs' own number —
+ * this is the same object seen a third time. See HEADER_ROW in RoutineModal.
  */
-const HEADER_STACK = 'flex flex-col gap-0.5 pb-2';
+const HEADER_STACK = 'flex flex-col pb-2';
 
 /**
- * What the date's calendar opens at — the task dialog's own panel width, since
- * it is the same month in the same kind of column. See PROPERTY_PANEL there.
+ * The one width the dialog's triggers take — the agenda's, and with it the two
+ * dates', which used to hug their own text and so started every row at a
+ * different edge. 176px: wide enough for the agenda names, and fixed so the
+ * card's colour beside it starts on the same line whichever agenda is chosen.
  */
-const PROPERTY_PANEL = 'w-[171.5px]';
+const TRIGGER_WIDTH = 'w-44';
+
+/** What the date's calendar opens at — the trigger it drops from, exactly. */
+const PROPERTY_PANEL = TRIGGER_WIDTH;
 
 /**
- * The colour panel, which is as wide as the widest line inside it and no wider —
- * six swatches across, or the row at the foot that keeps the agenda's own
- * colour. See SWATCH_COMPACT.
+ * The colour panel.
+ *
+ * A number rather than `w-fit`, because the grid inside now takes its cell width
+ * from the panel instead of the other way round: 252px of content is five
+ * swatches and four 8px gaps, which is the label dialog's own palette to the
+ * pixel (see SWATCH in ColorPicker). 270 = 252 + the panel's 8px of padding on
+ * each side + its hairline.
  */
-const COLOR_PANEL = 'w-fit';
+const COLOR_PANEL = 'w-[270px]';
 
 /** The colour itself, as a value in the property list: a small square. */
 const COLOR_SWATCH = 'size-3.5 shrink-0 rounded-sm';
+
+/**
+ * "Ver no Google Agenda" with nowhere to go — an event on a Gloo agenda, which
+ * exists here and nowhere else.
+ *
+ * Filled grey rather than the framework's fade: at 40% opacity an outlined pill
+ * on the dialog's white ground read as a button that had not finished loading.
+ * A solid, darker grey reads as a button that is switched off, which is what it
+ * is. The brand mark loses its colour with it — a full-colour Google logo on a
+ * dead control is the one part still claiming to work.
+ */
+const LINK_OUT_DISABLED = [
+  'disabled:opacity-100 data-[disabled=true]:opacity-100',
+  'disabled:bg-default data-[disabled=true]:bg-default',
+  'disabled:text-muted data-[disabled=true]:text-muted',
+  'disabled:[&_svg]:grayscale data-[disabled=true]:[&_svg]:grayscale',
+].join(' ');
+
+/**
+ * Where the event lives in Google Calendar: the day it is on, in the account
+ * that owns its agenda.
+ *
+ * The day rather than the event itself, because Google's per-event address is
+ * keyed on an id we do not keep. `authuser` is the account: a user signed into
+ * two Google accounts lands in whichever one Google saw last unless the address
+ * says which, and the wrong account answers with an empty calendar.
+ */
+function googleCalendarLink(startsAt: string, email: string): string {
+  const day = new Date(startsAt);
+  const path = `${day.getFullYear()}/${day.getMonth() + 1}/${day.getDate()}`;
+  return `https://calendar.google.com/calendar/r/day/${path}?authuser=${encodeURIComponent(email)}`;
+}
 
 /**
  * The two rows a recurrence opens — until when, and on which days.
@@ -137,28 +178,6 @@ const COLOR_SWATCH = 'size-3.5 shrink-0 rounded-sm';
  */
 const SUB_ROW_INSET = 'pl-6';
 const SUB_ROW_MARK = 'h-4 w-[3px] shrink-0 rounded-full bg-border';
-
-/**
- * The agenda's trigger, which is the one in this dialog that does not take the
- * value column's width: it is a column of its own, with the card's colour in a
- * second one beside it. A fixed 176px — wide enough for the agenda names in
- * front of it, and fixed so the colour beside it starts on the same line
- * whichever agenda is chosen.
- *
- * Composed here rather than taken from propertyStyles because of the one thing
- * it must *not* have: the 8px the shared trigger insets itself by while open
- * (see OPEN_FIELD_GROUND). That inset is free on a full-width trigger and costs
- * a hugging one exactly 8px of its value, which is a name losing its last two
- * letters the moment the list is opened. The ground it keeps — the fill and the
- * squared-off bottom — is what says the panel below belongs to it.
- */
-const AGENDA_TRIGGER = [
-  FLAT_SELECT_TRIGGER,
-  NO_FIELD_BORDER,
-  OPEN_FIELD_FILL,
-  'aria-expanded:rounded-t-md aria-expanded:rounded-b-none',
-  'w-44 shrink-0 gap-1 p-0 text-left',
-].join(' ');
 
 /**
  * The location as an address, or null when it is a place rather than a link.
@@ -395,9 +414,10 @@ function GoogleColorPicker({
     <div className="flex flex-col gap-2">
       <span className={SECTION_TITLE}>{strings.color.palette}</span>
       {/* Six across rather than the app picker's five: eleven colours come out
-          as two rows and a stray, and six leaves five and six. The same small
-          square the app's own picker uses in this panel — see SWATCH_COMPACT. */}
-      <div className="grid w-fit grid-cols-6 gap-1">
+          as two rows and a stray, and six leaves five and six. The same swatch
+          the app's own picker uses, a little narrower for the extra column —
+          see SWATCH. */}
+      <div className="grid grid-cols-6 gap-1">
         {GOOGLE_EVENT_COLOR_IDS.map((id) => {
           const hex = GOOGLE_EVENT_COLORS[id];
           return (
@@ -408,7 +428,7 @@ function GoogleColorPicker({
               title={strings.calendar.event.googleColorNames[id]}
               aria-pressed={value === hex}
               onClick={() => onChange(hex)}
-              {...colorFill(hex, `${SWATCH_COMPACT} ${value === hex ? SWATCH_SELECTED : ''}`)}
+              {...colorFill(hex, `${SWATCH} ${value === hex ? SWATCH_SELECTED : ''}`)}
             />
           );
         })}
@@ -445,6 +465,7 @@ export function EventModal({
   onClose: () => void;
 }) {
   const { data: users = [] } = useUsers();
+  const { data: accounts = [] } = useCalendarAccounts();
   const { data: me } = useMe();
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
@@ -493,10 +514,12 @@ export function EventModal({
   /**
    * Whether the colour panel is open.
    *
-   * Held here rather than left to the Popover because choosing a colour has to
-   * close it: a panel that stays up covers the warning dialog that a choice can
-   * raise, and a confirmation you have to read around is not a confirmation.
-   * Closing on every pick is also simply what a one-answer panel should do.
+   * Held here rather than left to the Popover because of the one case where a
+   * choice *has* to close it: the warning a colour can raise on a Google event
+   * opens over this panel, and a confirmation you have to read around is not a
+   * confirmation. Every other pick leaves the panel up — trying three colours
+   * against the row behind is the whole point of it, and the way out is the
+   * check beside "Manter cor padrão", or a press anywhere outside.
    */
   const [isColorOpen, setColorOpen] = useState(false);
 
@@ -552,10 +575,11 @@ export function EventModal({
 
   /** Every way the colour is set goes through here, so the gate cannot be skipped. */
   function chooseColor(color: PaletteColor | null) {
-    setColorOpen(false);
     if (wouldLoseLabel) {
       // Null is a colour too as far as Google is concerned: clearing writes an
       // empty colorId, which costs the label exactly as setting one does.
+      // The panel goes with the question — see isColorOpen.
+      setColorOpen(false);
       setPendingColor({ color });
       return;
     }
@@ -581,14 +605,15 @@ export function EventModal({
   const { row, label: fieldLabel, undimmed } = propertyStyles(isEditing, PROPERTY_SHAPE);
 
   /**
-   * The same trigger for the three values that do not own their row: the two
-   * dates, which are followed by an answer of their own ("Dia inteiro", "Sem
-   * fim"), and the agenda, which shares its line with the card's colour. Each
-   * takes the width of its value instead of the column's — see TRIGGER_HUGS.
+   * The three values that do not own their row: the two dates, each followed by
+   * an answer of its own on the same line, and the agenda, which shares its line
+   * with the card's colour. One trigger for all three — same width, same ground
+   * while open, same height — because three values that stop short of the column
+   * should all stop in the same place. See TRIGGER_WIDTH.
    */
-  const { trigger: hugTrigger } = propertyStyles(isEditing, {
+  const { trigger: narrowTrigger } = propertyStyles(isEditing, {
     ...PROPERTY_SHAPE,
-    width: TRIGGER_HUGS,
+    width: TRIGGER_WIDTH,
   });
 
   /**
@@ -636,6 +661,21 @@ export function EventModal({
 
   /** Whether committing has to ask anything first. */
   const needsConfirm = isSeries || otherAttendees > 0;
+
+  /**
+   * Where the locked dialog's footer goes, or null when there is nowhere.
+   *
+   * Read off the *saved* event rather than the form: this is a link to something
+   * that already exists over there, and an agenda picked but not yet saved has
+   * not put it there yet.
+   */
+  const googleLink = (() => {
+    if (!event || !googleAgendaIds.has(event.agendaId)) return null;
+    const email = accounts.find((account) =>
+      account.agendas.some((agenda) => agenda.id === event.agendaId),
+    )?.googleEmail;
+    return email ? googleCalendarLink(event.startsAt, email) : null;
+  })();
 
   function save(choice: EventChangeChoice = { notify: false }) {
     const payload = toPayload(form);
@@ -737,7 +777,7 @@ export function EventModal({
                     onClick={() => setEditing(true)}
                   >
                     <Pencil className="size-4" />
-                    {strings.common.edit}
+                    {strings.calendar.event.edit}
                   </button>
                 )}
 
@@ -754,7 +794,7 @@ export function EventModal({
               <div className={`${modalDivider} ${modalDividerGap}`} />
             </Modal.Header>
 
-            <Modal.Body className="flex flex-col p-0">
+            <Modal.Body className="flex min-h-0 flex-1 flex-col p-0">
               {/* The title and what kind of thing it is, held off the properties
                   by the gap the task modal puts under its own title. */}
               <div className={HEADER_STACK}>
@@ -778,7 +818,11 @@ export function EventModal({
                       // eslint-disable-next-line jsx-a11y/no-autofocus
                       autoFocus
                       placeholder={strings.calendar.event.titleLabel}
-                      className={`${FLAT_INPUT} ${TITLE_FIELD} text-xl font-normal`}
+                      // `pt-0` alongside TITLE_FIELD's own `pb-0`: HeroUI's
+                      // Input pads both ends, and the top 8px of it was pushing
+                      // the name of an event being edited below the line the
+                      // same name reads on when it is not.
+                      className={`${FLAT_INPUT} ${TITLE_FIELD} pt-0 text-xl font-normal`}
                       // The caret lands after the last letter, not before the
                       // first: a focused input starts its selection at 0, which
                       // put the cursor at the head of a name you were about to
@@ -814,20 +858,6 @@ export function EventModal({
                     )}
                   </h2>
                 )}
-
-                {/* What kind of thing this is, read off the row rather than
-                    assumed: a Google task opens in this same dialog and calling
-                    it an event here while the card behind it says "Tarefa" is
-                    the dialog disagreeing with itself. Anything made *from* the
-                    dialog is an event, which is what the fallback says.
-
-                    A line under the title rather than a row in the list below:
-                    it is not something you set, it is what you are looking at —
-                    so it wears the title's subtitle instead of a label, icon and
-                    value of its own. */}
-                <span className="text-sm font-light text-muted/70">
-                  {strings.dashboard.day.itemKind[event?.kind ?? CalendarItemKind.EVENT]}
-                </span>
               </div>
 
               {/* One property per row — icon and label on the left, the value on
@@ -855,7 +885,7 @@ export function EventModal({
                       onChange={(value) => set('date', value)}
                       isEditing={isEditing}
                       label={strings.calendar.event.date}
-                      triggerClass={hugTrigger}
+                      triggerClass={narrowTrigger}
                       panelWidth={PROPERTY_PANEL}
                     />
                   </div>
@@ -969,23 +999,46 @@ export function EventModal({
                       {strings.calendar.recurrence.until}
                     </span>
                     <div className={`${VALUE_CELL} flex flex-wrap items-center gap-3`}>
+                      {/* Blank is not a missing answer here, it is the answer
+                          "sem data final" — a series with no end is what Google's
+                          own default produces — so the row says so instead of
+                          showing the column's em dash, and the way to get back
+                          to it is a tick under the month rather than a link
+                          beside the value. Beside it, that link only existed
+                          once a date had been picked, which put the way out of a
+                          choice somewhere it could not be seen from. */}
                       <DatePropertyValue
                         value={form.recurrenceUntil}
                         onChange={(value) => set('recurrenceUntil', value)}
                         isEditing={isEditing}
                         label={strings.calendar.recurrence.until}
-                        triggerClass={hugTrigger}
+                        triggerClass={narrowTrigger}
                         panelWidth={PROPERTY_PANEL}
+                        emptyText={strings.calendar.recurrence.noEnd}
+                        footer={(close) => (
+                          <>
+                            <div className={modalDivider} />
+                            {/* Ticked is the state the row starts in, and a day
+                                picked above unticks it. Pressing it while it is
+                                already ticked changes nothing — there is no date
+                                left to clear — so it stays ticked and closes,
+                                the same as any other answer to this row. */}
+                            <AppCheckbox
+                              quiet
+                              isSelected={!form.recurrenceUntil}
+                              onChange={() => {
+                                set('recurrenceUntil', '');
+                                close();
+                              }}
+                              className="px-0.5 py-1"
+                            >
+                              <span className="text-xs font-medium text-value-ink">
+                                {strings.calendar.recurrence.noEnd}
+                              </span>
+                            </AppCheckbox>
+                          </>
+                        )}
                       />
-                      {isEditing && form.recurrenceUntil ? (
-                        <button
-                          type="button"
-                          className="cursor-pointer text-xs text-muted underline"
-                          onClick={() => set('recurrenceUntil', '')}
-                        >
-                          {strings.calendar.recurrence.noEnd}
-                        </button>
-                      ) : null}
                     </div>
                   </div>
                 )}
@@ -1098,7 +1151,11 @@ export function EventModal({
                         placeholder={EMPTY_VALUE}
                         value={form.location}
                         onChange={(change) => set('location', change.target.value)}
-                        className={`w-full bg-transparent p-0 outline-none placeholder:text-muted ${PROPERTY_VALUE}`}
+                        // The colour panel's width, not the column's: this is
+                        // the one field in the list, and a caret running the
+                        // whole way to the dialog's edge was the only thing in
+                        // the column that did. See COLOR_PANEL.
+                        className={`${COLOR_PANEL} max-w-full bg-transparent p-0 outline-none placeholder:text-muted ${PROPERTY_VALUE}`}
                       />
                     ) : locationHref ? (
                       /* A meeting link is there to be pressed, not read out:
@@ -1139,10 +1196,13 @@ export function EventModal({
                       onChange={(key) => set('agendaId', String(key))}
                     >
                       <Select.Trigger
-                        // Locked it is text, not a field switched off: HeroUI
-                        // dims a disabled trigger, which left this the one value
+                        // The column's own trigger, exactly as the two dates
+                        // wear it — including the dimming opt-out it carries for
+                        // the locked state, without which this was the one value
                         // in the column reading a shade lighter than the rest.
-                        className={`${AGENDA_TRIGGER} ${isEditing ? 'cursor-pointer' : VIEW_TRIGGER}`}
+                        // `shrink-0` so the colour beside it takes the leftover
+                        // room rather than this giving any up.
+                        className={`${narrowTrigger} shrink-0`}
                       >
                         <span className={`truncate ${PROPERTY_VALUE}`}>
                           {writableAgendas.find((agenda) => agenda.id === form.agendaId)?.name ??
@@ -1208,7 +1268,7 @@ export function EventModal({
                         <Popover.Content
                           placement="bottom end"
                           offset={4}
-                          className={`${COLOR_PANEL} ${FIELD_PANEL}`}
+                          className={`${COLOR_PANEL} ${FLOATING_PANEL} ${PANEL_SCROLLS}`}
                         >
                           <Popover.Dialog className="flex flex-col gap-2 p-2">
                             {/* Which palette depends on where the event lives. A
@@ -1220,29 +1280,47 @@ export function EventModal({
                               <GoogleColorPicker value={form.color} onChange={chooseColor} />
                             ) : (
                               <ColorPicker
-                                compact
                                 value={form.color ?? agendaColor}
                                 onChange={chooseColor}
                               />
                             )}
-                            {/* The way back off it, and the panel's own last
-                                line whether or not there is anything to undo: a
-                                row that came and went with the card's colour
-                                moved every swatch above it the moment one was
-                                picked. A dot rather than a square, because this
-                                is a statement about the agenda rather than
-                                another colour to choose. */}
-                            <button
-                              type="button"
-                              className={`${menuRow} text-xs whitespace-nowrap`}
-                              onClick={() => chooseColor(null)}
-                            >
-                              <span
-                                aria-hidden
-                                {...colorFill(agendaColor, 'size-3 shrink-0 rounded-full')}
-                              />
-                              {strings.calendar.event.colorDefault}
-                            </button>
+                            {/* The panel's last line: the way back off a colour,
+                                and the way out of the panel.
+
+                                Both are here whether or not anything has been
+                                picked — a row that came and went with the card's
+                                colour moved every swatch above it the moment one
+                                was chosen. The first is the outlined pill the
+                                label dialog closes on, with a dot rather than a
+                                square because it is a statement about the agenda
+                                rather than another colour to choose. The second
+                                is the check: nothing is staged behind it — the
+                                colour reached the form the moment it was pressed
+                                — so all it does is put the panel away, which is
+                                what a hand looks for after choosing. */}
+                            <div className="flex items-center gap-2">
+                              <SecondaryButton
+                                size="sm"
+                                className="flex-1 gap-2 text-xs whitespace-nowrap"
+                                onPress={() => chooseColor(null)}
+                              >
+                                <span
+                                  aria-hidden
+                                  {...colorFill(agendaColor, 'size-4 shrink-0 rounded-full')}
+                                />
+                                {strings.calendar.event.colorDefault}
+                              </SecondaryButton>
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="primary"
+                                className="size-8 shrink-0 rounded-full"
+                                aria-label={strings.common.save}
+                                onPress={() => setColorOpen(false)}
+                              >
+                                <Check className="size-4" />
+                              </Button>
+                            </div>
                           </Popover.Dialog>
                         </Popover.Content>
                       </Popover>
@@ -1259,35 +1337,67 @@ export function EventModal({
               <div className={`${modalDivider} ${modalDividerGap}`} />
 
               {/* The same block the other two dialogs carry, under the same
-                  name — see NotesBlock. */}
-              <NotesBlock
-                value={form.description}
-                onChange={(html) => set('description', html)}
-                placeholder={strings.routine.notesPlaceholder}
-                title={strings.routine.notesTitle}
-                isEditing={isEditing}
-                compact
-                // Nothing between the note and the buttons: the dialog's own
-                // bottom edge is what closes it off, and a rule there read as a
-                // section boundary with nothing after it.
-                showDivider={false}
-              />
+                  name — see NotesBlock.
+
+                  `fill`, so the note is the rest of the dialog rather than the
+                  height of what has been typed into it: an empty one says so in
+                  the middle of the space it owns, and a pressed anywhere in that
+                  space puts the caret in the note. The task dialog's own note
+                  does the same. */}
+              <div className="flex min-h-0 flex-1 flex-col">
+                <NotesBlock
+                  fill
+                  value={form.description}
+                  onChange={(html) => set('description', html)}
+                  placeholder={strings.routine.notesPlaceholder}
+                  title={strings.routine.notesTitle}
+                  isEditing={isEditing}
+                  compact
+                  // Nothing between the note and the buttons: the dialog's own
+                  // bottom edge is what closes it off, and a rule there read as a
+                  // section boundary with nothing after it.
+                  showDivider={false}
+                />
+              </div>
             </Modal.Body>
 
             {/* Excluir is in the header, with the other two dialogs' — so the
-                footer is only the two ways out, and Salvar only while there is
-                something staged to save. */}
+                footer holds only the way out and the way to commit.
+
+                Locked, there is nothing staged and so nothing to abandon: the
+                header's × is the way out, and the slot Cancelar held goes to the
+                one thing you might still want from an event you are only
+                reading — the original, in the calendar it came from. Switched
+                off rather than hidden on a Gloo event, so the footer is the same
+                shape whichever agenda you opened. */}
             <Modal.Footer className={`${dialogFooter} flex items-center justify-end gap-2`}>
-              <SecondaryButton slot="close">{strings.common.cancel}</SecondaryButton>
               {isEditing ? (
-                <Button
-                  variant="primary"
-                  isDisabled={!canSubmit || isPending}
-                  onPress={() => (needsConfirm ? setConfirming('edit') : save())}
+                <>
+                  <SecondaryButton slot="close">{strings.common.cancel}</SecondaryButton>
+                  <Button
+                    variant="primary"
+                    isDisabled={!canSubmit || isPending}
+                    onPress={() => (needsConfirm ? setConfirming('edit') : save())}
+                  >
+                    {strings.common.save}
+                  </Button>
+                </>
+              ) : (
+                <SecondaryButton
+                  className={`gap-2 ${LINK_OUT_DISABLED}`}
+                  isDisabled={!googleLink}
+                  onPress={() => {
+                    if (googleLink) window.open(googleLink, '_blank', 'noopener,noreferrer');
+                  }}
                 >
-                  {strings.common.save}
-                </Button>
-              ) : null}
+                  {/* A step up on the 16px the header's own glyphs take: this
+                      one is a brand mark rather than a line icon, and its detail
+                      — the clip, the two-tone body, the date on it — needs the
+                      extra couple of pixels to read as what it is. */}
+                  <GoogleCalendarIcon className="size-[1.125rem]" />
+                  {strings.calendar.event.openInGoogle}
+                </SecondaryButton>
+              )}
             </Modal.Footer>
           </Modal.Dialog>
         </Modal.Container>

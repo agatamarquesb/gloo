@@ -6,12 +6,14 @@ import type { TaskFilters, TaskStatusFilter } from '@gloo/shared';
 
 import { SearchField } from '@/components/common/SearchField';
 import { TaskCard } from '@/components/tasks/TaskCard';
+import { TaskReorderRow } from '@/components/tasks/TaskReorderRow';
 import { TaskModal } from '@/components/tasks/TaskModal';
 import { TaskStatusPills } from '@/components/tasks/TaskStatusPills';
 import { useDebouncedValue } from '@/hooks/ui/useDebouncedValue';
 import { useMe } from '@/hooks/queries/auth';
 import { useTasks } from '@/hooks/queries/tasks';
 import { strings } from '@/strings/pt-BR';
+import { liftRoom } from '@/theme/styleConstants';
 
 import { DashboardCard } from './DashboardCard';
 import { readTaskOrder, reorderTasks, sortByManualOrder, writeTaskOrder } from './myTasksOrder';
@@ -22,12 +24,6 @@ import { readTaskOrder, reorderTasks, sortByManualOrder, writeTaskOrder } from '
  * reads as scrollable when there are more.
  */
 const LIST_HEIGHT = 'h-[26rem]';
-
-/**
- * The gap a dragged row opens where it will land — see `dragHeight` below, which
- * measures the row so the space is exactly the size of the thing going into it.
- */
-const DROP_GAP = 'pointer-events-none rounded-2xl border border-dashed border-outline-green/60';
 
 /**
  * The element that actually scrolls the page this card is on.
@@ -101,9 +97,9 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
     scroller?.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
   }
 
-  function handleDrop(targetId: string) {
-    if (!dragId || dragId === targetId) return;
-    const next = reorderTasks(order, visibleIds, dragId, targetId);
+  function handleDrop(draggedId: string, targetId: string) {
+    if (!draggedId || draggedId === targetId) return;
+    const next = reorderTasks(order, visibleIds, draggedId, targetId);
     setOrder(next);
     writeTaskOrder(next);
     setDragId(null);
@@ -163,7 +159,7 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
           variant="fade"
           orientation="vertical"
           size={10}
-          className={`${LIST_HEIGHT} gloo-thin-scroll -mx-1.5 overflow-y-auto px-1.5 py-1`}
+          className={`${LIST_HEIGHT} gloo-thin-scroll overflow-y-auto ${liftRoom}`}
         >
           {/* The flex column is inside the scroller, not the scroller itself:
               rows are flex items either way, and as children of a fixed-height
@@ -177,59 +173,29 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
               const insertAbove = visibleIds.indexOf(dragId ?? '') > visibleIds.indexOf(task.id);
 
               return (
-                // The whole row is the handle: press it and drag. No grip to
-                // aim at, because the row already has a click target covering
-                // it — a handle would be one more thing to miss, and pressing
-                // anywhere is what the gesture is for.
-                <div
+                <TaskReorderRow
                   key={task.id}
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.effectAllowed = 'move';
-                    // Firefox starts no drag at all without payload on the event.
-                    event.dataTransfer.setData('text/plain', task.id);
-                    setDragHeight(event.currentTarget.getBoundingClientRect().height);
+                  id={task.id}
+                  dragId={dragId}
+                  overId={overId}
+                  dragHeight={dragHeight}
+                  insertAbove={insertAbove}
+                  onDragStart={(height) => {
+                    setDragHeight(height);
                     setDragId(task.id);
                   }}
                   onDragEnd={() => {
                     setDragId(null);
                     setOverId(null);
                   }}
-                  onDragOver={(event) => {
-                    if (!dragId || dragId === task.id) return;
-                    // preventDefault is what marks the row as a drop target;
-                    // without it the browser refuses the drop outright.
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = 'move';
-                    setOverId(task.id);
-                  }}
-                  onDragLeave={() => setOverId((current) => (current === task.id ? null : current))}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    handleDrop(task.id);
-                  }}
-                  className={`relative rounded-2xl ${dragId === task.id ? 'opacity-40' : ''}`}
+                  onDragOver={() => setOverId(task.id)}
+                  onDragLeave={() =>
+                    setOverId((current) => (current === task.id ? null : current))
+                  }
+                  onDrop={(draggedId) => handleDrop(draggedId, task.id)}
                 >
-                  {/* Where it will land: a space the size of the row you are
-                      holding, opened on the edge it will land against, rather
-                      than a line drawn between two rows. You aim at the slot the
-                      task will occupy instead of at a mark standing for it.
-
-                      Both gaps live *inside* this row's own box, which is what
-                      keeps the drag steady: the wrapper grows, so the pointer
-                      stays over the same drop target while the space opens under
-                      it — a gap between the rows would move the target out from
-                      under the cursor and the two would fight. */}
-                  {overId === task.id && dragId && insertAbove ? (
-                    <div aria-hidden className={`${DROP_GAP} mb-2`} style={{ height: dragHeight }} />
-                  ) : null}
-
                   <TaskCard task={task} compact onOpen={() => setOpenTaskId(task.id)} />
-
-                  {overId === task.id && dragId && !insertAbove ? (
-                    <div aria-hidden className={`${DROP_GAP} mt-2`} style={{ height: dragHeight }} />
-                  ) : null}
-                </div>
+                </TaskReorderRow>
               );
             })}
           </div>

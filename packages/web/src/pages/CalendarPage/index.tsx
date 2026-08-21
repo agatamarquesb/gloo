@@ -34,6 +34,7 @@ import {
 import { strings } from '@/strings/pt-BR';
 
 import { CALENDAR_DATE_PARAM, CALENDAR_EVENT_PARAM } from '@/lib/calendarLink';
+import { playSound } from '@/lib/sounds';
 
 import { readViewMode, writeViewMode } from './viewPreference';
 
@@ -267,6 +268,10 @@ export function CalendarPage() {
   function handleSelect(event: CalendarEventDto) {
     // The click that ends a drag must not also select — see the hook.
     if (drag.consumeSuppressedClick()) return;
+    // The details card arrives in the column beside the grid, which is far
+    // enough from the pointer that the press and its answer read as two
+    // separate things. One bubble is what ties them back together.
+    playSound('bubble', 0.35);
     setSelectedKey(instanceKey(event));
   }
 
@@ -277,6 +282,9 @@ export function CalendarPage() {
    * below. The second is what the fades at the top and bottom of the column are
    * measured from.
    */
+  /** Which column the small month last sent us to — see openWeekOn. */
+  const [flashDay, setFlashDay] = useState<{ day: string; tick: number } | null>(null);
+
   const detailsRef = useRef<HTMLElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
   const { edges, measure: measureColumn } = useScrollEdges(columnRef, selectedEvent);
@@ -333,15 +341,48 @@ export function CalendarPage() {
   }, [selectedKey]);
 
   /**
-   * A day was picked — in the month grid, or in the month beside it.
-   *
-   * One function for both because it is one intent: asking to see a day is
-   * asking for Dia, whichever calendar it was asked from. Arrowing through the
-   * small month is deliberately not this — that only moves the band.
+   * A day picked in the month *grid* — the big one. That is a request to look at
+   * that day on its own, so it opens Dia.
    */
   function openDay(day: CalendarDate) {
     setFocusedDate(day);
     setViewMode(CalendarViewMode.DAY);
+  }
+
+  /**
+   * A day picked in the small month beside the grid, which asks for something
+   * else: the week that day falls in, with the day itself marked.
+   *
+   * Dia was what this did, and it was the wrong answer to the question the small
+   * month is asked — you go there to move about, and landing on a single column
+   * with no neighbours is losing the context you were navigating by. The flash
+   * is what stops the week arriving anonymous: seven identical columns say
+   * nothing about which of them you pressed. See gloo-day-flash.
+   *
+   * Arrowing through the small month is deliberately not this — that only moves
+   * the band.
+   */
+  function openWeekOn(day: CalendarDate) {
+    setFocusedDate(day);
+    setViewMode(CalendarViewMode.WEEK);
+    setFlashDay((previous) => ({ day: day.toString(), tick: (previous?.tick ?? 0) + 1 }));
+  }
+
+  /**
+   * "Hoje", which means "put me back on now" — and what "now" looks like depends
+   * on the view you are in. Semana comes back to this week and Dia to today,
+   * both without changing what you were reading. A month has no *now* to come
+   * back to — the month you are in is already on screen, or you are somewhere
+   * else entirely — so there the press is read as the request underneath it and
+   * opens today, on its own.
+   */
+  function goToToday() {
+    const now = today(getLocalTimeZone());
+    if (viewMode === CalendarViewMode.MONTH) {
+      openDay(now);
+      return;
+    }
+    setFocusedDate(now);
   }
 
   /** Paging: the week itself moves, and the grid leans the way it went. */
@@ -419,11 +460,7 @@ export function CalendarPage() {
               onViewModeChange={setViewMode}
               range={range}
               onStep={step}
-              // Today, and today on its own: "Hoje" is a request to see what is
-              // happening now, and answering it with the week or the month it
-              // falls in is the same view you already had with one cell
-              // highlighted differently.
-              onToday={() => openDay(today(getLocalTimeZone()))}
+              onToday={goToToday}
               search={search}
               onSearchChange={setSearch}
               onCreateEvent={() => setEditing({ event: null, start: defaultStart() })}
@@ -466,6 +503,8 @@ export function CalendarPage() {
                   dragPreview={drag.preview}
                   onSlotClick={(start) => setEditing({ event: null, start })}
                   todayIso={today(getLocalTimeZone()).toString()}
+                  flashDay={flashDay}
+                  onFlashDone={() => setFlashDay(null)}
                 />
               )}
             </div>
@@ -478,17 +517,22 @@ export function CalendarPage() {
             fastest control on the page the one you had to go and find. */}
         <div className="flex min-h-0 flex-col gap-4 md:gap-5">
           {/* Two ways in, and they mean different things. Arrowing through the
-              month only moves what the grid is centred on; *picking* a day is a
-              request to look at that day, so it switches the grid to Dia — the
-              same thing clicking a date in the month view does. */}
+              month only moves what the grid is centred on; *picking* a day asks
+              to be taken to it, which is the week it falls in with the day
+              marked — see openWeekOn. */}
           <MiniCalendarCard
             focusedDate={focusedDate}
             onFocusedDateChange={setFocusedDate}
-            onOpenDay={openDay}
+            onOpenDay={openWeekOn}
             bandedRange={banded}
             // Nothing is marked in month view: the band is the whole month, so
             // the only day standing out there is today.
             pickedDate={viewMode === CalendarViewMode.MONTH ? null : focusedDate}
+            // The same hour a click on an empty month cell opens at — see
+            // NEW_EVENT_HOUR in CalendarMonthGrid. A day picked off a month
+            // carries no time with it, and 09:00 is the one the grid already
+            // settled on.
+            onCreateOnDay={(date) => setEditing({ event: null, start: dayStart(date) })}
           />
 
           {/* The second row is the scroller: the details of whatever is selected
@@ -585,6 +629,17 @@ export function CalendarPage() {
       />
     </div>
   );
+}
+
+/**
+ * The start of a new event on a day chosen from the mini calendar. See
+ * NEW_EVENT_HOUR in CalendarMonthGrid, which is the same answer to the same
+ * question for a click on an empty month cell.
+ */
+function dayStart(date: CalendarDate): Date {
+  const start = date.toDate(getLocalTimeZone());
+  start.setHours(9, 0, 0, 0);
+  return start;
 }
 
 /**

@@ -107,13 +107,20 @@ export const BARE_TRIGGER = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FI
  * the text, so the band gets its height and the value does not move as the list
  * opens.
  *
+ * `-mb-1.5` is the same trade at the other end, and it is what keeps the *page*
+ * still as well as the value: without it the band's lower half was 6px the row
+ * did not have, so opening a list pushed everything under it down — the rule
+ * below the properties, the note below that, and on the agenda's row the card's
+ * colour sitting beside the trigger. The band now overflows its row in both
+ * directions and takes no space at all.
+ *
  * The width deliberately does *not* change with it. Every trigger and every
  * panel in the task modal's property column is one width — see PROPERTY_PANEL
  * there — and the band is `w-full` in both states, sliding 8px left with the
  * ground rather than growing by it. So the band and the panel under it are the
  * same box seen twice, whichever property opened them.
  */
-export const BARE_TRIGGER_NO_INDICATOR = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FIELD_GROUND} aria-expanded:-mt-1.5 aria-expanded:pt-1.5 aria-expanded:pb-1.5 gap-1 p-0 text-left`;
+export const BARE_TRIGGER_NO_INDICATOR = `${FLAT_SELECT_TRIGGER} ${NO_FIELD_BORDER} ${OPEN_FIELD_GROUND} aria-expanded:-mt-1.5 aria-expanded:pt-1.5 aria-expanded:-mb-1.5 aria-expanded:pb-1.5 gap-1 p-0 text-left`;
 
 /**
  * The trigger's width, which is `w-full` for every row that owns its own — the
@@ -194,15 +201,6 @@ export const LABEL_ICON = 'size-4 shrink-0 text-current';
  * copies with a comment on each saying so.
  */
 export const PROPERTY_VALUE = 'text-sm font-medium text-value-ink';
-
-/**
- * The same value for content that comes out of the database — a sector, a
- * project. Lower case so the column reads as one voice rather than as a chip
- * among sentences, and the first letter back up so it reads as a word rather
- * than as a fragment. Both in CSS: the name belongs to whoever typed it, and
- * neither rule should reach the data.
- */
-export const PROPERTY_VALUE_LOWER = `${PROPERTY_VALUE} lowercase first-letter:uppercase`;
 
 /**
  * A value with nothing in it — no deadline set, no project chosen. An em dash

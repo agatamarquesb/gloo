@@ -92,7 +92,13 @@ function LabelEditor({
       {/* The colours, and the mixer when it is open — the one part of the panel
           whose height is not knowable. No "Selecionar uma cor" over it: the two
           sections inside name themselves. */}
-      <div className="gloo-thin-scroll min-h-0 flex-1 overflow-y-auto pr-1">
+      {/* `-m-1 p-1` rather than a plain inset: a chosen swatch is marked with a
+          ring drawn 4px *outside* it (see SWATCH_SELECTED), and a scroller with
+          no room for that cut the ring off every swatch against its edges. The
+          negative margin lets the box reach 4px into the panel's own padding and
+          the padding hands that 4px back to the grid, so the ring has its room
+          and the swatches keep exactly the width they had. */}
+      <div className="gloo-thin-scroll -m-1 min-h-0 flex-1 overflow-y-auto p-1">
         <ColorPicker value={color} onChange={setColor} />
       </div>
 

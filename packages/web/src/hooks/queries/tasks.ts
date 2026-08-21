@@ -1,4 +1,10 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 
 import type {
   CreateTaskInput,
@@ -120,6 +126,76 @@ export function useUpdateTask(id: string) {
   });
 }
 
+/**
+ * Everything a status change does to the cache before the server has answered,
+ * shared by the two hooks below.
+ *
+ * Written once rather than once per hook: whether the task was named when the
+ * component rendered or when the pointer was let go, moving a task to "feita"
+ * has to sound the same and land on screen just as quickly.
+ */
+function optimisticStatus(queryClient: QueryClient, id: string, status: string) {
+  // Here rather than at any one of the places a status can be changed from —
+  // every one of them comes through one of these hooks. Alongside the cache
+  // write below, so the sound and the chip change together.
+  if (status === TaskStatus.DONE) playSound('taskCompleted');
+
+  const previous = queryClient.getQueriesData({ queryKey: taskKeys.all });
+
+  // The `['tasks']` prefix covers both list caches (arrays) and the detail
+  // cache (a single object), so each entry has to be narrowed before update
+  // — mapping blindly would throw on the detail entry and abort the mutation.
+  queryClient.setQueriesData({ queryKey: taskKeys.all }, (old: unknown) => {
+    const withStatus = <T extends { id: string; status: TaskListItemDto['status'] }>(task: T): T =>
+      task.id === id ? { ...task, status: status as TaskListItemDto['status'] } : task;
+
+    if (Array.isArray(old)) return (old as TaskListItemDto[]).map(withStatus);
+    if (old && typeof old === 'object' && 'id' in old && 'status' in old) {
+      return withStatus(old as TaskDetailDto);
+    }
+    return old;
+  });
+
+  return { previous };
+}
+
+/** And putting it back when the server refuses. */
+function rollbackStatus(
+  queryClient: QueryClient,
+  context: { previous: ReturnType<QueryClient['getQueriesData']> } | undefined,
+) {
+  context?.previous.forEach(([key, data]) => {
+    queryClient.setQueryData(key, data);
+  });
+}
+
+/**
+ * The status PATCH, with the task named at call time rather than at render time.
+ *
+ * useUpdateTaskStatus below is bound to one id, which is right everywhere the
+ * task is a fixed thing on screen — a row's own chip, the dialog's own status.
+ * It is wrong in the two places this exists for, where the id is not known until
+ * the moment of the call: a card *dropped* on a board column, where binding to
+ * the id in state would mean trusting a render to have happened between picking
+ * the card up and letting it go, and a task created from one, whose id does not
+ * exist until the POST comes back.
+ */
+export function useSetTaskStatus() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateTasks();
+
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      apiClient.patch<TaskDetailDto>(`/tasks/${id}/status`, { status }),
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: taskKeys.all });
+      return optimisticStatus(queryClient, id, status);
+    },
+    onError: (_err, _variables, context) => rollbackStatus(queryClient, context),
+    onSettled: invalidate,
+  });
+}
+
 export function useUpdateTaskStatus(id: string) {
   const queryClient = useQueryClient();
   const invalidate = useInvalidateTasks();
@@ -127,35 +203,10 @@ export function useUpdateTaskStatus(id: string) {
   return useMutation({
     mutationFn: (status: string) => apiClient.patch<TaskDetailDto>(`/tasks/${id}/status`, { status }),
     onMutate: async (status: string) => {
-      // Here rather than at any one of the four places a status can be changed
-      // from — every one of them comes through this hook. Alongside the
-      // optimistic update below, so the sound and the chip change together.
-      if (status === TaskStatus.DONE) playSound('taskCompleted');
-
       await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const previous = queryClient.getQueriesData({ queryKey: taskKeys.all });
-
-      // The `['tasks']` prefix covers both list caches (arrays) and the detail
-      // cache (a single object), so each entry has to be narrowed before update
-      // — mapping blindly would throw on the detail entry and abort the mutation.
-      queryClient.setQueriesData({ queryKey: taskKeys.all }, (old: unknown) => {
-        const withStatus = <T extends { id: string; status: TaskListItemDto['status'] }>(task: T): T =>
-          task.id === id ? { ...task, status: status as TaskListItemDto['status'] } : task;
-
-        if (Array.isArray(old)) return (old as TaskListItemDto[]).map(withStatus);
-        if (old && typeof old === 'object' && 'id' in old && 'status' in old) {
-          return withStatus(old as TaskDetailDto);
-        }
-        return old;
-      });
-
-      return { previous };
+      return optimisticStatus(queryClient, id, status);
     },
-    onError: (_err, _status, context) => {
-      context?.previous.forEach(([key, data]) => {
-        queryClient.setQueryData(key, data);
-      });
-    },
+    onError: (_err, _status, context) => rollbackStatus(queryClient, context),
     onSettled: invalidate,
   });
 }

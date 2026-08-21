@@ -8,6 +8,7 @@ import { useUpdateTaskStatus } from '@/hooks/queries/tasks';
 import { formatLongDate, formatShortDate } from '@/lib/formatDate';
 import { canMutateEntity } from '@/lib/permissions';
 import { strings } from '@/strings/pt-BR';
+import { quietSurface } from '@/theme/styleConstants';
 
 import { AssigneeAvatars } from './AssigneeAvatars';
 import { TaskProgressBar } from './TaskProgressBar';
@@ -27,10 +28,58 @@ import { TaskStatusChipSelect } from './TaskStatusChipSelect';
  */
 const STATUS_COLUMN = 'flex w-30 shrink-0 justify-start';
 
+/**
+ * Whether there is a list inside this one.
+ *
+ * A checklist rather than a notebook of lines: what it answers is the same thing
+ * the progress bar beside it is measuring. Always drawn, so a column of rows
+ * stays aligned; only the dot is conditional.
+ */
+function SubtaskMark({ count, className = 'size-5' }: { count: number; className?: string }) {
+  return (
+    <span
+      className="pointer-events-none relative shrink-0 text-muted"
+      title={count > 0 ? strings.task.hasSubtasks : strings.task.noSubtasks}
+    >
+      <ClipboardList className={className} aria-hidden />
+      {count > 0 ? (
+        <>
+          {/* The dot alone, with no ring: at this size the halo read as a
+              second, paler ring around it rather than as separation from the
+              icon underneath. */}
+          <span
+            aria-hidden
+            className="absolute -right-1 -top-1 size-2.5 rounded-full bg-danger"
+          />
+          <span className="sr-only">{strings.task.hasSubtasks}</span>
+        </>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * How many files are on it, beside the subtask mark: the two answer the same
+ * question — what else is in here — so they read as a pair. Zero included, for
+ * the same alignment reason.
+ */
+function AttachmentCount({ count }: { count: number }) {
+  return (
+    <span
+      className="pointer-events-none flex shrink-0 items-center gap-1 text-muted"
+      title={strings.task.attachmentCount}
+    >
+      <Paperclip className="size-4" aria-hidden />
+      <span className="text-xs">{count}</span>
+    </span>
+  );
+}
+
 export function TaskCard({
   task,
   onOpen,
   compact = false,
+  board = false,
 }: {
   task: TaskListItemDto;
   /**
@@ -50,6 +99,32 @@ export function TaskCard({
    * than as two levels of the app.
    */
   compact?: boolean;
+  /**
+   * The card as the board draws it: a solid tile in a quarter-page column,
+   * stacked one fact per line — title, then the deadline and sector, then the
+   * progress bar, then who it is on with what else is inside it opposite.
+   *
+   * Stacked however wide the *window* is, which is the point. The row layout
+   * below turns on at `sm`, a question about the viewport that only the card's
+   * own container can answer: on any desktop that breakpoint says "row", and the
+   * meta then overflows a column it was never measured against.
+   *
+   * No status pill and no green edge, unlike the row. The column the card is
+   * sitting in is the status — a pill repeating it inside every card would be
+   * the same word four times down a column headed with it — and the outline is
+   * the column's now, drawn once around the whole stack rather than once per
+   * card. What is left in its place is a fill: the app's one "sitting on the
+   * card" grey, the same one a routine row wears on the Dashboard, so the two
+   * kinds of tile read as the same kind of object.
+   *
+   * And one green edge along the top of it. A *border* and not an inset shadow,
+   * because it has to follow the two top corners round: a shadow would be
+   * clipped square by the radius and stop where the curve begins. The other
+   * three sides are the same border in transparent, which is what lets the
+   * green taper into them at the corners rather than ending on a cut — and what
+   * keeps the tile the same size on all four sides.
+   */
+  board?: boolean;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,9 +142,15 @@ export function TaskCard({
       onOpen();
       return;
     }
-    // Carry where the row was clicked from, so closing the task modal returns
-    // here rather than dumping you on the Tasks page.
-    navigate(`/tasks/${task.id}`, { state: { from: location.pathname } });
+    // The query string travels with the id, and the origin carries it back.
+    //
+    // Everything the Tasks page is showing lives in the URL — which view, which
+    // filters, which day on the month — so a bare /tasks/:id is not "this task
+    // over what I was looking at", it is this task over the page's defaults.
+    // Dropping it put the *list* behind a card opened from the board, and closing
+    // the dialog then left you on the list you never asked for.
+    const here = `${location.pathname}${location.search}`;
+    navigate(`/tasks/${task.id}${location.search}`, { state: { from: here } });
   }
 
   return (
@@ -80,10 +161,20 @@ export function TaskCard({
     //
     // motion-safe on the hover lift: it's decoration, so it goes away under
     // prefers-reduced-motion while the colour change stays.
-    // The hover fill is a fifth of the neutral rather than two fifths: the row
-    // sits on the card's own white, and at the old strength the grey read as a
-    // selected state rather than as the pointer passing over.
-    <div className="gloo-rise relative flex w-full flex-col gap-3 rounded-2xl border border-outline-green bg-transparent p-4 text-left transition-[background-color,transform] duration-200 hover:bg-row-hover motion-safe:hover:scale-[1.015] sm:flex-row sm:items-center sm:gap-4">
+    //
+    // The row is an outline on the card's own white; the board card is a filled
+    // tile whose only edge is a green one along its top — see `board`. Which is
+    // also why they hover differently: the row's fill is a fifth of the neutral,
+    // a wash that reads as the pointer passing over rather than as a selection,
+    // while the tile already has a fill and has to step *off* it to answer at
+    // all.
+    <div
+      className={`gloo-rise relative flex w-full flex-col text-left transition-[background-color,transform] duration-200 motion-safe:hover:scale-[1.015] ${
+        board
+          ? `gap-3 rounded-2xl border-2 border-transparent border-t-green px-4 py-3.5 ${quietSurface} hover:bg-default/40 dark:hover:bg-default/70`
+          : 'gap-3 rounded-2xl border border-outline-green bg-transparent p-4 hover:bg-row-hover sm:flex-row sm:items-center sm:gap-4'
+      }`}
+    >
       <button
         type="button"
         onClick={open}
@@ -93,7 +184,7 @@ export function TaskCard({
 
       {/* Compact, the title takes a routine title's text-sm and the line under it
           the text-xs a routine's date carries — see `compact` above. */}
-      <div className="pointer-events-none relative min-w-0 flex-1">
+      <div className={`pointer-events-none relative min-w-0 flex-1 ${board ? 'space-y-1' : ''}`}>
         {/* The mark leads the title rather than joining the meta line under it:
             the date on that line is the *due* date either way, and what is worth
             noticing at a glance is that this row is late — which is also why the
@@ -128,59 +219,53 @@ export function TaskCard({
         </p>
       </div>
 
-      {/* Meta collapses under the title on phones instead of squeezing the
-          title into an unreadable column beside it. */}
-      <div className="relative flex shrink-0 items-center justify-between gap-3 sm:justify-end sm:gap-4">
-        <TaskProgressBar value={task.progress} className="pointer-events-none w-20 sm:w-28" />
+      {board ? (
+        // One fact per line, in the order they are read: how far along, then who
+        // has it and what is inside it.
+        <div className="pointer-events-none relative flex flex-col gap-3">
+          {/* Right-aligned figure, so the bar's cell ends on the same margin the
+              line under it ends on — see `outputRight`. */}
+          <TaskProgressBar value={task.progress} className="w-full" outputRight />
 
-        {/* The one thing on the row you can change without opening it: pressing
-            the status opens the three options rather than the task. */}
-        <div className={`pointer-events-auto ${STATUS_COLUMN}`}>
-          <TaskStatusChipSelect
-            status={task.status}
-            isDisabled={!canEdit}
-            onChange={(status: TaskStatus) => updateStatus.mutate(status)}
+          {/* The avatars keep the left edge and the two marks the right, and
+              `ml-auto` rather than `justify-between` is what holds that when a
+              task has nobody on it: AssigneeAvatars draws nothing at all then,
+              and a lone child of a spread row goes to the left. */}
+          <div className="flex items-center gap-2">
+            <AssigneeAvatars assignees={task.assignees} compact withName />
+            <div className="ml-auto flex items-center gap-2">
+              <SubtaskMark count={task.subtaskCount} className="size-4" />
+              <AttachmentCount count={task.attachmentCount} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Meta collapses under the title on phones instead of squeezing the
+        // title into an unreadable column beside it.
+        <div className="relative flex shrink-0 items-center justify-between gap-3 sm:justify-end sm:gap-4">
+          <TaskProgressBar
+            value={task.progress}
+            className="pointer-events-none w-20 sm:w-28"
           />
+
+          {/* The one thing on the row you can change without opening it: pressing
+              the status opens the three options rather than the task. */}
+          <div className={`pointer-events-auto ${STATUS_COLUMN}`}>
+            <TaskStatusChipSelect
+              status={task.status}
+              isDisabled={!canEdit}
+              onChange={(status: TaskStatus) => updateStatus.mutate(status)}
+            />
+          </div>
+
+          <SubtaskMark count={task.subtaskCount} />
+          <AttachmentCount count={task.attachmentCount} />
+
+          <div className="pointer-events-none">
+            <AssigneeAvatars assignees={task.assignees} />
+          </div>
         </div>
-
-        {/* Subtask marker, always shown so the row's columns stay aligned; only
-            the dot is conditional. A checklist rather than a notebook of lines:
-            what it answers is "is there a list inside this one?", which is also
-            what the progress bar to its left is measuring. */}
-        <span
-          className="pointer-events-none relative shrink-0 text-muted"
-          title={task.subtaskCount > 0 ? strings.task.hasSubtasks : strings.task.noSubtasks}
-        >
-          <ClipboardList className="size-5" aria-hidden />
-          {task.subtaskCount > 0 ? (
-            <>
-              {/* The dot alone, with no ring: at this size the halo read as a
-                  second, paler ring around it rather than as separation from the
-                  icon underneath. */}
-              <span
-                aria-hidden
-                className="absolute -right-1 -top-1 size-2.5 rounded-full bg-danger"
-              />
-              <span className="sr-only">{strings.task.hasSubtasks}</span>
-            </>
-          ) : null}
-        </span>
-
-        {/* Attachment count, beside the subtask marker: the two answer the same
-            question — what else is in here — so they read as a pair. Always
-            shown, zero included, so the row's columns stay aligned. */}
-        <span
-          className="pointer-events-none flex shrink-0 items-center gap-1 text-muted"
-          title={strings.task.attachmentCount}
-        >
-          <Paperclip className="size-4" aria-hidden />
-          <span className="text-xs">{task.attachmentCount}</span>
-        </span>
-
-        <div className="pointer-events-none">
-          <AssigneeAvatars assignees={task.assignees} />
-        </div>
-      </div>
+      )}
     </div>
   );
 }

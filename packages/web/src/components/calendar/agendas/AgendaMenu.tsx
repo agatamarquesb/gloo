@@ -8,7 +8,7 @@ import { CalendarProvider, type AgendaDto } from '@gloo/shared';
 import { useShowOnlyAgenda, useUpdateAgenda } from '@/hooks/queries/calendar';
 import { ColorPicker } from '@/components/common/ColorPicker';
 import { colorFill } from '@/theme/labelColors';
-import { FIELD_PANEL } from '@/theme/fieldStyles';
+import { FIELD_PANEL, PANEL_SCROLLS } from '@/theme/fieldStyles';
 import { dotsMenuButton, menuRow } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
@@ -108,7 +108,15 @@ export function AgendaMenu({
           same placement every dropdown in the app takes (see LabelPicker). It
           used to open centred on the button, which put it over the agenda above
           the one being changed. Narrow enough to stay inside the card. */}
-      <Popover.Content placement="bottom end" className={`w-52 ${FIELD_PANEL}`}>
+      {/* Scrolls rather than spills. react-aria caps a popover at the room it
+          has on screen and leaves the overflow visible, so on a short window the
+          colour mixer — 200px that appear the moment a custom swatch is pressed
+          — was drawn straight out through the panel's own bottom edge, hex row
+          and all. See PANEL_SCROLLS. */}
+      <Popover.Content
+        placement="bottom end"
+        className={`w-52 ${FIELD_PANEL} ${PANEL_SCROLLS}`}
+      >
         <Popover.Dialog className="p-1">
           {view === 'rename' ? (
             <div className="flex flex-col gap-1">

@@ -141,17 +141,6 @@ function hexToHsv(hex: string): Hsv {
 
 export const SWATCH = 'h-8 w-full rounded-lg transition-transform hover:scale-105';
 
-/**
- * The same palette in a panel that hangs off a property row rather than filling
- * a dialog — the event's "Cor do card".
- *
- * Square and small: the swatches carry the panel's whole size, so a fixed 24px
- * cell is what takes the popover down to the width of five of them and the
- * height of two rows. `aspect-square` rather than a second height, so the two
- * numbers cannot drift apart.
- */
-export const SWATCH_COMPACT = 'size-6 aspect-square rounded-md transition-transform hover:scale-105';
-
 /** Where the mixer opens when there is nothing to edit — a mid orange. */
 const DEFAULT_MIX: HexColor = '#bf8756';
 export const SWATCH_SELECTED = 'ring-2 ring-foreground ring-offset-2 ring-offset-surface';
@@ -300,12 +289,9 @@ type Mixing = null | { mode: 'create' } | { mode: 'edit'; color: HexColor };
 export function ColorPicker({
   value,
   onChange,
-  compact = false,
 }: {
   value: PaletteColor;
   onChange: (color: PaletteColor) => void;
-  /** The small square grid a property row opens — see SWATCH_COMPACT. */
-  compact?: boolean;
 }) {
   const { colors, add, replace, remove } = useCustomColors(value);
   const [mixing, setMixing] = useState<Mixing>(null);
@@ -317,13 +303,13 @@ export function ColorPicker({
    */
   const [mixed, setMixed] = useState<HexColor | null>(null);
 
-  const swatch = compact ? SWATCH_COMPACT : SWATCH;
-  // Compact, the grid is as wide as its five squares and no wider: the panel
-  // takes its width from here, which is the point of the smaller cell.
-  // Six across compact, five at full size: the small panel is as wide as its
-  // widest line, and a sixth column spends that width on colours rather than
-  // leaving it empty beside them.
-  const grid = compact ? 'grid w-fit grid-cols-6 gap-1.5' : 'grid grid-cols-5 gap-2';
+  // One grid wherever this opens — five across on an 8px gap, with the cells
+  // taking a fifth of whatever width the panel holding them has. The event
+  // dialog's panel is narrower than the label dialog's by 18px, which is the
+  // whole of the difference between the two: the same swatch, not a small copy
+  // of it. See COLOR_PANEL in EventModal.
+  const swatch = SWATCH;
+  const grid = 'grid grid-cols-5 gap-2';
 
   /** Choosing any swatch is an answer, so it also puts the mixer away. */
   function pick(color: PaletteColor) {
@@ -395,11 +381,14 @@ export function ColorPicker({
           aria-label={strings.color.add}
           aria-expanded={mixing?.mode === 'create'}
           onClick={() => {
-            // Open, it keeps what is being mixed — the same thing the "+" inside
-            // the mixer's own field does. Shut, it opens the mixer.
+            // Open, it keeps what is being mixed — it adds that colour to the row
+            // and no more. Choosing it is the swatch's own job, one press further
+            // on, and doing both here answered a question the panel had not been
+            // asked: in the event dialog a choice closes the panel, so a colour
+            // saved for later took the palette away with it. Shut, it opens the
+            // mixer.
             if (mixing?.mode === 'create' && mixed) {
               add(mixed);
-              onChange(mixed);
               setMixing(null);
               return;
             }

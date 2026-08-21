@@ -6,6 +6,7 @@ import { RoutinesCard } from '@/components/dashboard/RoutinesCard';
 import { SectorDonutCard } from '@/components/dashboard/SectorDonutCard';
 import { TaskSummaryCard } from '@/components/dashboard/TaskSummaryCard';
 import { TimeBlockingCard } from '@/components/dashboard/TimeBlockingCard';
+import { ProjectsCard } from '@/components/tasks/ProjectsCard';
 import { NewTaskModal } from '@/components/tasks/TaskModal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useMe } from '@/hooks/queries/auth';
@@ -38,6 +39,18 @@ export function DashboardPage() {
         <div className="flex flex-col gap-4 md:gap-5">
           <CalendarCard />
           <TimeBlockingCard />
+          {/* The projects, under the timer and the width of the column — the
+              same card the Tasks page opens with, so a project is drawn one way
+              wherever it appears.
+
+              Given a height rather than left to its contents, because the two
+              columns are independent: this is what the task list beside it
+              measures (its five-row list plus the card's own header, filter row
+              and padding — see LIST_HEIGHT in MyTasksCard), so the right column
+              ends level with the left instead of stopping short of it. Only from
+              md up, where there are two columns for that to matter; stacked on a
+              phone the card takes the height its folders need. */}
+          <ProjectsCard className="md:h-[548px]" />
         </div>
       </div>
 

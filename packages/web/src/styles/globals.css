@@ -951,10 +951,44 @@ body {
   .gloo-nudge-b {
     animation: gloo-nudge 200ms var(--ease-out-fluid, cubic-bezier(0.32, 0.72, 0, 1));
   }
+
+  /*
+   * The day you just picked in the small month, answered in the big grid.
+   *
+   * Picking a date there now lands you in Semana, and a week of seven identical
+   * columns says nothing about which of them you asked for. This washes that one
+   * column in the same light grey a hover uses and lets it drain away — long
+   * enough to find with your eye, short enough that it is gone before it becomes
+   * a state you have to dismiss.
+   *
+   * On an overlay rather than the column's own background: the column carries
+   * events, the hour rules and the now line, and animating a fill behind all of
+   * them is the only way none of the three flickers with it.
+   */
+  @keyframes gloo-day-flash {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  .gloo-day-flash {
+    animation: gloo-day-flash 900ms var(--ease-out-fluid, cubic-bezier(0.32, 0.72, 0, 1))
+      forwards;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .gloo-rise {
     animation: none;
+  }
+
+  /* The mark still has to be made, so it is shown and then simply left off
+     rather than faded: no motion, and nothing lingering either. */
+  .gloo-day-flash {
+    animation: none;
+    opacity: 0;
   }
 }

@@ -11,13 +11,34 @@ import { toJsonAttachments } from '../routines/mapper';
 import type { Prisma } from '../../../generated/prisma/client';
 import { taskInclude, toTaskDetailDto, toTaskListItemDto } from './mapper';
 
+/**
+ * One filter's chosen ids.
+ *
+ * `sectorId` and `assigneeId` carry a comma-separated list now that the Tasks
+ * page's filter panel lets you tick more than one of each. Kept as the same two
+ * parameters rather than plural ones so every link already in the wild — the
+ * Dashboard's tiles deep-link into this page — goes on meaning what it meant: a
+ * single id is simply a list of one.
+ *
+ * Empty entries are dropped, so a trailing comma or a cleared filter that left
+ * one behind cannot turn into a search for the sector whose id is "".
+ */
+function ids(value: string | undefined): string[] {
+  return value ? value.split(',').filter(Boolean) : [];
+}
+
 function buildWhere(query: Record<string, string | undefined>): Prisma.TaskWhereInput {
   const { search, status, sectorId, assigneeId, dueDateFrom, dueDateTo } = query;
   const where: Prisma.TaskWhereInput = {};
 
+  const sectorIds = ids(sectorId);
+  const assigneeIds = ids(assigneeId);
+
   if (search) where.title = { contains: search, mode: 'insensitive' };
-  if (sectorId) where.sectorId = sectorId;
-  if (assigneeId) where.assignees = { some: { userId: assigneeId } };
+  // Any of them, not all: ticking two sectors asks for the tasks in either.
+  if (sectorIds.length > 0) where.sectorId = { in: sectorIds };
+  // And a task counts if any one of the people ticked is on it.
+  if (assigneeIds.length > 0) where.assignees = { some: { userId: { in: assigneeIds } } };
 
   const dueDateFilter: Prisma.DateTimeNullableFilter = {};
   if (dueDateFrom) dueDateFilter.gte = new Date(dueDateFrom);

@@ -1,6 +1,6 @@
 # Sound effects
 
-Six licensed tracks, served from this directory. They are **not** committed —
+Seven licensed tracks, served from this directory. They are **not** committed —
 the licences are per-account, so the files are exported from the account that
 holds them and dropped in here (and kept out of git; see `.gitignore` beside
 this file).
@@ -17,5 +17,6 @@ stand-ins are placeholders, not the intended sounds.
 | `sweep.mp3` | The broom that clears a note (Limpar) |
 | `countdown-end.mp3` | The Time blocking countdown reaches zero |
 | `task-completed.mp3` | A task moves to "Feita" |
+| `bubble.mp3` | A card on the Calendar is clicked and its details open in the column beside it |
 
 Export as MP3 and keep the names exactly as above — nothing else needs changing.

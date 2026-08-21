@@ -152,10 +152,35 @@ export const PANEL_OWNS_FIELD = 'gloo-owns-field';
  * `data-placement` variants are the join: whichever edge faces the field loses
  * its rounding, and with `offset: 0` the two meet along one line.
  */
+/**
+ * The shell on its own: the radius, the hairline and the glass, with none of the
+ * squaring-off. A panel that hangs off a *value* rather than dropping out of a
+ * field — the event dialog's colour, which opens from a swatch with no ground of
+ * its own — has nothing above it to meet, so it keeps all four corners at the one
+ * radius rather than squaring the two that face nothing.
+ */
+export const FLOATING_PANEL =
+  'rounded-[8px] border border-border/50 shadow-[0_8px_20px_-12px_rgb(0_0_0/0.25)]';
+
 export const FIELD_PANEL = [
-  'rounded-[8px] border border-border/50 shadow-[0_8px_20px_-12px_rgb(0_0_0/0.25)]',
+  FLOATING_PANEL,
   'data-[placement=bottom]:rounded-t-none data-[placement=top]:rounded-b-none',
 ].join(' ');
+
+/**
+ * A panel that scrolls inside itself rather than overflowing.
+ *
+ * react-aria measures the room a popover has on screen and caps it with an
+ * inline `max-height`; what it does *not* do is clip or scroll the content, so a
+ * panel whose contents grow past that cap — the colour picker the moment its
+ * mixer opens — simply draws them out through its own bottom edge, hex field and
+ * all, on any window short enough. This hands that overflow to a scrollbar.
+ *
+ * The horizontal axis becomes scrollable with it (CSS has no `overflow-y: auto,
+ * overflow-x: visible`), so any panel taking this must keep what it draws inside
+ * its own padding — a selected swatch's ring included.
+ */
+export const PANEL_SCROLLS = 'gloo-thin-scroll overflow-y-auto';
 
 /**
  * A field that grows a ground while its list is open.

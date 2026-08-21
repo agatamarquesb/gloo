@@ -14,11 +14,19 @@ import { TaskStatus } from '@gloo/shared';
  * (see `sortByManualOrder`), so nothing is ever hidden by an order that has
  * fallen behind the list.
  */
-const ORDER_KEY = 'gloo-my-tasks-order';
+export const MY_TASKS_ORDER_KEY = 'gloo-my-tasks-order';
 
-export function readTaskOrder(): string[] {
+/**
+ * And the Tasks page's own list, which is a different list of the same objects:
+ * everyone's tasks rather than yours, under whatever filter that page is on. Its
+ * own key because an arrangement of five of your rows says nothing useful about
+ * the order of forty of everybody's.
+ */
+export const ALL_TASKS_ORDER_KEY = 'gloo-tasks-order';
+
+export function readTaskOrder(key: string = MY_TASKS_ORDER_KEY): string[] {
   try {
-    const stored: unknown = JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]');
+    const stored: unknown = JSON.parse(localStorage.getItem(key) ?? '[]');
     return Array.isArray(stored) ? stored.filter((id) => typeof id === 'string') : [];
   } catch {
     // Corrupt or unavailable storage must not take the card down with it.
@@ -26,9 +34,9 @@ export function readTaskOrder(): string[] {
   }
 }
 
-export function writeTaskOrder(ids: string[]) {
+export function writeTaskOrder(ids: string[], key: string = MY_TASKS_ORDER_KEY) {
   try {
-    localStorage.setItem(ORDER_KEY, JSON.stringify(ids));
+    localStorage.setItem(key, JSON.stringify(ids));
   } catch {
     // Private mode, a full quota — the order is a convenience, not the data.
   }

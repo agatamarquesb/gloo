@@ -7,7 +7,7 @@ import { CalendarViewMode } from '@gloo/shared';
 
 import { SearchField } from '@/components/common/SearchField';
 import { FIELD_PANEL, PANEL_MATCHES_TRIGGER } from '@/theme/fieldStyles';
-import { dotsMenuButton, menuRow, outlineControl } from '@/theme/styleConstants';
+import { dotsMenuButton, menuRow, toolbarPill, toolbarPillOpen } from '@/theme/styleConstants';
 import { CALENDAR_LOCALE } from '@/lib/weekStart';
 import { strings } from '@/strings/pt-BR';
 
@@ -119,22 +119,6 @@ function IconButton({
   );
 }
 
-/**
- * The shape the row's two secondary controls share: "Hoje" and the view
- * selector beside it.
- *
- * Written down once because they sit against each other — any drift in height,
- * radius or hover between the two is visible without moving your eye. The light
- * grey under the cursor is the point of it: at HeroUI's own default the pill
- * went almost as dark as the ink on it, which read as pressed rather than as
- * hovered.
- */
-const TOOLBAR_PILL = [
-  outlineControl,
-  'h-9 rounded-full text-sm font-medium text-muted md:h-8',
-  'hover:bg-default/40 data-[hovered=true]:bg-default/40',
-].join(' ');
-
 export function CalendarToolbar({
   viewMode,
   onViewModeChange,
@@ -187,7 +171,7 @@ export function CalendarToolbar({
         <Button
           size="sm"
           variant="outline"
-          className={`${TOOLBAR_PILL} px-3`}
+          className={`${toolbarPill} px-3`}
           onPress={onToday}
         >
           {strings.calendar.today}
@@ -207,22 +191,7 @@ export function CalendarToolbar({
           <Button
             size="sm"
             variant="outline"
-            className={[
-              TOOLBAR_PILL,
-              'w-[6.5rem] justify-between gap-1 px-3',
-              // Open, the pill and its list are one shape: the bottom corners
-              // square off to meet the panel butting against them, exactly as a
-              // property row does in the task and routine modals (see
-              // OPEN_FIELD_GROUND).
-              //
-              // And the top two come down from the capsule's own radius to the
-              // 8px the panel under them is drawn at. Kept at `rounded-full` the
-              // squared-off bottom turned the trigger into a dome sitting on a
-              // box — a shape neither half of the silhouette owns. At 8px the
-              // two read as one box with rounded corners, which is what the pill
-              // becomes for as long as its list is open.
-              'aria-expanded:rounded-b-none aria-expanded:rounded-t-lg aria-expanded:bg-default/40',
-            ].join(' ')}
+            className={`${toolbarPill} ${toolbarPillOpen} w-[6.5rem] justify-between gap-1 px-3`}
           >
             {strings.calendar.view[viewMode]}
             <ChevronDown className="size-4 shrink-0" />
@@ -269,16 +238,23 @@ export function CalendarToolbar({
           className="w-52"
         />
 
-        <Button
-          isIconOnly
-          size="sm"
-          variant="primary"
-          className="size-9 rounded-full md:size-8"
-          aria-label={strings.calendar.newEvent}
-          onPress={onCreateEvent}
-        >
-          <Plus className="size-4" />
-        </Button>
+        {/* The title sits on a wrapper because HeroUI's Button takes no `title`
+            of its own, and a native tooltip is what this wants: the button is a
+            glyph, and the browser's own hint is the one that arrives at the
+            pointer rather than somewhere near the control. The heading on the
+            other end of this row says what it does the same way. */}
+        <span title={strings.calendar.createEvent} className="flex">
+          <Button
+            isIconOnly
+            size="sm"
+            variant="primary"
+            className="size-9 rounded-full md:size-8"
+            aria-label={strings.calendar.createEvent}
+            onPress={onCreateEvent}
+          >
+            <Plus className="size-4" />
+          </Button>
+        </span>
       </div>
     </div>
   );

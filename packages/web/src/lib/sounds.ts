@@ -22,6 +22,7 @@ const EFFECT_FILES = {
   sweep: 'sweep.mp3',
   countdownEnd: 'countdown-end.mp3',
   taskCompleted: 'task-completed.mp3',
+  bubble: 'bubble.mp3',
 } as const;
 
 export type SoundEffect = keyof typeof EFFECT_FILES;
@@ -202,6 +203,33 @@ const FALLBACKS: Record<SoundEffect, () => void> = {
     const ctx = audioContext();
     if (!ctx) return;
     for (let i = 0; i < 5; i++) tone(880, ctx.currentTime + i * 0.4, 0.18);
+  },
+
+  /**
+   * One bubble surfacing — a short sine whose pitch bends up as it fades. The
+   * bend is the whole of it: at a fixed pitch the same envelope is a beep, and
+   * what a card opening wants is a blip in water, not a notification.
+   */
+  bubble: () => {
+    const ctx = audioContext();
+    if (!ctx) return;
+
+    const start = ctx.currentTime;
+    const length = 0.11;
+
+    const oscillator = ctx.createOscillator();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(420, start);
+    oscillator.frequency.exponentialRampToValueAtTime(1180, start + length);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.12, start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+
+    oscillator.connect(gain).connect(ctx.destination);
+    oscillator.start(start);
+    oscillator.stop(start + length);
   },
 
   /** A small rising figure — something finished. */

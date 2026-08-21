@@ -307,6 +307,61 @@ export const dotsMenuButton =
 export const outlineControl = 'border-outline-control';
 
 /**
+ * The room a scrolling list has to leave around rows that grow on hover.
+ *
+ * Every list in the app that holds a lifting row — a task row, a routine row —
+ * clips it otherwise: the row scales about its own centre, so it grows *past*
+ * the scroller's edges, and a scroller has to hide what leaves its box. The
+ * padding is the room to grow into and the matching negative margin gives it
+ * back, so the rows still sit on their card's own margins.
+ *
+ * 12px rather than the 6 this started at, because the overflow is a share of the
+ * row's *width*: a 1.5% scale on the Tasks page's full-width row is 8px on each
+ * side where the same row on the Dashboard, at half the width, is 4. Six was cut
+ * for the narrow case and quietly wrong for the wide one — this clears every
+ * width the app is laid out at.
+ *
+ * Vertical stays at 4px: the same 1.5% of a row's *height* is under a pixel.
+ */
+export const liftRoom = '-mx-3 px-3 py-1';
+
+/** What `liftRoom` costs a scroller in height, for anything measuring one. */
+export const LIFT_ROOM_Y = 8;
+
+/**
+ * The app's secondary control: an outlined capsule with a grey label — "Hoje"
+ * and the view selector on the Calendar page, the period selector on the Tasks
+ * page's chart.
+ *
+ * Written down once because these turn up on different pages that get compared:
+ * any drift in height, radius or hover between them is visible the moment two
+ * of them are on screen. The light grey under the cursor is the point of it — at
+ * HeroUI's own default the pill went almost as dark as the ink on it, which read
+ * as pressed rather than as hovered.
+ *
+ * Both spellings of hover on purpose: `hover:` for the plain CSS state and
+ * `data-[hovered=true]` for React Aria's, which is what HeroUI's own Button
+ * paints its fill with.
+ */
+export const toolbarPill = [
+  outlineControl,
+  'h-9 rounded-full text-sm font-medium text-muted md:h-8',
+  'hover:bg-default/40 data-[hovered=true]:bg-default/40',
+].join(' ');
+
+/**
+ * That same pill while its list is open, so the two read as one silhouette.
+ *
+ * The bottom corners square off to meet the panel butting against them, exactly
+ * as a property row does in the task and routine modals (see OPEN_FIELD_GROUND),
+ * and the top two come down from the capsule's own radius to the 8px the panel
+ * is drawn at. Kept at `rounded-full` the squared-off bottom turned the trigger
+ * into a dome sitting on a box — a shape neither half of the silhouette owns.
+ */
+export const toolbarPillOpen =
+  'aria-expanded:rounded-b-none aria-expanded:rounded-t-lg aria-expanded:bg-default/40';
+
+/**
  * A line in one of the calendar's popover menus — the agenda `···`, the account
  * `···`, and the "Nova agenda" affordance under them.
  *

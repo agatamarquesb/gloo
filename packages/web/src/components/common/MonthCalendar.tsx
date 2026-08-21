@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { toCalendarDate, type CalendarDate } from '@internationalized/date';
 import { Calendar } from '@heroui/react';
 
@@ -52,6 +52,31 @@ interface MonthCalendarProps {
    * Only reachable with `leadingHeading`, which is what frees that end.
    */
   headerAction?: ReactNode;
+  /**
+   * Keeps the leading arrangement's quiet arrows, but puts one at each end of
+   * the row with the month's name centred between them.
+   *
+   * The Tasks page's month asks for this: it has no `headerAction` to balance
+   * the far end, so with the group on the left it sat under the first two
+   * columns of a seven-column grid with nothing across from it — and with the
+   * group merely centred, the two arrows ended up in the middle of the row
+   * hugging the title, which is where a reader least expects to find them. A
+   * paging control belongs on the edge it pages towards.
+   *
+   * Not the same as dropping `leadingHeading` altogether: that arrangement puts
+   * the arrows at the ends too, but wearing HeroUI's own grey discs rather than
+   * this calendar's bare glyphs.
+   */
+  centerHeading?: boolean;
+  /**
+   * A right-click on a day. The Calendar page's mini month answers it with the
+   * one thing you can do to a day from there — start an event on it.
+   *
+   * react-aria forwards the global pointer events straight to the cell's own
+   * element (see filterDOMProps), so this needs no wrapper of its own and the
+   * left-click that opens the day is untouched.
+   */
+  onCellContextMenu?: (date: CalendarDate, event: React.MouseEvent) => void;
 }
 
 /**
@@ -86,8 +111,22 @@ export function MonthCalendar({
   className = '',
   leadingHeading = false,
   headerAction,
+  centerHeading = false,
   value,
+  onCellContextMenu,
 }: MonthCalendarProps) {
+  /**
+   * Set for the length of one right-click, so the focus the browser moves on the
+   * way to the context menu can be told apart from a focus the user asked for.
+   *
+   * The move itself cannot be stopped: `preventDefault` on either mousedown or
+   * pointerdown does stop the cell being focused, and on macOS it stops the
+   * context menu with it — the menu is fired *from* that press. So the press is
+   * left alone and the focus it causes is dropped instead, which leaves the month
+   * where it was and the grid beside it showing the day it was already showing.
+   */
+  const isRightPress = useRef(false);
+
   return (
     <Calendar
       // HeroUI pins .calendar to a fixed w-63/max-w-63, which left the grid
@@ -100,7 +139,10 @@ export function MonthCalendar({
       // for what goes wrong when this and the range logic disagree.
       firstDayOfWeek={CALENDAR_FIRST_DAY}
       focusedValue={focusedValue}
-      onFocusChange={onFocusChange}
+      onFocusChange={(date) => {
+        if (isRightPress.current) return;
+        onFocusChange(date);
+      }}
       {...(value === undefined ? {} : { value })}
       // HeroUI types the selected value as DateValue — the union that also
       // covers zoned and time-bearing dates — because a Calendar can be driven
@@ -119,15 +161,19 @@ export function MonthCalendar({
                 against. Pulling the button left of the row, as this did at
                 first, overshoots that by the width of both insets. */}
             <Calendar.NavButton slot="previous" className={NAV_BUTTON} />
-            {/* A minimum width rather than a natural one, for the same reason
-                the centred arrangement gives the heading `flex-1`: the month
-                names are not the same length, and left to itself the arrow after
-                it would step sideways every time you paged the year. Sized to
-                the longest of them — "setembro de 2026". */}
-            <Calendar.Heading className="min-w-[8.75rem] text-center" />
+            {/* Spread, the heading takes the whole middle and the two arrows are
+                pushed to the row's ends by it. Otherwise a minimum width, for
+                the same reason: the month names are not the same length, and
+                left to itself the arrow after it would step sideways every time
+                you paged the year. Sized to the longest of them — "setembro de
+                2026". */}
+            <Calendar.Heading
+              className={centerHeading ? 'flex-1 text-center' : 'min-w-[8.75rem] text-center'}
+            />
             <Calendar.NavButton slot="next" className={NAV_BUTTON} />
-            {/* Pushes whatever the caller sent to the far end of the row. */}
-            <span className="flex-1" />
+            {/* Pushes whatever the caller sent to the far end of the row. Not
+                needed when the heading is already doing the pushing. */}
+            {centerHeading ? null : <span className="flex-1" />}
             {headerAction}
           </>
         ) : (
@@ -147,7 +193,28 @@ export function MonthCalendar({
         </Calendar.GridHeader>
         <Calendar.GridBody>
           {(date) => (
-            <Calendar.Cell date={date} className={`relative ${cellClassName?.(date) ?? ''}`}>
+            <Calendar.Cell
+              date={date}
+              className={`relative ${cellClassName?.(date) ?? ''}`}
+              onContextMenu={
+                onCellContextMenu ? (event) => onCellContextMenu(date, event) : undefined
+              }
+              // A right-click is not a visit — see isRightPress. The flag is
+              // raised for the press and lowered on the next tick, by which time
+              // the focus it caused has been and gone.
+              onMouseDown={
+                onCellContextMenu
+                  ? (press) => {
+                      isRightPress.current = press.button === 2;
+                      if (isRightPress.current) {
+                        setTimeout(() => {
+                          isRightPress.current = false;
+                        }, 0);
+                      }
+                    }
+                  : undefined
+              }
+            >
               {({ formattedDate }) => (
                 <>
                   {formattedDate}

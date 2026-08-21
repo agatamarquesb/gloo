@@ -85,6 +85,23 @@ interface CalendarTimeGridProps {
   /** A click on empty grid, as the instant that slot represents. */
   onSlotClick: (start: Date) => void;
   todayIso: string;
+  /**
+   * The day to wash grey for a moment, and a counter that says when it was
+   * asked for — see gloo-day-flash.
+   *
+   * The counter is what makes picking the same date twice flash twice: a CSS
+   * animation only runs when the element carrying it is new, so the overlay is
+   * keyed on this and remounted on every press.
+   */
+  flashDay: { day: string; tick: number } | null;
+  /**
+   * The wash has finished and can be forgotten.
+   *
+   * Not cosmetic housekeeping: left standing, the mark would be re-mounted — and
+   * so re-played — every time that week came back on screen, marking a day
+   * nobody had just asked for.
+   */
+  onFlashDone: () => void;
 }
 
 /**
@@ -111,6 +128,8 @@ export function CalendarTimeGrid({
   dragPreview,
   onSlotClick,
   todayIso,
+  flashDay,
+  onFlashDone,
 }: CalendarTimeGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // The line across today's column, and which blocks are behind it. Both change
@@ -353,6 +372,18 @@ export function CalendarTimeGrid({
                 }}
                 role="presentation"
               >
+                {/* Under everything the column holds and deaf to the pointer —
+                    it is a mark on the day, not a layer over it. See
+                    gloo-day-flash. */}
+                {flashDay?.day === day.toString() ? (
+                  <div
+                    key={`flash-${flashDay.tick}`}
+                    aria-hidden
+                    className="gloo-day-flash pointer-events-none absolute inset-0 z-0 bg-default"
+                    onAnimationEnd={onFlashDone}
+                  />
+                ) : null}
+
                 {HOURS.map((hour) => (
                   <div
                     key={hour}

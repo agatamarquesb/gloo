@@ -51,6 +51,8 @@ export function DatePropertyValue({
   panelWidth,
   tone = '',
   mark = null,
+  emptyText = EMPTY_VALUE,
+  footer,
 }: {
   /** ISO date string (`YYYY-MM-DD`), or '' for none. */
   value: string;
@@ -66,6 +68,21 @@ export function DatePropertyValue({
   tone?: string;
   /** Anything that travels with the date, on its right — the overdue mark. */
   mark?: ReactNode;
+  /**
+   * What an unset date reads as. The em dash unless the row has a *name* for
+   * having no date — the event dialog's "Repetir até", where blank is not a
+   * missing answer but the answer "sem data final".
+   */
+  emptyText?: string;
+  /**
+   * A row under the month, inside the same panel — the way to answer the
+   * question without picking a day.
+   *
+   * A function of `close` rather than plain content: whatever goes here is
+   * another answer to the row, and an answer leaves the panel exactly as
+   * choosing a day does.
+   */
+  footer?: (close: () => void) => ReactNode;
 }) {
   const [isOpen, setOpen] = useState(false);
 
@@ -77,7 +94,7 @@ export function DatePropertyValue({
     }
   }, [value]);
 
-  const text = formatDay(value) ?? EMPTY_VALUE;
+  const text = formatDay(value) ?? emptyText;
 
   if (!isEditing) {
     return (
@@ -102,7 +119,10 @@ export function DatePropertyValue({
           its width — so the month is cut to the panel rather than overflowing
           it; see CALENDAR_TYPE for the scale that makes seven columns fit. */}
       <Popover.Content {...listboxPopover} className={`${panelWidth} ${FIELD_PANEL}`}>
-        <Popover.Dialog className="p-2">
+        {/* A column rather than bare padding: the panel is the month plus
+            whatever the row hangs under it, and the gap is what keeps the two
+            from reading as one grid with a stray line at the bottom. */}
+        <Popover.Dialog className="flex flex-col gap-1.5 p-2">
           <Calendar
             className={`w-full max-w-none ${CALENDAR_TYPE}`}
             aria-label={label}
@@ -134,6 +154,8 @@ export function DatePropertyValue({
               </Calendar.YearPickerGridBody>
             </Calendar.YearPickerGrid>
           </Calendar>
+
+          {footer?.(() => setOpen(false))}
         </Popover.Dialog>
       </Popover.Content>
     </Popover>

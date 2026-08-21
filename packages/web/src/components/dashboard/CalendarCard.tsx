@@ -351,6 +351,10 @@ export function CalendarCard({
         // follow it; the far end of that row is where the agenda filter goes,
         // which is the corner every other card keeps its `···` in.
         leadingHeading
+        // Narrow, the month is a control on a column of its own with no agenda
+        // filter across from it, so the group stands in the middle rather than
+        // hugging the left edge — see centerHeading.
+        centerHeading={narrow}
         // No agenda filter on a month with no agendas on it: every option in it
         // would tick and untick something the card is not drawing.
         headerAction={

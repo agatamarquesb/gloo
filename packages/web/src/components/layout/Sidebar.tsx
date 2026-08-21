@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, FolderKanban, LogOut } from 'lucide-react';
 import { Button } from '@heroui/react';
-import { NavLink } from 'react-router';
+import { NavLink, useMatch } from 'react-router';
 
 import { useLogout } from '@/hooks/queries/auth';
 import { modalDivider } from '@/theme/styleConstants';
@@ -28,11 +28,50 @@ const NAV_ROW_IDLE = 'text-muted hover:bg-default hover:text-default-foreground'
 /**
  * What Projetos opens onto.
  *
- * Labels and nothing else for now: neither page exists yet, so these are the
- * shape of the menu rather than two ways into it. The moment there is somewhere
- * to go they become NavLinks like the rows above.
+ * Todos os projetos is a route now — the same /projects the Tasks page's folders
+ * already lead to, so the rail and the folders are two ways into one page rather
+ * than two different ideas of where projects live. Calendário de projetos has
+ * nowhere to go yet, so it stays a label; it gets a `to` the moment its page
+ * exists and needs nothing else here.
  */
-const PROJECT_ITEMS = [strings.nav.allProjects, strings.nav.projectsCalendar];
+const PROJECT_ITEMS = [
+  { label: strings.nav.allProjects, to: '/projects' },
+  { label: strings.nav.projectsCalendar, to: null },
+] as const;
+
+/**
+ * One item under Projetos: the rule's own segment, then the label.
+ *
+ * The two live together because the green stretch belongs to the item that is
+ * on, and the only thing that knows which item is on is the link wrapped around
+ * both of them.
+ */
+function ProjectItem({ label, isSelected }: { label: string; isSelected: boolean }) {
+  return (
+    <>
+      {/* A fixed 4px lane with the mark centred in it, rather than the mark
+          itself being the column: grown from the left edge, the selected segment
+          thickened rightwards and the line took a step sideways at whichever
+          item was on. Now the thin grey and the thick green share one axis. */}
+      <span aria-hidden className="flex w-1 shrink-0 justify-center">
+        <span
+          className={`rounded-full transition-[width,background-color] ${
+            isSelected ? 'w-full bg-accent' : 'w-0.5 bg-border'
+          }`}
+        />
+      </span>
+      <span
+        className={`flex-1 rounded-lg px-2 py-1.5 text-sm transition-colors ${
+          isSelected
+            ? 'font-medium text-surface-foreground'
+            : 'text-muted group-hover:bg-default group-hover:text-default-foreground'
+        }`}
+      >
+        {label}
+      </span>
+    </>
+  );
+}
 
 /**
  * Navigation and Sign Out only. Identity (the user chip, the profile modal) and
@@ -40,13 +79,22 @@ const PROJECT_ITEMS = [strings.nav.allProjects, strings.nav.projectsCalendar];
  */
 export function Sidebar() {
   const logout = useLogout();
-  const [isProjectsOpen, setProjectsOpen] = useState(false);
   /**
-   * Which of the two is on screen. Component state for now, and the one place
-   * this list will not need changing when the pages exist: it becomes the route
-   * match, and the green stretch of the rule follows it by itself.
+   * Any projects page, the index and a single project alike: the group is about
+   * that whole branch of the app, not about one URL in it.
    */
-  const [selectedProject, setSelectedProject] = useState(0);
+  const isProjectsRoute = useMatch('/projects/*') !== null;
+  const [isProjectsOpen, setProjectsOpen] = useState(isProjectsRoute);
+
+  /**
+   * Landing on a projects page unfolds the group — otherwise arriving from the
+   * Tasks page's folders leaves the rail claiming nothing is open. It fires on
+   * the crossing rather than on every render, so folding it away while staying
+   * on the page still works.
+   */
+  useEffect(() => {
+    if (isProjectsRoute) setProjectsOpen(true);
+  }, [isProjectsRoute]);
 
   return (
     <aside className="hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-surface px-3 py-5 md:flex">
@@ -89,7 +137,13 @@ export function Sidebar() {
             type="button"
             aria-expanded={isProjectsOpen}
             onClick={() => setProjectsOpen((open) => !open)}
-            className={`${NAV_ROW} ${NAV_ROW_IDLE} w-full cursor-pointer justify-between`}
+            /* Folded away on a projects page, the row wears the page's own
+               state: the item that would have shown it is not on screen, and a
+               rail that says nothing is open while a projects page is open is
+               worse than a parent standing in for its child. */
+            className={`${NAV_ROW} ${
+              isProjectsRoute && !isProjectsOpen ? NAV_ROW_ACTIVE : NAV_ROW_IDLE
+            } w-full cursor-pointer justify-between`}
           >
             <span className="flex items-center gap-3">
               {/* A folder seen head-on with its contents showing — and the same
@@ -108,42 +162,26 @@ export function Sidebar() {
 
           {isProjectsOpen ? (
             <ul className="mt-1 flex flex-col">
-              {PROJECT_ITEMS.map((label, index) => {
-                const isSelected = index === selectedProject;
-
-                return (
-                  // The rule down the left is what says these belong to the row
-                  // above: one segment per item, so the line is continuous and
-                  // the selected item can thicken its own stretch of it without
-                  // breaking the run.
-                  <li key={label} className="flex items-stretch gap-3 pl-6">
-                    {/* A fixed 4px lane with the mark centred in it, rather than
-                        the mark itself being the column: grown from the left
-                        edge, the selected segment thickened rightwards and the
-                        line took a step sideways at whichever item was on. Now
-                        the thin grey and the thick green share one axis. */}
-                    <span aria-hidden className="flex w-1 shrink-0 justify-center">
-                      <span
-                        className={`rounded-full transition-[width,background-color] ${
-                          isSelected ? 'w-full bg-accent' : 'w-0.5 bg-border'
-                        }`}
-                      />
+              {PROJECT_ITEMS.map(({ label, to }) => (
+                // The rule down the left is what says these belong to the row
+                // above: one segment per item, so the line is continuous and
+                // the selected item can thicken its own stretch of it without
+                // breaking the run.
+                <li key={label} className="flex">
+                  {to ? (
+                    <NavLink to={to} className="group flex flex-1 items-stretch gap-3 pl-6">
+                      {({ isActive }) => <ProjectItem label={label} isSelected={isActive} />}
+                    </NavLink>
+                  ) : (
+                    // No page behind it yet, so no hover and nothing to press:
+                    // a row that lights up under the cursor and then does
+                    // nothing is a promise the app cannot keep.
+                    <span className="flex flex-1 items-stretch gap-3 pl-6">
+                      <ProjectItem label={label} isSelected={false} />
                     </span>
-                    <button
-                      type="button"
-                      aria-current={isSelected ? 'page' : undefined}
-                      onClick={() => setSelectedProject(index)}
-                      className={`flex-1 cursor-pointer rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-default ${
-                        isSelected
-                          ? 'font-medium text-surface-foreground'
-                          : 'text-muted hover:text-default-foreground'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  </li>
-                );
-              })}
+                  )}
+                </li>
+              ))}
             </ul>
           ) : null}
         </div>
