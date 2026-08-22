@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { RoutineDto } from '@gloo/shared';
-
 import { nextOccurrence } from '@/components/dashboard/routineSchedule';
 import { useMe } from '@/hooks/queries/auth';
 import { useRoutines } from '@/hooks/queries/routines';
 import { useTasks } from '@/hooks/queries/tasks';
+import { routinePath, taskPath } from '@/lib/routes';
 import { playSound } from '@/lib/sounds';
 import { strings } from '@/strings/pt-BR';
 
@@ -31,11 +30,6 @@ const CHIME_QUIET_MS = 10 * 60 * 1000;
 
 export type NotificationKind = 'TASK_OVERDUE' | 'ROUTINE_DUE_SOON';
 
-/** What the notification's "view" action opens. Carries the entity, not a route. */
-export type NotificationTarget =
-  | { kind: 'TASK'; taskId: string }
-  | { kind: 'ROUTINE'; routine: RoutineDto };
-
 export interface AppNotification {
   /**
    * Identity includes the occurrence it refers to — a due date, or the date a
@@ -48,7 +42,17 @@ export interface AppNotification {
   title: string;
   /** Human-readable timing, e.g. "Vence amanhã". */
   detail: string;
-  target: NotificationTarget;
+  /**
+   * Where the thing lives, as a route.
+   *
+   * Pressing a notification takes you to the page it is about rather than
+   * opening a dialog over whatever you happened to be looking at: a task to the
+   * Tasks page under its own id, a routine to the Dashboard with that routine
+   * open. The page it lands on is then the page you stay on when you close it,
+   * which is the whole point — a notification is a pointer at something, and
+   * following it should leave you where that something is.
+   */
+  path: string;
   /** Days until due; negative once late. Drives ordering. */
   daysUntilDue: number;
 }
@@ -94,7 +98,7 @@ export function useNotifications(): {
         kind: 'TASK_OVERDUE',
         title: task.title,
         detail: strings.notifications.overdueByDays(-daysUntilDue),
-        target: { kind: 'TASK', taskId: task.id },
+        path: taskPath(task.id),
         daysUntilDue,
       };
     });
@@ -109,7 +113,7 @@ export function useNotifications(): {
         kind: 'ROUTINE_DUE_SOON' as const,
         title: routine.description,
         detail: strings.notifications.dueInDays(days),
-        target: { kind: 'ROUTINE' as const, routine },
+        path: routinePath(routine.id),
         daysUntilDue: days,
       }));
 

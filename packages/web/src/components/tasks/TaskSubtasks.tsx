@@ -48,6 +48,7 @@ export function TaskSubtasks({
   subtasks,
   isEditing,
   canEdit,
+  draft,
 }: {
   taskId: string;
   subtasks: SubtaskDto[];
@@ -59,6 +60,21 @@ export function TaskSubtasks({
    * mode, exactly as a routine's do, but not for someone who may not touch it.
    */
   canEdit: boolean;
+  /**
+   * The list held in the create dialog, where there is no task to hang a subtask
+   * off yet.
+   *
+   * Given, the block edits this array instead of calling the server: the same
+   * heading, the same "+", the same rows and the same ×, writing into the form
+   * rather than into a table. They are posted with the task — see `subtasks` on
+   * CreateTaskInput — so a task and the list somebody wrote on it come into
+   * existence together.
+   *
+   * The one thing a draft row cannot do is be ticked off: a subtask on a task
+   * that does not exist has not been done, and a box that toggled something
+   * nobody could see would be a lie about work.
+   */
+  draft?: { items: string[]; onChange: (items: string[]) => void };
 }) {
   const addSubtask = useAddSubtask(taskId);
   const updateSubtask = useUpdateSubtask();
@@ -100,8 +116,8 @@ export function TaskSubtasks({
   }, [isEditing]);
 
   function commit(subtask: SubtaskDto) {
-    const draft = drafts[subtask.id];
-    if (draft === undefined) return;
+    const typed = drafts[subtask.id];
+    if (typed === undefined) return;
 
     setDrafts((current) => {
       const next = { ...current };
@@ -109,7 +125,7 @@ export function TaskSubtasks({
       return next;
     });
 
-    const text = draft.trim();
+    const text = typed.trim();
     // Emptying a row is not a way to delete it — the × is — so a blank draft
     // simply reverts to what the server has.
     if (!text || text === subtask.text) return;
@@ -119,7 +135,37 @@ export function TaskSubtasks({
   function handleAdd() {
     const text = newText.trim();
     if (!text) return;
+    if (draft) {
+      draft.onChange([...draft.items, text]);
+      setNewText('');
+      return;
+    }
     addSubtask.mutate(text, { onSuccess: () => setNewText('') });
+  }
+
+  /**
+   * The rows the block draws, from whichever of the two it is showing.
+   *
+   * A draft's lines are given ids of their own position, which is all an id has
+   * to do here: nothing addresses them but this component, and a line's place in
+   * the list *is* which line it is until the task exists.
+   */
+  const rows: SubtaskDto[] = draft
+    ? draft.items.map((text, index) => ({ id: String(index), text, done: false, order: index }))
+    : subtasks;
+
+  /** A draft row's text, changed in place. */
+  function setDraftText(index: number, text: string) {
+    draft?.onChange(draft.items.map((item, at) => (at === index ? text : item)));
+  }
+
+  function removeRow(id: string) {
+    playSound('delete');
+    if (draft) {
+      draft.onChange(draft.items.filter((_item, index) => String(index) !== id));
+      return;
+    }
+    deleteSubtask.mutate(id);
   }
 
   return (
@@ -152,18 +198,26 @@ export function TaskSubtasks({
         ) : null}
       </div>
 
-      {/* The same sentence Anexos and the note say, in the same place: centred in
-          what is left of the block. Only while the dialog is locked — editing,
-          the block is a list you are adding to and "there is nothing here" is
-          the state you are busy leaving. */}
-      {subtasks.length === 0 && !isEditing ? (
+      {/* The same sentence Anexos and the note say, in the same place: centred
+          in what is left of the block — which means it has to *replace* the
+          list rather than sit above it. Drawn as a sibling of the scroller, the
+          two shared the block's spare height and the sentence came out level
+          with nothing in particular, a good 80px above the same sentence in
+          Anexos beside it.
+
+          In both modes now, not only while the dialog is locked. The old rule —
+          that a block you are adding to should not report being empty — left the
+          create dialog's Subtarefas as a heading over nothing at all, which
+          reads as a section that failed rather than as one waiting. It steps
+          aside the moment the blank line opens, since a list with a caret in it
+          is no longer empty. */}
+      {rows.length === 0 && !isAdding ? (
         <p className="flex flex-1 items-center justify-center text-center text-xs text-muted">
           {strings.attachment.empty}
         </p>
-      ) : null}
-
+      ) : (
       <SectionScroll className={blockRowList}>
-        {subtasks.map((subtask) => (
+        {rows.map((subtask, index) => (
           // Checkbox, then the text, then the × on the row's right edge — the
           // reading order of the row: what you do to it, what it says, and the
           // way to be rid of it. Top-aligned, so a subtask that wraps starts
@@ -176,7 +230,8 @@ export function TaskSubtasks({
             <AppCheckbox
               quiet
               className="mt-0.5 shrink-0"
-              isDisabled={!canEdit}
+              // A draft's rows cannot be ticked — see `draft` above.
+              isDisabled={!canEdit || Boolean(draft)}
               isSelected={subtask.done}
               onChange={(done) => updateSubtask.mutate({ id: subtask.id, done })}
             >
@@ -186,14 +241,22 @@ export function TaskSubtasks({
             {isEditing ? (
               <TextField
                 aria-label={strings.task.subtaskPlaceholder}
-                value={drafts[subtask.id] ?? subtask.text}
-                onChange={(text) => setDrafts((current) => ({ ...current, [subtask.id]: text }))}
+                value={draft ? subtask.text : (drafts[subtask.id] ?? subtask.text)}
+                onChange={(text) =>
+                  draft
+                    ? setDraftText(index, text)
+                    : setDrafts((current) => ({ ...current, [subtask.id]: text }))
+                }
                 className="min-w-0 flex-1"
               >
                 <TextArea
                   rows={1}
                   placeholder={strings.task.subtaskPlaceholder}
-                  onBlur={() => commit(subtask)}
+                  onBlur={() => {
+                    // A draft row is already written into the form on every
+                    // keystroke; there is nothing waiting to be sent.
+                    if (!draft) commit(subtask);
+                  }}
                   className={`${ITEM_TEXT} field-sizing-content resize-none bg-transparent outline-none placeholder:text-muted ${
                     subtask.done ? 'text-muted line-through' : 'text-foreground'
                   }`}
@@ -215,10 +278,7 @@ export function TaskSubtasks({
                 type="button"
                 className={`${blockRowAction} ${blockRowActionOnHover} mt-1`}
                 aria-label={strings.task.removeSubtask}
-                onClick={() => {
-                  playSound('delete');
-                  deleteSubtask.mutate(subtask.id);
-                }}
+                onClick={() => removeRow(subtask.id)}
               >
                 <X className="size-4" />
               </button>
@@ -265,6 +325,7 @@ export function TaskSubtasks({
         </div>
       ) : null}
       </SectionScroll>
+      )}
     </section>
   );
 }

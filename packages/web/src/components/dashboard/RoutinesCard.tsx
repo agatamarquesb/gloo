@@ -8,6 +8,7 @@ import type { RoutineDto } from '@gloo/shared';
 import { useCreateRoutine, useRoutines } from '@/hooks/queries/routines';
 import { useMe } from '@/hooks/queries/auth';
 import { canMutateEntity } from '@/lib/permissions';
+import { ROUTINE_PARAM } from '@/lib/routes';
 import { FIELD_PANEL } from '@/theme/fieldStyles';
 import { dotsMenuButton, menuRow } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
@@ -31,9 +32,6 @@ import { groupRoutinesByMonth } from './routineSchedule';
  * to stay small to leave its legend room underneath.
  */
 const LIST_HEIGHT = 'h-56';
-
-/** Query param that reopens a routine from a shared link. */
-export const ROUTINE_PARAM = 'rotina';
 
 export function RoutinesCard() {
   const { data: me } = useMe();

@@ -49,8 +49,15 @@ export function DashboardPage() {
               and padding — see LIST_HEIGHT in MyTasksCard), so the right column
               ends level with the left instead of stopping short of it. Only from
               md up, where there are two columns for that to matter; stacked on a
-              phone the card takes the height its folders need. */}
-          <ProjectsCard className="md:h-[548px]" />
+              phone the card takes the height its folders need.
+
+              Six folders at a height of their own, rather than four dividing
+              that 548px between them: stretched to fill it they came out at
+              twice the size of the same folders on the Tasks page, a name, a
+              date and a kind marooned in a box. So the card keeps the height the
+              column needs and the folders keep the height *they* need, and the
+              gap between the two is left as white under the last row. */}
+          <ProjectsCard className="md:h-[548px]" max={6} stretch={false} />
         </div>
       </div>
 

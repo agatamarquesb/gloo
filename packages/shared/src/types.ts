@@ -133,9 +133,21 @@ export interface CreateTaskInput {
   attachments?: AttachmentDto[] | null;
   /** The tags to carry, as ids into the shared label pool. */
   labelIds?: string[];
+  /**
+   * Subtasks written on the create dialog, before the task existed to hang them
+   * off — see the draft list in TaskSubtasks.
+   *
+   * Their text and nothing else: a subtask typed into a task that has not been
+   * saved cannot already be ticked, and its order is the order they were typed
+   * in. Create only, which is why `UpdateTaskInput` drops it below: an existing
+   * task's subtasks are rows with their own endpoints, and a PATCH carrying a
+   * list of strings would have no way to say which of them are the ones already
+   * there.
+   */
+  subtasks?: string[];
 }
 
-export type UpdateTaskInput = Partial<CreateTaskInput>;
+export type UpdateTaskInput = Partial<Omit<CreateTaskInput, 'subtasks'>>;
 
 export interface TaskSummaryDto {
   upcoming: number;

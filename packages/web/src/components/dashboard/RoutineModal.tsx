@@ -53,6 +53,7 @@ import {
   propertyStyles,
 } from '@/theme/propertyRow';
 import { formatTimestamp } from '@/lib/formatDate';
+import { routinePath } from '@/lib/routes';
 import { playSound } from '@/lib/sounds';
 import { colorFill, LABEL_PILL } from '@/theme/labelColors';
 import {
@@ -458,14 +459,13 @@ export function RoutineModal({
 
   /**
    * Routines live on the Dashboard rather than at their own route, so a shareable
-   * link is the Dashboard plus a query param that reopens this one. See
-   * ROUTINE_PARAM in RoutinesCard, which is what reads it back.
+   * link is the Dashboard plus a query param that reopens this one — the same
+   * path the bell's notifications navigate to. See ROUTINE_PARAM in routes.ts,
+   * which RoutinesCard is what reads it back with.
    */
   function copyLink() {
     if (!routine) return;
-    const url = new URL(window.location.origin);
-    url.searchParams.set('rotina', routine.id);
-    navigator.clipboard.writeText(url.toString());
+    navigator.clipboard.writeText(new URL(routinePath(routine.id), window.location.origin).toString());
   }
 
   function handleDelete() {

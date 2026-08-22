@@ -134,6 +134,13 @@ model Task {
   /// When the task last reached DONE. Cleared if it is reopened, so it always
   /// pairs with the status rather than remembering a completion that was undone.
   completedAt DateTime?
+  /// When the task was moved to the trash. Null for a live one.
+  ///
+  /// Same arrangement as a routine's: "Deletar" sets this and the row stays
+  /// put, so the Tasks page's Lixeira can list it and put it back. Only
+  /// "Esvaziar lixeira" — or "Deletar permanentemente" — actually removes it.
+  /// Every query for live tasks has to filter on it.
+  deletedAt   DateTime?
 
   subtasks  Subtask[]
   assignees TaskAssignee[]
@@ -142,6 +149,7 @@ model Task {
   @@index([status])
   @@index([dueDate])
   @@index([sectorId])
+  @@index([deletedAt])
   @@map("tasks")
 }
 

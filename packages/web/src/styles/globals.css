@@ -306,10 +306,25 @@
 }
 
 .dark {
-  /* Brand colors are mode-invariant, so this only re-asserts the semantic
-     wiring — otherwise HeroUI's own .dark value for --warning would take over. */
+  /* The one brand colour that is *not* mode-invariant, and it took a dark screen
+     to find out why it had to be.
+
+     #c4d254 is a chartreuse built to sit on white, where the paper around it is
+     brighter than it is. On a near-black card nothing is brighter than it: a
+     filled pill, a progress bar, a count chip and the sidebar's current page all
+     become the lit objects on the screen, and a list of them glares. This is the
+     same hue and the same green, taken down about nine points of lightness and a
+     little chroma — enough that black text still sits on it comfortably, quiet
+     enough to read a page of them without squinting.
+
+     Written in oklch rather than as a hex so the relationship to the light
+     value is legible: same hue, same idea, one step down.
+
+     The semantic wiring below is re-asserted either way — otherwise HeroUI's own
+     .dark value for --warning would take over. */
+  --green: oklch(74% 0.11 113);
   --accent: var(--green);
-  --accent-hover: #d6e179;
+  --accent-hover: oklch(79% 0.115 113);
   --accent-foreground: var(--black);
 
   /* Mixed towards black instead: the same two steps of the same green, read
@@ -343,21 +358,35 @@
      a near-black surface turns every red in the app — the bell's dot, the
      delete rows, an error line — into a dull brick. Ours goes the other way:
      red has to be the one colour that still reads as an alarm here. */
-  --danger: oklch(68% 0.235 25.7);
+     Chroma pulled back from the first pass at 0.235, which read as an electric
+     red rather than an alarming one: on this surface a small dot in it left an
+     after-image, and the delete buttons it fills were the loudest thing in any
+     dialog. Lightness is unchanged, so it is still the one colour here that
+     stops you. */
+  --danger: oklch(64% 0.17 25.7);
 
-  /* Overdue ink on the dark card, for the same reason: #a3502f is a colour that
-     needs a pale ground under it, and there is none here. The overdue *pill*
-     keeps that ink, since it brings its own. */
-  --overdue-ink: #ff7a5c;
+  /* Overdue ink on the dark card: #a3502f is a colour that needs a pale ground
+     under it, and there is none here. The overdue *pill* keeps that ink, since
+     it brings its own.
+
+     A clay red rather than the hot salmon this started as (#ff7a5c). Overdue is
+     the most repeated colour on a busy list — every late title, every late
+     progress bar, every late card edge — and at that chroma a screenful of them
+     vibrated. Same hue and the same distance from the surface; less shout. */
+  --overdue-ink: oklch(70% 0.105 34);
 
   /* The same step, taken from the other end: off white rather than off black. */
   --value-ink: #d4d4d8;
 
   /* A green-tinted step off the surface rather than the light mode's pale green
      wash, which on a dark card would be a lit panel rather than a hovered row.
-     Lightened alongside it, by the same reasoning: what the pointer leaves
-     behind is a breath of green, not a filled row. */
-  --row-hover: color-mix(in oklab, var(--green) 9%, #1b1b1e);
+
+     *Above* the card rather than below it. This used to be mixed into #1b1b1e,
+     which is darker than the surface it sits on — so hovering a row dimmed it,
+     and once the rows themselves took a fill (see the task card) the hover was
+     a hole rather than a lift. The ground is now a step up from that fill, and
+     the green is still only a breath of it. */
+  --row-hover: color-mix(in oklab, var(--green) 9%, oklch(29.5% 0.004 286));
 
   /* Outline only: a filled white disc glared and a dark one read as a heavy hole
      punched in the tile, but dropping the disc entirely left the icon floating
@@ -583,6 +612,42 @@ body {
      than the week of dates under it. */
   .calendar-year-picker__trigger-heading {
     white-space: nowrap;
+  }
+
+  /*
+   * The same month, cut the same way, when what it picks is a *window* — the
+   * "Período" row of the Tasks page's filter panel.
+   *
+   * HeroUI names a range calendar's parts `range-calendar__*` rather than
+   * reusing `calendar__*`, so every rule above has to be said twice. Written out
+   * rather than folded into one selector list, because the two grids differ in
+   * one place that matters — see the height below.
+   */
+  .range-calendar__cell,
+  .range-calendar__heading,
+  .range-calendar__cell-button {
+    font-size: 0.6875rem;
+  }
+
+  .range-calendar__header-cell {
+    font-size: 0.5625rem;
+    padding-bottom: 0.25rem;
+  }
+
+  /*
+   * A range cell holds its own button, and it is the button that is square
+   * (`aspect-ratio: 1`) — so releasing the cell alone leaves the child at full
+   * height and nothing changes. Both come down, and the band that runs between a
+   * window's two ends comes down with them.
+   */
+  .range-calendar__cell,
+  .range-calendar__cell .range-calendar__cell-button {
+    aspect-ratio: auto;
+    height: 1.375rem;
+  }
+
+  .range-calendar__header {
+    padding-bottom: 0.5rem;
   }
 }
 

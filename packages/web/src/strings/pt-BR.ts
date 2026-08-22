@@ -214,6 +214,8 @@ export const strings = {
   dashboard: {
     taskSummary: 'Resumo de tarefas',
     myTasks: 'Minhas tarefas',
+    /** The way out of the task card, to the page that holds all of them. */
+    seeAllTasks: 'Ver todas',
     bySector: 'Tarefas por setor',
     calendar: 'Calendário',
     /** The `···` on that card: which agendas mark its days. */
@@ -284,6 +286,8 @@ export const strings = {
       brand: 'Marca',
       product: 'Produto',
       tool: 'Ferramenta',
+      campaign: 'Campanha',
+      content: 'Conteúdo',
     },
     /** The page a folder opens onto, which does not exist yet. */
     soon: {
@@ -303,8 +307,6 @@ export const strings = {
     },
     /** A board column with nothing in it. */
     emptyColumn: 'Nada por aqui',
-    /** The way in at the head of each board column, under its name. */
-    newTask: 'Nova tarefa',
     /**
      * What the "Ordenar" menu offers. Short words, not the field names the
      * modal writes out — a menu of three is read at a glance, and "Data de
@@ -322,6 +324,35 @@ export const strings = {
     filter: {
       all: 'Todos',
       selected: (count: number) => `${count} selecionados`,
+      /** The window of deadlines the list is narrowed to. */
+      period: 'Período',
+      /** What that row reads when a window is set: "10 ago. – 25 ago." */
+      range: (from: string, to: string) => `${from} – ${to}`,
+      /** The check under the month that commits the window. */
+      confirmPeriod: 'Confirmar período',
+    },
+    /**
+     * The `⋮` beside "Filtrar" — what you do to the list rather than what you
+     * see in it.
+     */
+    menu: {
+      label: 'Mais',
+      trash: 'Lixeira',
+    },
+    /**
+     * The Lixeira: the same list read from the other side of the bin, so most of
+     * its words are the Routines trash's own.
+     */
+    trash: {
+      heading: 'Lixeira',
+      /** The tick box in front of a row's title. */
+      select: 'Selecionar tarefa',
+      empty: 'A lixeira está vazia.',
+      /** And what the list says with nothing ticked in it. */
+      deleteSelected: 'Deletar selecionadas',
+      selectAll: 'Selecionar todas',
+      /** The same button once they all are — see SelectAllButton. */
+      deselectAll: 'Desmarcar todas',
     },
     performance: {
       title: 'Desempenho',
@@ -385,8 +416,6 @@ export const strings = {
     empty: 'Tudo em dia por aqui.',
     open: 'Abrir notificações',
     dismiss: 'Descartar notificação',
-    viewTask: 'Ver tarefa',
-    viewRoutine: 'Ver rotina',
     /** Days late, as a positive number. */
     overdueByDays: (days: number) => {
       if (days <= 0) return 'Venceu hoje';
@@ -625,6 +654,8 @@ export const strings = {
     search: 'Buscar',
     sortBy: 'Ordenar',
     filterBy: 'Filtrar',
+    /** Puts a panel of filters back to how it opened. */
+    clear: 'Limpar',
     loading: 'Carregando...',
   },
 } as const;

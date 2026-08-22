@@ -22,7 +22,7 @@ const PRIORITY_CLASS: Record<TaskPriority, string> = {
 
 /**
  * The botão de status' shape wearing the priority palette: the same capsule, the
- * same dot, the same lower case — geometry imported from StatusChip rather than
+ * same dot, the same case — geometry imported from StatusChip rather than
  * restated, so the two can never drift apart.
  */
 export function PriorityChip({ priority }: { priority: TaskPriority }) {

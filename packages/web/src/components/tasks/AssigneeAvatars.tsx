@@ -1,6 +1,7 @@
 import type { UserDto } from '@gloo/shared';
 
 import { UserAvatar } from '@/components/common/UserAvatar';
+import { strings } from '@/strings/pt-BR';
 
 const MAX_VISIBLE = 4;
 
@@ -36,7 +37,28 @@ export function AssigneeAvatars({
   const visible = assignees.slice(0, MAX_VISIBLE);
   const overflow = assignees.length - visible.length;
 
-  if (assignees.length === 0) return null;
+  // Nobody on it: an empty disc, dashed, exactly where a face would be.
+  //
+  // Drawing nothing was the alternative and it read as a card that had lost
+  // something rather than as one nobody has taken — and on a row it let
+  // everything before it slide across by an avatar's width. A dashed outline is
+  // how this app says "a slot with nothing in it" (see the board's own columns),
+  // so the shape says which fact is missing without a word for it.
+  if (assignees.length === 0) {
+    return (
+      <span
+        aria-hidden
+        // Two pixels of the muted ink rather than one of the control outline:
+        // that edge is tuned for a *filled* control, where a fill sits inside it
+        // and does half the work of finding it. There is nothing inside this
+        // one, so at a hairline it read as a smudge on the card.
+        className={`block shrink-0 rounded-full border-2 border-dashed border-muted ${
+          compact ? 'size-5' : 'size-8'
+        }`}
+        title={strings.task.noAssignees}
+      />
+    );
+  }
 
   const sole = withName && assignees.length === 1 ? assignees[0] : null;
 

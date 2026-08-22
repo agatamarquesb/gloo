@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { Button, ScrollShadow } from '@heroui/react';
 
 import type { TaskFilters, TaskStatusFilter } from '@gloo/shared';
@@ -12,8 +13,9 @@ import { TaskStatusPills } from '@/components/tasks/TaskStatusPills';
 import { useDebouncedValue } from '@/hooks/ui/useDebouncedValue';
 import { useMe } from '@/hooks/queries/auth';
 import { useTasks } from '@/hooks/queries/tasks';
+import { TASKS_PATH } from '@/lib/routes';
 import { strings } from '@/strings/pt-BR';
-import { liftRoom } from '@/theme/styleConstants';
+import { cardSeeAll, liftRoom } from '@/theme/styleConstants';
 
 import { DashboardCard } from './DashboardCard';
 import { readTaskOrder, reorderTasks, sortByManualOrder, writeTaskOrder } from './myTasksOrder';
@@ -46,6 +48,7 @@ function scrollingAncestor(from: HTMLElement | null): HTMLElement | null {
 
 export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
   const { data: me } = useMe();
+  const navigate = useNavigate();
   const card = useRef<HTMLElement>(null);
   const [status, setStatus] = useState<TaskStatusFilter | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
@@ -107,7 +110,21 @@ export function MyTasksCard({ onAddTask }: { onAddTask: () => void }) {
   }
 
   return (
-    <DashboardCard ref={card} title={strings.dashboard.myTasks}>
+    <DashboardCard
+      ref={card}
+      title={strings.dashboard.myTasks}
+      // The way out, in the corner opposite the heading — the same control the
+      // projects card below it wears, in the same place and the same style, so
+      // the two ways off this page read as one idea. This card holds the tasks
+      // assigned to you and five of them at a time; the rest of them, and
+      // everyone else's, are on the page this leads to.
+      action={
+        <button type="button" onClick={() => navigate(TASKS_PATH)} className={cardSeeAll}>
+          {strings.dashboard.seeAllTasks}
+          <ChevronRight className="size-3.5" aria-hidden />
+        </button>
+      }
+    >
       {/* One row for everything you do to the list: filter it on the left,
           search it and add to it on the right. None of it belongs in the card's
           header, where it read as part of the title.

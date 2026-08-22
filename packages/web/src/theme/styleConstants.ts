@@ -447,3 +447,16 @@ export const layout = {
   cardRadius: 'rounded-3xl',
   pillRadius: 'rounded-full',
 } as const;
+
+/**
+ * A card's way out: "Ver todos ›" on the projects card, "Ver todas ›" on the
+ * Dashboard's own task card.
+ *
+ * Written down once because those two sit in the same column of the Dashboard,
+ * one directly under the other — any drift in size, colour or hover between
+ * them is visible without moving your eyes. Deliberately quiet: no border, no
+ * ground, the app's smallest type in the app's grey, darkening only under the
+ * pointer.
+ */
+export const cardSeeAll =
+  'flex cursor-pointer items-center gap-0.5 text-[12px] leading-none text-muted transition-colors hover:text-surface-foreground active:text-surface-foreground';

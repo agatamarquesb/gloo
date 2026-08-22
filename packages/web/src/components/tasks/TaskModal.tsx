@@ -51,6 +51,8 @@ import { useSectors } from '@/hooks/queries/sectors';
 import {
   useCreateTask,
   useDeleteTask,
+  useEmptyTaskTrash,
+  useRestoreTask,
   useSetTaskStatus,
   useTask,
   useUpdateTask,
@@ -434,6 +436,7 @@ function TaskModalContent({
   onCreated,
   flushRef,
   isDraft = false,
+  isTrashed = false,
 }: {
   task: TaskDetailDto;
   onClose: () => void;
@@ -461,6 +464,16 @@ function TaskModalContent({
    * status, its subtasks — is out until it does.
    */
   isDraft?: boolean;
+  /**
+   * Whether the task is being read out of the Lixeira.
+   *
+   * The same dialog, showing the same task, with everything that *changes* it
+   * taken away: no Editar, no autosave, no status, no subtask controls. What is
+   * left are the only two things you can do to something in a bin — destroy it,
+   * from the header, or take it back, from the footer. Exactly the arrangement
+   * the Routines trash gives a routine; see `isTrashed` there.
+   */
+  isTrashed?: boolean;
 }) {
   const { data: me } = useMe();
   const { data: sectors = [] } = useSectors();
@@ -470,11 +483,17 @@ function TaskModalContent({
   const updateTask = useUpdateTask(task.id);
   const updateStatus = useUpdateTaskStatus(task.id);
   const deleteTask = useDeleteTask();
+  const restoreTask = useRestoreTask();
+  const purgeTask = useEmptyTaskTrash();
 
-  const canEdit = canMutateEntity(me, {
-    createdById: task.createdById,
-    assigneeIds: task.assignees.map((assignee) => assignee.id),
-  });
+  // Nobody edits a deleted task, whatever their permissions: it is not in the
+  // list any more, and an edit saved onto it would be an edit nobody can see.
+  const canEdit =
+    !isTrashed &&
+    canMutateEntity(me, {
+      createdById: task.createdById,
+      assigneeIds: task.assignees.map((assignee) => assignee.id),
+    });
 
   const [form, setForm] = useState<FormState>(() => toFormValue(task));
   /**
@@ -502,6 +521,17 @@ function TaskModalContent({
    * SAMPLE_PROJECTS.
    */
   const [project, setProject] = useState<string>(SAMPLE_PROJECTS[0]);
+
+  /**
+   * The subtasks written on a *draft*, before there is a task to hang them off.
+   *
+   * Component state rather than a field of `FormState`, and deliberately: the
+   * form is what autosave compares against and what a PATCH is built from, and
+   * an existing task's subtasks are rows with their own endpoints — putting a
+   * list of strings in there would mean every save arguing with them. They exist
+   * for exactly one moment, the POST that creates the task; see handleSubmit.
+   */
+  const [draftSubtasks, setDraftSubtasks] = useState<string[]>([]);
 
   /**
    * Unlocking the dialog puts the caret in the title, as if it had been pressed:
@@ -641,7 +671,7 @@ function TaskModalContent({
     // drop back into reading. The list behind it picks the new task up from the
     // mutation's own invalidation.
     if (isDraft) {
-      createTask.mutate(payload, {
+      createTask.mutate({ ...payload, subtasks: draftSubtasks }, {
         onSuccess: (created) => {
           onCreated?.(created);
           onClose();
@@ -927,10 +957,29 @@ function TaskModalContent({
         </Modal.Heading>
 
         <div className="flex flex-wrap items-center gap-4">
+          {/* Out of the bin, the header is one button and the way out: the task
+              is not in any list, so there is no link worth copying and nothing
+              to unlock. "Deletar permanente" is what "Deletar" cannot be any
+              more — it has already been done once. */}
+          {isTrashed ? (
+            <button
+              type="button"
+              className={`${quietTextButton} text-sm font-medium`}
+              disabled={purgeTask.isPending}
+              onClick={() => {
+                playSound('delete');
+                purgeTask.mutate([task.id], { onSuccess: onClose });
+              }}
+            >
+              <Trash2 className="size-4" />
+              {strings.routine.trash.deletePermanently}
+            </button>
+          ) : null}
+
           {/* Both of these need a task on the server: there is no address to
               copy before one exists, and nothing to delete. A draft's header is
               therefore only "Editando" and the way out. */}
-          {isDraft ? null : (
+          {isDraft || isTrashed ? null : (
             <button
               type="button"
               className={`${quietTextButton} text-sm font-medium`}
@@ -1173,15 +1222,23 @@ function TaskModalContent({
           <div
             className={`flex min-h-0 min-w-0 flex-col pt-4 ${COLUMN_INSET} md:col-start-1 md:row-start-2`}
           >
-            {/* Present but read-only on a draft — every one of its controls
-                posts to /tasks/:id/subtasks, which has no id to post to yet. The
-                block still holds its place, so the dialog you save is the dialog
-                you get back, with the list ready to fill in. */}
+            {/* Live on a draft too, writing into the form instead of into a
+                table: the "+" is there, the rows are there, and the list is
+                posted with the task the moment Salvar creates it — see
+                `draftSubtasks` above and `subtasks` on CreateTaskInput. It used
+                to be read-only here, on the grounds that its controls post to
+                /tasks/:id/subtasks and a draft has no id; the effect was a
+                create dialog whose Subtarefas block was a heading you could not
+                use, on the one screen where writing the list down is most of
+                what you came to do. */}
             <TaskSubtasks
               taskId={task.id}
               subtasks={task.subtasks}
-              isEditing={isEditing && !isDraft}
-              canEdit={canEdit && !isDraft}
+              isEditing={isEditing}
+              canEdit={canEdit}
+              draft={
+                isDraft ? { items: draftSubtasks, onChange: setDraftSubtasks } : undefined
+              }
             />
           </div>
 
@@ -1211,6 +1268,20 @@ function TaskModalContent({
         <Modal.Footer
           className={`flex flex-wrap items-center justify-end gap-2 ${dialogSection} ${COLUMN_INSET} mt-0`}
         >
+          {/* One button in the bin, and it is the constructive one: destroying is
+              in the header, where the Routines trash keeps its own, and a footer
+              offering only "Cancelar" over a task nobody can change was a way
+              out of a dialog that had nothing to leave behind. */}
+          {isTrashed ? (
+            <Button
+              className="rounded-full"
+              isDisabled={restoreTask.isPending}
+              onPress={() => restoreTask.mutate(task.id, { onSuccess: onClose })}
+            >
+              {strings.routine.trash.restore}
+            </Button>
+          ) : (
+            <>
           <SecondaryButton onPress={handleCancel}>{strings.common.cancel}</SecondaryButton>
           {isEditing ? (
             <Button
@@ -1221,6 +1292,8 @@ function TaskModalContent({
               {strings.common.save}
             </Button>
           ) : null}
+            </>
+          )}
         </Modal.Footer>
       </div>
     </Modal.Dialog>
@@ -1357,7 +1430,16 @@ export function NewTaskModal({
   );
 }
 
-export function TaskModal({ taskId, onClose }: { taskId: string; onClose: () => void }) {
+export function TaskModal({
+  taskId,
+  onClose,
+  isTrashed = false,
+}: {
+  taskId: string;
+  onClose: () => void;
+  /** Opened from the Lixeira — see `isTrashed` in TaskModalContent. */
+  isTrashed?: boolean;
+}) {
   const { data: task, isLoading } = useTask(taskId);
   /** Filled in by the dialog's content — see `flushRef` there. */
   const flushEdits = useRef<() => void>(() => {});
@@ -1387,7 +1469,12 @@ export function TaskModal({ taskId, onClose }: { taskId: string; onClose: () => 
             </Modal.Body>
           </Modal.Dialog>
         ) : (
-          <TaskModalContent task={task} onClose={onClose} flushRef={flushEdits} />
+          <TaskModalContent
+            task={task}
+            onClose={onClose}
+            isTrashed={isTrashed}
+            flushRef={flushEdits}
+          />
         )}
       </Modal.Container>
     </Modal.Backdrop>

@@ -5,6 +5,7 @@ export function TaskProgressBar({
   className = 'w-28',
   outputFirst = false,
   outputRight = false,
+  isOverdue = false,
 }: {
   value: number;
   className?: string;
@@ -24,6 +25,16 @@ export function TaskProgressBar({
    * "0%" sitting 20px inside that edge read as the bar being cut short.
    */
   outputRight?: boolean;
+  /**
+   * Whether the task this measures is late — in which case the bar is drawn in
+   * the overdue red rather than the brand green.
+   *
+   * The same red the title above it is written in and the same red the card's
+   * top edge takes (see --overdue-ink), because they are one statement: how far
+   * a late task has got is still late progress, and a green bar under a red
+   * title read as two rows' worth of information crossed over.
+   */
+  isOverdue?: boolean;
 }) {
   const output = (
     <ProgressBar.Output
@@ -34,7 +45,18 @@ export function TaskProgressBar({
   return (
     // size="md" (8px track) rather than "sm" (4px): thin enough to stay recessive
     // next to the row's text, thick enough to read at a glance.
-    <ProgressBar aria-label="Progresso" size="md" value={value} className={`flex items-center gap-2 ${className}`}>
+    // The fill is painted from `--progress-bar-fill`, so the red is set by
+    // re-pointing that one variable rather than by overriding the fill's own
+    // class — the supported way to restyle a HeroUI part, and the only one that
+    // survives the component composing its slots.
+    <ProgressBar
+      aria-label="Progresso"
+      size="md"
+      value={value}
+      className={`flex items-center gap-2 ${className} ${
+        isOverdue ? '[--progress-bar-fill:var(--overdue-ink)]' : ''
+      }`}
+    >
       {outputFirst ? output : null}
       <ProgressBar.Track className="flex-1">
         <ProgressBar.Fill />

@@ -32,15 +32,18 @@ const STATUS_CLASS: Record<TaskStatus, string> = {
  * capsule. `whitespace-nowrap` because a status is a single token: "Em
  * andamento" broken over two lines is not a label any more.
  *
- * `lowercase` in CSS rather than in the strings, because the same strings label
- * the filter pills and the dropdown, where sentence case is right.
+ * The label is set exactly as it is written — "A fazer", "Em andamento",
+ * "Feita", "Alta". The pill used to force it to lower case, which made the chip
+ * the one place in the app where a status was spelled differently from the
+ * filter pill, the dropdown option and the column header all saying the same
+ * word. Case is part of how these read as sentences of Portuguese, so it stays.
  */
 /**
  * `leading-none` collapses the label's line box to its own type size, and `py-1`
  * gives back the height that removes so the pill measures the same.
  */
 export const STATUS_PILL =
-  'inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-1 text-[13px] leading-none whitespace-nowrap lowercase';
+  'inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-1 text-[13px] leading-none whitespace-nowrap';
 
 /**
  * How tall that comes to: `py-1` twice over the 13px of the label, which
@@ -75,7 +78,7 @@ export const LABEL_OPTICAL_LIFT = '-translate-y-[0.08em]';
 /**
  * The **botão de status** — the app's one name for this design, wherever it
  * appears: a task row, the task modal, the dropdown that changes a status. A
- * small capsule in the status colour, a dot, and the status in lower case.
+ * small capsule in the status colour, a dot, and the status written out.
  *
  * A plain span rather than HeroUI's Chip: the Chip brought its own type scale
  * and its own padding, and inside a Select trigger it was stretched to the

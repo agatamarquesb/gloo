@@ -4,20 +4,34 @@ import { useNavigate } from 'react-router';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { useSectorColors } from '@/hooks/ui/useSectorColors';
 import { PROJECTS_PATH, projectPath } from '@/lib/routes';
+import { cardSeeAll } from '@/theme/styleConstants';
 import { strings } from '@/strings/pt-BR';
 
 /**
- * How many projects the card will ever show.
+ * How many projects the card shows by default.
  *
- * Four, in two rows of two: the card is a third of the row above the task list
- * and as tall as the month beside it, which is room for two folders stacked and
- * was being spent on two folders and a pool of white under them.
+ * Four, in two rows of two: on the Tasks page the card is a third of the row
+ * above the task list and as tall as the month beside it, which is room for two
+ * folders stacked and was being spent on two folders and a pool of white under
+ * them.
  *
- * A cap rather than a length: the array below happens to be exactly this long,
- * but a projects endpoint will not be, and this is the line that keeps the card
- * two rows tall when it arrives.
+ * A cap rather than a length: the array below is longer, and a projects endpoint
+ * will be longer still, so this is the line that keeps that card two rows tall.
  */
 const MAX_PROJECTS = 4;
+
+/**
+ * How tall one folder is when the card is not dividing its height between them.
+ *
+ * 7.5rem: the 7rem a folder measures on the Tasks page — where the row's height
+ * is the month's and two rows of folders divide it — and a little over, since
+ * the Dashboard's card is wider than that one and a folder there can carry the
+ * extra without looking stretched. Both are the size a folder is *meant* to be:
+ * a name, its dates and its kind, and nothing over. Left to divide the
+ * Dashboard card's own height between them, three rows of folders came out at
+ * twice this, with the three lines of text adrift in the middle of each.
+ */
+const FOLDER_HEIGHT = 'auto-rows-[7.5rem]';
 
 /**
  * The projects the card shows.
@@ -53,6 +67,18 @@ const PROJECTS = [
     dates: '01 out. - 20 nov, 2026',
     kind: strings.projects.kind.tool,
   },
+  {
+    id: 'campanha-natal',
+    name: 'Campanha de Natal',
+    dates: '01 nov. - 24 dez, 2026',
+    kind: strings.projects.kind.campaign,
+  },
+  {
+    id: 'conteudo-blog',
+    name: 'Conteúdo do blog',
+    dates: '05 nov. - 15 dez, 2026',
+    kind: strings.projects.kind.content,
+  },
 ] as const;
 
 /**
@@ -76,10 +102,22 @@ const TAB_WIDTH = 'w-[45%]';
 /**
  * @param className extra classes for the card's own box — the Dashboard's copy
  * of this card, which is given a fixed height so it ends level with the task
- * list in the column beside it. Left off everywhere else, where the card takes
+ * list in the column beside it. Left off on the Tasks page, where the card takes
  * the height of the row it is in.
+ * @param max how many folders to show. Six on the Dashboard, which is a card's
+ * full width and has the height for three rows; four on the Tasks page, where
+ * the card is a third of a row and has the height for two.
+ * @param stretch whether the folders divide the card's height between them.
+ * True on the Tasks page, whose card is stretched to the month beside it and
+ * would otherwise end in a pool of white. False on the Dashboard, where the
+ * folders take a height of their own — see FOLDER_HEIGHT — and what is left of
+ * the card under the last row is simply left empty.
  */
-export function ProjectsCard({ className }: { className?: string } = {}) {
+export function ProjectsCard({
+  className,
+  max = MAX_PROJECTS,
+  stretch = true,
+}: { className?: string; max?: number; stretch?: boolean } = {}) {
   const navigate = useNavigate();
   const sectorColors = useSectorColors();
 
@@ -91,33 +129,37 @@ export function ProjectsCard({ className }: { className?: string } = {}) {
       //
       // It was at the foot of the folders, which is where "and the rest of them"
       // belongs when there is a pool of white down there to put it in — and
-      // there is not any more: four folders now take the whole card. On the
+      // there is not any more: the folders now take the whole card. On the
       // heading's line it costs no height at all, and it is where every other
       // card on this page keeps the control that acts on it.
       //
-      // Deliberately quiet either way: no border, no ground, the app's smallest
-      // type in the app's grey, darkening only under the pointer.
+      // See cardSeeAll for why the style is shared rather than written here.
       action={
-        <button
-          type="button"
-          onClick={() => navigate(PROJECTS_PATH)}
-          className="flex cursor-pointer items-center gap-0.5 text-[12px] leading-none text-muted transition-colors hover:text-surface-foreground active:text-surface-foreground"
-        >
+        <button type="button" onClick={() => navigate(PROJECTS_PATH)} className={cardSeeAll}>
           {strings.projects.seeAll}
           <ChevronRight className="size-3.5" aria-hidden />
         </button>
       }
     >
-      {/* Two across and two down, filling whatever height the row hands the card
-          — `auto-rows-fr` is what divides that height evenly between the two
-          rows rather than letting the folders keep their natural size and leave
-          the remainder as white at the bottom.
+      {/* Two across, and as many rows down as the folders need.
+
+          Stretched, `auto-rows-fr` divides whatever height the row hands the
+          card evenly between those rows, rather than letting the folders keep
+          their natural size and leave the remainder as white at the bottom.
+          Unstretched, every row is FOLDER_HEIGHT and whatever the card has left
+          under the last one stays empty — which is the point: the card's height
+          is doing a job of its own there, and the folders are not the ones that
+          should be paying for it.
 
           `min-h-0` because a grid item's default minimum is its content: without
           it a folder whose name wraps pushes the card taller than the row it is
           in, which is the one thing this layout must not do. */}
-      <div className="grid min-h-0 flex-1 grid-cols-2 auto-rows-fr gap-2">
-        {PROJECTS.slice(0, MAX_PROJECTS).map((project, index) => (
+      <div
+        className={`grid min-h-0 flex-1 grid-cols-2 gap-2 ${
+          stretch ? 'auto-rows-fr' : FOLDER_HEIGHT
+        }`}
+      >
+        {PROJECTS.slice(0, max).map((project, index) => (
           <button
             key={project.id}
             type="button"

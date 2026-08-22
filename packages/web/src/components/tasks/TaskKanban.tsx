@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
 
 import { TaskStatus, type TaskListItemDto } from '@gloo/shared';
 
@@ -9,29 +8,27 @@ import { strings } from '@/strings/pt-BR';
 import { TaskCard } from './TaskCard';
 import { TaskListScroll } from './TaskListScroll';
 import { TaskReorderRow } from './TaskReorderRow';
-import { NewTaskModal } from './TaskModal';
 
 /**
- * The four columns, in the order work moves through them — with "Atrasada"
- * before "Feitas" rather than after it.
+ * The three columns, in the order work moves through them.
  *
- * A late task is unfinished work, and the board is read left to right as a
- * queue: everything still to do should be passed before the pile that is done
- * with. Last, "Atrasada" sat past the end of that queue, which is the one place
- * on the board a person is not looking for the tasks that need them most.
+ * "Atrasada" is not one of them, and never should have been: late is not a state
+ * anybody puts a task into, it is what happens to a task whose deadline passed
+ * while it was still in one of these three. Given a column of its own it took
+ * tasks *out* of the state their owner had put them in — a late task being
+ * worked on vanished from "Em andamento" — so the board stopped answering the
+ * one question a board is for.
+ *
+ * A late task therefore sits in the column its status says, and the card says it
+ * is late the way every other list in the app says it: the mark before the name,
+ * the name in red, and the tile's top edge and progress bar in the same red. See
+ * TaskCard.
  */
 const COLUMNS = [
   { status: TaskStatus.TODO, label: strings.task.status.TODO },
   { status: TaskStatus.IN_PROGRESS, label: strings.task.status.IN_PROGRESS },
-  { status: TaskStatus.OVERDUE, label: strings.task.filters.overdue },
   { status: TaskStatus.DONE, label: strings.task.filters.done },
 ] as const;
-
-/** How many cards a column stands before the rest become a scroll. */
-const COLUMN_CARDS = 8;
-
-/** The "+" at the head of a column, and the empty box that balances it. */
-const BUTTON_GUTTER = 'size-3.5 shrink-0';
 
 /**
  * The card in the air: which one it is, which one it is over, and how tall it is
@@ -46,21 +43,18 @@ interface DragState {
 const NOT_DRAGGING: DragState = { id: null, overId: null, height: 0 };
 
 /**
- * Which column a task belongs in.
+ * Which column a task belongs in: the status its owner set, and nothing else.
  *
- * Lateness wins over the status, and deliberately: `isOverdue` is what the row's
- * own chip says — true whether somebody marked the task late or its deadline
- * simply passed — so a task that reads "atrasada" everywhere else in the app has
- * to be in the column with that name. Sorting by status alone would leave a late
- * task sitting in "A fazer" wearing a red chip, next to an empty "Atrasada".
+ * Lateness used to win over that, which is exactly what the "Atrasada" column
+ * cost — see COLUMNS. It has no say here now.
  *
- * A partition and not four filters, so no task is drawn twice. That is the one
- * place this parts company with the pills above the list, whose counts overlap
- * on purpose — a pill answers "how many are late", which includes the ones it
- * also counts under "a fazer"; a column has to put each card in one place.
+ * The one translation left is for tasks carrying the retired OVERDUE status,
+ * marked late by hand back when that was something a person could set. There is
+ * no column for it, so they are read as what they actually are: unfinished work,
+ * to do. Picking a status on such a card moves it out of the old value for good.
  */
 function columnOf(task: TaskListItemDto): TaskStatus {
-  return task.isOverdue ? TaskStatus.OVERDUE : task.status;
+  return task.status === TaskStatus.OVERDUE ? TaskStatus.TODO : task.status;
 }
 
 /** One column's own drop state, so only the column under the pointer lights up. */
@@ -73,7 +67,6 @@ function TaskKanbanColumn({
   setDrag,
   onDropTask,
   onReorderTask,
-  onAddTask,
 }: {
   status: TaskStatus;
   label: string;
@@ -85,7 +78,6 @@ function TaskKanbanColumn({
   onDropTask: (status: TaskStatus, taskId: string) => void;
   /** The dragged card, and the one it was dropped on — which is where it goes. */
   onReorderTask: (draggedId: string, targetId: string) => void;
-  onAddTask: (status: TaskStatus) => void;
 }) {
   const [isOver, setOver] = useState(false);
 
@@ -118,62 +110,44 @@ function TaskKanbanColumn({
       // target that appears when you aim at it. What the drag adds is the fill:
       // the palest step of that same green, so the column you are over lights up
       // without a second edge appearing inside the first.
-      className={`flex min-w-0 flex-col gap-2 rounded-2xl border border-outline-green px-3 pb-3 pt-2 transition-colors ${
+      // `min-h-0` and the full height of its track: the board fills a section of
+      // fixed height (see TASK_LIST_HEIGHT), so a column is that height whatever
+      // is in it and the cards inside scroll rather than the board growing. It
+      // is also what stops three columns of different lengths reading as three
+      // boxes of different sizes.
+      className={`flex h-full min-h-0 min-w-0 flex-col gap-2 rounded-2xl border border-outline-green px-3 pb-3 pt-2 transition-colors ${
         isOver ? 'bg-row-hover' : 'bg-transparent'
       }`}
     >
-      {/* The name and how many are under it, on one line — the count is the
-          thing you read a column header for. `pt-1.5` stands the pair off the
-          column's own edge: at the top of a bordered box the heading was sitting
-          on the hairline it is inside.
+      {/* The name and how many are under it, inside a capsule of the column's
+          own edge — the same hairline in the same green, so the header reads as
+          a smaller instance of the box it heads rather than as a label floating
+          at the top of it.
 
           The count is a green pill rather than a grey one. Grey is what this app
           writes *quiet* things in, and the figure at the head of a column is the
           opposite — it is the one number the header exists to give. Black on the
           brand green, the same pairing every filled control in the app uses. */}
-      <div className="flex items-center justify-between gap-2 px-1 pt-1.5">
+      <div className="flex items-center justify-between gap-2 rounded-full border border-outline-green px-3 py-1.5">
         <p className="truncate text-sm font-medium text-surface-foreground">{label}</p>
         <span className="shrink-0 rounded-md bg-green px-1.5 py-0.5 text-xs font-medium tabular-nums text-black">
           {tasks.length}
         </span>
       </div>
 
-      {/* The way in, under the column's name and above the first card.
-          Full-width and quiet — an outline in the column's own green with no
-          fill, so four of them across the board do not read as four buttons
-          shouting over the cards they head.
-
-          Per column rather than once for the board, because the column is the
-          status: a task added under "Em andamento" is one that has been started,
-          and this is the only place in the app where that can be said while
-          creating it. See `defaultStatus` in NewTaskModal for how it gets
-          there. */}
-      <button
-        type="button"
-        onClick={() => onAddTask(status)}
-        className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-outline-green px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-row-hover hover:text-surface-foreground"
-      >
-        <Plus className={BUTTON_GUTTER} aria-hidden />
-        {strings.tasksPage.newTask}
-        {/* An empty box the width of the glyph, so the label is centred on the
-            button rather than shunted right of centre by it. Without it the
-            words sit 10px — half the glyph and its gap — to the right of the
-            button's own middle, which is nothing at all until the column is
-            empty and "Nada por aqui" is centred underneath them. */}
-        <span aria-hidden className={BUTTON_GUTTER} />
-      </button>
-
       {tasks.length === 0 ? (
-        <p className="px-1 py-6 text-center text-xs text-muted">
+        // Centred in what is left of the column rather than sat under the "+":
+        // the column is now a box of fixed height, and a line of type pinned to
+        // the top of it read as the first row of a list that failed to load.
+        <p className="flex flex-1 items-start justify-center px-1 py-6 text-center text-xs text-muted">
           {strings.tasksPage.emptyColumn}
         </p>
       ) : (
-        // Eight cards, and the ninth a scroll away — the same measured cap and
-        // the same fade into the ground the list down the page uses, so a full
-        // column ends on a softened edge rather than on a cut. Eight rather than
-        // the list's ten because a board card is twice a row's height, and four
-        // columns each ten cards tall is a page nobody can see the shape of.
-        <TaskListScroll count={tasks.length} rows={COLUMN_CARDS}>
+        // As many cards as the column is tall, and the rest a scroll away — the
+        // height is the section's (see TASK_LIST_HEIGHT), and the same fade into
+        // the ground the list down the page uses ends a full column on a
+        // softened edge rather than on a cut.
+        <TaskListScroll count={tasks.length} fill>
           {tasks.map((task) => (
             // The very row the list down the page rearranges with — the whole
             // card is the handle, and a gap the size of the card you are holding
@@ -250,8 +224,6 @@ export function TaskKanban({
   // change never depends on a render having happened between picking a card up
   // and letting it go. See useSetTaskStatus.
   const setStatus = useSetTaskStatus();
-  /** The column whose "+ Nova tarefa" was pressed, or null for no dialog. */
-  const [addingTo, setAddingTo] = useState<TaskStatus | null>(null);
   /**
    * What is being carried, and where it is hovering.
    *
@@ -281,33 +253,27 @@ export function TaskKanban({
   }
 
   return (
-    <>
-      {/* Four across from lg, two abreast below it, one on a phone: a column
-          narrower than the card inside it stops being a column.
-
-          `items-start` so each column is only as tall as what is in it. Stretched
-          to the row's height, an empty "Atrasada" was a green rectangle as tall
-          as the busiest column beside it. */}
-      <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {COLUMNS.map((column) => (
-          <TaskKanbanColumn
-            key={column.status}
-            status={column.status}
-            label={column.label}
-            tasks={tasks.filter((task) => columnOf(task) === column.status)}
-            boardIds={boardIds}
-            drag={drag}
-            setDrag={setDrag}
-            onDropTask={handleDrop}
-            onReorderTask={handleReorder}
-            onAddTask={setAddingTo}
-          />
-        ))}
-      </div>
-
-      {addingTo ? (
-        <NewTaskModal defaultStatus={addingTo} onClose={() => setAddingTo(null)} />
-      ) : null}
-    </>
+    // Three across from lg, one on anything narrower: at two abreast the odd
+    // column sat alone on a second row, which is not a board.
+    //
+    // Stretched to the row's height rather than each column taking its own, and
+    // the row is the section's fixed height — see TASK_LIST_HEIGHT. Three boxes
+    // of one size that scroll inside themselves, instead of three of different
+    // heights that grow and shrink as the filters change.
+    <div className="grid h-full min-h-0 grid-cols-1 gap-2 lg:grid-cols-3">
+      {COLUMNS.map((column) => (
+        <TaskKanbanColumn
+          key={column.status}
+          status={column.status}
+          label={column.label}
+          tasks={tasks.filter((task) => columnOf(task) === column.status)}
+          boardIds={boardIds}
+          drag={drag}
+          setDrag={setDrag}
+          onDropTask={handleDrop}
+          onReorderTask={handleReorder}
+        />
+      ))}
+    </div>
   );
 }

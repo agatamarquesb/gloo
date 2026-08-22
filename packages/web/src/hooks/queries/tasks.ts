@@ -56,6 +56,24 @@ export function useTasks(
   });
 }
 
+/**
+ * The trash, under whatever the page's filters are set to.
+ *
+ * The same filters and the same shape as the live list, because it is the same
+ * list read from the other side of `deletedAt` — searching, sorting and
+ * narrowing all work in the bin exactly as they do outside it. Only the status
+ * has nothing to say there, which is why the Lixeira locks that one row of the
+ * filter panel rather than this hook dropping it.
+ */
+export function useDeletedTasks(filters: TaskFilters, { enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: taskKeys.deleted(filters),
+    queryFn: () => apiClient.get<TaskListItemDto[]>(`/tasks/deleted${toQueryString(filters)}`),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useTask(id: string | undefined) {
   return useQuery({
     queryKey: taskKeys.detail(id ?? ''),
@@ -220,6 +238,56 @@ export function useDeleteTask() {
       // Drop the detail entry rather than invalidating it: a blanket
       // invalidation would refetch the task that was just deleted and 404.
       queryClient.removeQueries({ queryKey: taskKeys.detail(id) });
+      invalidate();
+    },
+  });
+}
+
+/**
+ * Several tasks to the bin at once — what the list's "Deletar selecionadas"
+ * does.
+ *
+ * One request per task rather than a bulk endpoint: the API guards a delete per
+ * task (see canMutate there), so a batch would have to answer partly-allowed
+ * either way, and there is no arrangement of this page where the number of
+ * ticked rows is large. The cache is invalidated once, when they have all
+ * landed.
+ */
+export function useDeleteTasks() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateTasks();
+  return useMutation({
+    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => apiClient.delete(`/tasks/${id}`))),
+    onSuccess: (_result, ids) => {
+      ids.forEach((id) => queryClient.removeQueries({ queryKey: taskKeys.detail(id) }));
+      invalidate();
+    },
+  });
+}
+
+/** Out of the bin and back into the list. */
+export function useRestoreTask() {
+  const invalidate = useInvalidateTasks();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.post<TaskDetailDto>(`/tasks/${id}/restore`, {}),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Destroys what is in the bin — all of it, or just the ids named.
+ *
+ * `undefined` is "everything", which is what "Esvaziar lixeira" sends; a list of
+ * ids is what "Deletar permanentemente" sends. Same call either way, so the two
+ * buttons cannot drift apart.
+ */
+export function useEmptyTaskTrash() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateTasks();
+  return useMutation({
+    mutationFn: (ids?: string[]) => apiClient.delete('/tasks/deleted', ids ? { ids } : undefined),
+    onSuccess: (_result, ids) => {
+      ids?.forEach((id) => queryClient.removeQueries({ queryKey: taskKeys.detail(id) }));
       invalidate();
     },
   });

@@ -27,9 +27,21 @@ function ids(value: string | undefined): string[] {
   return value ? value.split(',').filter(Boolean) : [];
 }
 
-function buildWhere(query: Record<string, string | undefined>): Prisma.TaskWhereInput {
+/**
+ * The `where` every list of tasks is built on.
+ *
+ * `trashed` picks which side of the bin it reads. A deleted task is still a row
+ * — see `deletedAt` in the schema — so *every* query has to say which it wants:
+ * left alone it is the live set, and the Lixeira asks for the complement with
+ * the very same filters, which is what lets the trash be searched, sorted and
+ * narrowed exactly like the list it came from.
+ */
+function buildWhere(
+  query: Record<string, string | undefined>,
+  { trashed = false }: { trashed?: boolean } = {},
+): Prisma.TaskWhereInput {
   const { search, status, sectorId, assigneeId, dueDateFrom, dueDateTo } = query;
-  const where: Prisma.TaskWhereInput = {};
+  const where: Prisma.TaskWhereInput = { deletedAt: trashed ? { not: null } : null };
 
   const sectorIds = ids(sectorId);
   const assigneeIds = ids(assigneeId);
@@ -137,6 +149,66 @@ export async function taskRoutes(app: FastifyInstance) {
     return sortTasks(dtos, query.sortBy, query.sortDir);
   });
 
+  /**
+   * The trash — the same list, read from the other side of `deletedAt`.
+   *
+   * It takes every filter the live list takes and goes through the same builder
+   * and the same sort, because the bin is not a different kind of thing: it is
+   * these tasks, and looking for one among forty deleted rows is the same job as
+   * looking for one among forty live ones. Newest first when nothing is asked
+   * for — what you just deleted is what you are most likely to want back.
+   *
+   * Company-wide, like the list itself: a task is shared, so anyone who could
+   * delete it can see it sitting in the bin.
+   */
+  app.get('/deleted', async (request) => {
+    const query = request.query as Record<string, string | undefined>;
+    const where = buildWhere(query, { trashed: true });
+
+    const tasks = await prisma.task.findMany({
+      where,
+      include: taskInclude,
+      orderBy: { deletedAt: 'desc' },
+    });
+
+    return sortTasks(tasks.map(toTaskListItemDto), query.sortBy, query.sortDir);
+  });
+
+  /**
+   * Empties the trash for good — all of it, or just the `ids` the caller names.
+   *
+   * Guarded per task rather than wholesale, exactly as the routines' trash is: a
+   * user clears the ones they could have deleted themselves and leaves anyone
+   * else's where they are. Naming ids that are live, absent or someone else's is
+   * not an error; they are simply not among the ones destroyed.
+   */
+  app.delete<{ Body?: { ids?: string[] } }>('/deleted', async (request) => {
+    const named = request.body?.ids;
+
+    const trashed = await prisma.task.findMany({
+      where: {
+        deletedAt: { not: null },
+        ...(Array.isArray(named) ? { id: { in: named } } : {}),
+      },
+      include: taskInclude,
+    });
+
+    const removable = trashed
+      .filter((task) =>
+        canMutate(request.authUser, {
+          createdById: task.createdById,
+          assigneeIds: task.assignees.map((a) => a.userId),
+        }),
+      )
+      .map(({ id }) => id);
+
+    if (removable.length > 0) {
+      await prisma.task.deleteMany({ where: { id: { in: removable } } });
+    }
+
+    return { deleted: removable.length };
+  });
+
   app.get('/summary', async (request): Promise<TaskSummaryDto> => {
     const query = request.query as Record<string, string | undefined>;
     // Every filter the list itself takes *except* the status, through the same
@@ -177,7 +249,13 @@ export async function taskRoutes(app: FastifyInstance) {
     // work each sector carries, and a finished task is still work that sector
     // did — see TaskBySectorDto. Filtering out DONE made a sector that had
     // cleared its list indistinguishable from one that never had anything.
-    const counts = await prisma.task.groupBy({ by: ['sectorId'], _count: true });
+    const counts = await prisma.task.groupBy({
+      by: ['sectorId'],
+      // Everything except what is in the bin: a deleted task is not work the
+      // sector is carrying, and it is one press away from being destroyed.
+      where: { deletedAt: null },
+      _count: true,
+    });
     const countBySector = new Map(counts.map((c) => [c.sectorId, c._count]));
 
     return sectors.map((sector) => ({
@@ -188,7 +266,7 @@ export async function taskRoutes(app: FastifyInstance) {
 
   app.get('/calendar', async (request) => {
     const { from, to } = request.query as { from?: string; to?: string };
-    const where: Prisma.TaskWhereInput = { dueDate: { not: null } };
+    const where: Prisma.TaskWhereInput = { deletedAt: null, dueDate: { not: null } };
     if (from || to) {
       where.dueDate = {
         not: null,
@@ -219,7 +297,7 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Body: CreateTaskInput }>('/', async (request, reply) => {
-    const { title, description, priority, dueDate, sectorId, assigneeIds, attachments, labelIds } =
+    const { title, description, priority, dueDate, sectorId, assigneeIds, attachments, labelIds, subtasks } =
       request.body;
 
     if (!title || !priority || !sectorId) {
@@ -238,6 +316,17 @@ export async function taskRoutes(app: FastifyInstance) {
         sectorId,
         createdById: request.authUser.id,
         assignees: { create: (assigneeIds ?? []).map((userId) => ({ userId })) },
+        // Whatever was typed into the create dialog's Subtarefas block, in the
+        // order it was typed. Written with the task rather than posted one by
+        // one afterwards, so a task never exists for a moment without the list
+        // that was saved along with it. Blank lines are dropped: an untitled
+        // subtask is a row nobody can read.
+        subtasks: {
+          create: (subtasks ?? [])
+            .map((text) => text.trim())
+            .filter(Boolean)
+            .map((text, order) => ({ text, order })),
+        },
         // Only ids from the task pool — see labelIdsInScope.
         labels: {
           create: (await labelIdsInScope(labelIds ?? [], LabelScope.TASK)).map((labelId) => ({
@@ -318,6 +407,26 @@ export async function taskRoutes(app: FastifyInstance) {
     return toTaskDetailDto(task);
   });
 
+  /** Puts a trashed task back. Same rule as deleting it in the first place. */
+  app.post<{ Params: { id: string } }>('/:id/restore', async (request, reply) => {
+    const { id } = request.params;
+    const existing = await loadTaskOrThrow(id);
+
+    if (!canMutate(request.authUser, { createdById: existing.createdById, assigneeIds: existing.assignees.map((a) => a.userId) })) {
+      return reply.code(403).send({ error: 'Sem permissão para editar esta tarefa' });
+    }
+
+    const task = await prisma.task.update({
+      where: { id },
+      data: { deletedAt: null },
+      include: taskInclude,
+    });
+
+    return toTaskDetailDto(task);
+  });
+
+  // Reversible: this moves the task to the trash rather than removing it.
+  // DELETE /deleted above is the one that actually destroys anything.
   app.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
     const { id } = request.params;
     const existing = await loadTaskOrThrow(id);
@@ -326,7 +435,7 @@ export async function taskRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'Sem permissão para excluir esta tarefa' });
     }
 
-    await prisma.task.delete({ where: { id } });
+    await prisma.task.update({ where: { id }, data: { deletedAt: new Date() } });
     return reply.code(204).send();
   });
 

@@ -40,16 +40,31 @@ const VERTICAL_PADDING = LIFT_ROOM_Y;
 export function TaskListScroll({
   count,
   rows = DEFAULT_VISIBLE_ROWS,
+  fill = false,
   children,
 }: {
   count: number;
   /** How many rows stand before the rest become a scroll. */
   rows?: number;
+  /**
+   * Take the height the parent gives instead of measuring one.
+   *
+   * For the two places the list now sits inside a box of stated height — the
+   * Tasks page's section and a board column within it. The section does not
+   * change size as tasks are filtered in and out of it (see TASK_LIST_HEIGHT),
+   * so what a row height would decide here is already decided a level up, and
+   * measuring it again would only argue with it.
+   */
+  fill?: boolean;
   children: ReactNode;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
+    // Nothing to measure when the height is the parent's — and nothing to
+    // undo either, since the branch below never wrote one.
+    if (fill) return;
+
     const list = listRef.current;
     // The scroller is the list's own parent — ScrollShadow renders one element
     // and puts its child straight inside it. Reached this way rather than by a
@@ -83,7 +98,7 @@ export function TaskListScroll({
     const observer = new ResizeObserver(measure);
     observer.observe(list);
     return () => observer.disconnect();
-  }, [count, rows]);
+  }, [count, rows, fill]);
 
   return (
     // HeroUI's own fade rather than a hand-rolled gradient, as on the Dashboard's
@@ -98,7 +113,7 @@ export function TaskListScroll({
       variant="fade"
       orientation="vertical"
       size={30}
-      className={`gloo-thin-scroll overflow-y-auto ${liftRoom}`}
+      className={`gloo-thin-scroll overflow-y-auto ${fill ? 'min-h-0 flex-1' : ''} ${liftRoom}`}
     >
       {/* The flex column is inside the scroller, not the scroller itself: rows
           are flex items either way, and as children of a height-capped flex
